@@ -1,0 +1,30 @@
+# Configuration file for <https://github.com/sapcc/argora>
+
+metadata:
+  url: https://github.com/sapcc/argora
+
+binaries:
+  - name:        argora
+    fromPackage: ./cmd/
+    installTo: bin/
+
+golang:
+  setGoModVersion: true
+
+golangciLint:
+  createConfig: true
+
+githubWorkflow:
+  ci:
+    enabled: false
+    coveralls: false
+
+renovate:
+  enabled: true
+
+dockerfile:
+  enabled: true
+
+verbatim: |
+  tilt: FORCE
+    tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
