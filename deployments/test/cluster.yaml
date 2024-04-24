@@ -1,0 +1,21 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: qa-de-1a-ceph
+  namespace: default
+  labels:
+    discovery.inf.sap.cloud/clusterRole: "cc-ceph"
+spec:
+  controlPlaneEndpoint:
+    host: my.awesome.endpoint
+    port: 443
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha1
+    kind: KubernikusControlPlane
+    name: st1-qa-de-1
+    namespace: metal-st1-qa-de-1
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: Metal3Cluster
+    name: st1-qa-de-1
+    namespace: metal-st1-qa-de-1
