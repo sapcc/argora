@@ -14,7 +14,7 @@ endif
 
 default: build-all
 
-tilt: FORCE
+tilt: FORCE generate
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
 prepare-static-check: FORCE

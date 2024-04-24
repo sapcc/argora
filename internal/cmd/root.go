@@ -3,8 +3,10 @@ package cmd
 import (
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/sapcc/argora/internal/controller"
+	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-api-declarations/bininfo"
 	"github.com/spf13/cobra"
+	"os"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -19,11 +21,14 @@ var RootCmd = &cobra.Command{
 }
 
 var (
-	setupLog = ctrl.Log.WithName("setup")
+	setupLog    = ctrl.Log.WithName("setup")
+	netboxUrl   string
+	netboxToken string
 )
 
 func init() {
-
+	RootCmd.PersistentFlags().StringVar(&netboxUrl, "netbox-url", "https://netbox.global.cloud.sap", "URL of the netbox instance")
+	RootCmd.PersistentFlags().StringVar(&netboxToken, "netbox-token", os.Getenv("NETBOX_TOKEN"), "API token for netbox")
 }
 
 func RunRootCmd(cmd *cobra.Command, args []string) error {
@@ -43,7 +48,15 @@ func RunRootCmd(cmd *cobra.Command, args []string) error {
 		setupLog.Error(err, "unable to register baremetal operator scheme")
 		return err
 	}
-	clusterController := &controller.ClusterController{}
+	nbc, err := netbox.NewNetboxClient(netboxUrl, netboxToken)
+	if err != nil {
+		setupLog.Error(err, "unable to create netbox client")
+		return err
+	}
+	clusterController := &controller.ClusterController{
+		Client: mgr.GetClient(),
+		Nb:     nbc,
+	}
 	err = clusterController.AddToManager(mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to add cluster controller to manager")
