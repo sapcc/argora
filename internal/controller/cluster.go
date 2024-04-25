@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"strconv"
 	"strings"
 )
 
@@ -58,6 +59,11 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
 func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) error {
+	vlan, err := c.Nb.LookupVLANForDevice(device)
+	if err != nil {
+		log.FromContext(ctx).Error(err, "unable to lookup vlan for device")
+		return err
+	}
 	netw, err := netaddr.ParseIPv4Net(device.PrimaryIp4.Address)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to parse network")
@@ -73,7 +79,7 @@ func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, clus
 	nwdRaw := networkdata.NetworkData{
 		Networks: []networkdata.L3{
 			{
-				ID:        "mgmt",
+				ID:        strconv.Itoa(vlan),
 				Type:      networkdata.Ipv4,
 				IPAddress: &ipStr,
 				Link:      "mgmt",
