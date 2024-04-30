@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) 2024. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+ * Morbi non lorem porttitor neque feugiat blandit. Ut vitae ipsum eget quam lacinia accumsan.
+ * Etiam sed turpis ac ipsum condimentum fringilla. Maecenas magna.
+ * Proin dapibus sapien vel ante. Aliquam erat volutpat. Pellentesque sagittis ligula eget metus.
+ * Vestibulum commodo. Ut rhoncus gravida arcu.
+ */
+
 package netbox
 
 import (
@@ -34,32 +42,36 @@ func NewNetboxClient(url string, token string) (*NetboxClient, error) {
 	}, nil
 }
 
-func (n *NetboxClient) LookupVLANForDevice(device *models.Device) (int, error) {
+func (n *NetboxClient) LookupVLANForDevice(device *models.Device) (int, string, error) {
 	lir := models.ListInterfacesRequest{
 		DeviceId: device.Id,
 	}
 	lir.Name = "LAG1"
 	resp, err := n.dcim.ListInterfaces(lir)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if resp.Count == 0 {
-		return 0, fmt.Errorf("no interfaces found for device %s", device.Name)
+		return 0, "", fmt.Errorf("no interfaces found for device %s", device.Name)
 	}
 	if resp.Count > 1 {
-		return 0, fmt.Errorf("too many interfaces found for device %s", device.Name)
+		return 0, "", fmt.Errorf("too many interfaces found for device %s", device.Name)
 	}
 	interf := resp.Results[0]
 	for _, nestedVlan := range interf.TaggedVlans {
 		vlan, err := n.ipam.GetVlan(nestedVlan.Id)
 		if err != nil {
-			return 0, err
+			return 0, "", err
 		}
 		if vlan.Role.Slug == "cc-kubernetes-transit" {
-			return vlan.VId, nil
+			lipr := models.ListIpAddressesRequest{
+				InterfaceId: interf.Id,
+			}
+			res, err := n.ipam.ListIpAddresses(lipr)
+			return vlan.VId, "", nil
 		}
 	}
-	return 0, fmt.Errorf("no vlan found for device %s", device.Name)
+	return 0, "", fmt.Errorf("no vlan found for device %s", device.Name)
 }
 
 func (n *NetboxClient) LookupCluster(role string, name string) ([]models.Device, error) {
