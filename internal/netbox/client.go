@@ -68,10 +68,50 @@ func (n *NetboxClient) LookupVLANForDevice(device *models.Device) (int, string, 
 				InterfaceId: interf.Id,
 			}
 			res, err := n.ipam.ListIpAddresses(lipr)
-			return vlan.VId, "", nil
+			if err != nil {
+				return 0, "", err
+			}
+			if res.Count == 0 {
+				return 0, "", fmt.Errorf("no ip addresses found for device %s", device.Name)
+			}
+			if res.Count > 1 {
+				return 0, "", fmt.Errorf("too many ip addresses found for device %s", device.Name)
+			}
+			return vlan.VId, res.Results[0].Address, nil
 		}
 	}
 	return 0, "", fmt.Errorf("no vlan found for device %s", device.Name)
+}
+
+func (n *NetboxClient) LookupMacForIp(primaryIP string) (string, error) {
+	lipr := models.ListIpAddressesRequest{
+		Address: primaryIP,
+	}
+	resp, err := n.ipam.ListIpAddresses(lipr)
+	if err != nil {
+		return "", err
+	}
+	if resp.Count == 0 {
+		return "", fmt.Errorf("no ip address found for ip %s", primaryIP)
+	}
+	if resp.Count > 1 {
+		return "", fmt.Errorf("too many ip addresses found for ip %s", primaryIP)
+	}
+
+	ip := resp.Results[0]
+	lir := models.ListInterfacesRequest{}
+	lir.Id = ip.AssignedInterface.Id
+	res, err := n.dcim.ListInterfaces(lir)
+	if err != nil {
+		return "", err
+	}
+	if res.Count == 0 {
+		return "", fmt.Errorf("no interfaces found for ip %s", primaryIP)
+	}
+	if res.Count > 1 {
+		return "", fmt.Errorf("too many interfaces found for ip %s", primaryIP)
+	}
+	return res.Results[0].MacAddress, nil
 }
 
 func (n *NetboxClient) LookupCluster(role string, name string) ([]models.Device, error) {
