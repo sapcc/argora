@@ -5,16 +5,17 @@ go 1.22.0
 toolchain go1.22.3
 
 require (
-	github.com/dspinhirne/netaddr-go v0.0.0-20211008142535-a4c5bccad224
+	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.6.0
 	github.com/sapcc/go-api-declarations v1.11.2
 	github.com/sapcc/go-netbox-go v0.0.0-20240425095528-7233b9912165
 	github.com/spf13/cobra v1.8.0
-	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.30.1
 	sigs.k8s.io/cluster-api v1.7.2
 	sigs.k8s.io/controller-runtime v0.18.2
 )
+
+require gopkg.in/yaml.v3 v3.0.1
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -70,7 +71,7 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/apiextensions-apiserver v0.30.0 // indirect
 	k8s.io/apimachinery v0.30.1 // indirect
 	k8s.io/client-go v0.30.0 // indirect
