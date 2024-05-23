@@ -67,31 +67,31 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
 func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) error {
-	vlan, err := c.Nb.LookupVLANForDevice(device)
+	vlan, ipStr, err := c.Nb.LookupVLANForDevice(device)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to lookup vlan for device")
 		return err
 	}
-	netw, err := netaddr.ParseIPv4Net(device.PrimaryIp4.Address)
+	netw, err := netaddr.ParseIPv4Net(ipStr)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to parse network")
 		return err
 	}
-	ip, _, err := net.ParseCIDR(device.PrimaryIp4.Address)
+	netMask := netw.Netmask().Extended()
+	linkHint, err := createLinkHint(device)
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to parse ip")
+		log.FromContext(ctx).Error(err, "unable to create link hint")
 		return err
 	}
-	ipStr := ip.String()
-	netMask := netw.Netmask().Extended()
 	nwdRaw := networkdata.NetworkData{
 		Networks: []networkdata.L3{
 			{
 				ID:        strconv.Itoa(vlan),
 				Type:      networkdata.Ipv4,
 				IPAddress: &ipStr,
-				Link:      "mgmt",
+				Link:      linkHint,
 				Netmask:   &netMask,
+				NetworkID: "",
 				Routes: []networkdata.L3IPVRoutingConfigurationItem{
 					{
 						Gateway: netw.Nth(1).String(),
@@ -123,6 +123,11 @@ func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, clus
 func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "node", device.Name)
+	// check if device is active
+	if device.Status.Value != "active" {
+		logger.Info("device is not active")
+		return nil
+	}
 	// check if the host already exists
 	bmh := &bmov1alpha1.BareMetalHost{}
 	err := c.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh)
@@ -149,6 +154,12 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		return err
 	}
 	// create the host
+	diskFormat := "qcow2"
+	mac, err := c.Nb.LookupMacForIp(device.PrimaryIp4.Address)
+	if err != nil {
+		logger.Error(err, "unable to lookup mac for ip")
+		return err
+	}
 	host := &bmov1alpha1.BareMetalHost{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:      device.Name,
@@ -162,14 +173,22 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 				"topology.kubernetes.io/zone":        device.Site.Slug,
 			},
 		},
+
 		Spec: bmov1alpha1.BareMetalHostSpec{
-			Online: true,
+			Architecture:          "x86_64",
+			AutomatedCleaningMode: "disabled",
+			Online:                true,
+			Image: &bmov1alpha1.Image{
+				URL:        "https://repo.qa-de-1.cloud.sap/flatcar/stable/current/flatcar_production_openstack_image.img",
+				Checksum:   "https://repo.qa-de-1.cloud.sap/flatcar/stable/current/flatcar_production_openstack_image.img.DIGESTS",
+				DiskFormat: &diskFormat,
+			},
 			BMC: bmov1alpha1.BMCDetails{
 				Address:                        redfishUrl,
 				CredentialsName:                "bmc-secret-" + device.Name,
 				DisableCertificateVerification: true,
 			},
-			BootMACAddress: "",
+			BootMACAddress: mac,
 			NetworkData: &corev1.SecretReference{
 				Name:      "networkdata-" + device.Name,
 				Namespace: cluster.Namespace,
@@ -214,6 +233,16 @@ func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error)
 			Model: "ThinkSystem M.2 VD",
 		}, nil
 	default:
-		return nil, fmt.Errorf("unknown device model: %s", device.DeviceType.Model)
+		return nil, fmt.Errorf("unknown device model for root hint: %s", device.DeviceType.Model)
+	}
+}
+
+func createLinkHint(device *models.Device) (string, error) {
+	switch device.DeviceType.Model {
+	case "PowerEdge R640":
+
+		return "ens*f1*", nil
+	default:
+		return "", fmt.Errorf("unknown device model for link hint: %s", device.DeviceType.Model)
 	}
 }
