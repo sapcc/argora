@@ -8,7 +8,7 @@ require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.6.0
 	github.com/sapcc/go-api-declarations v1.11.2
-	github.com/sapcc/go-netbox-go v0.0.0-20240425095528-7233b9912165
+	github.com/sapcc/go-netbox-go v0.0.0-20240604065631-5279aaf32498
 	github.com/spf13/cobra v1.8.0
 	k8s.io/api v0.30.1
 	sigs.k8s.io/cluster-api v1.7.2

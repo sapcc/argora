@@ -32,11 +32,15 @@ var (
 	setupLog    = ctrl.Log.WithName("setup")
 	netboxUrl   string
 	netboxToken string
+	bmcUser     string
+	bmcPassword string
 )
 
 func init() {
 	RootCmd.PersistentFlags().StringVar(&netboxUrl, "netbox-url", "https://netbox.global.cloud.sap", "URL of the netbox instance")
 	RootCmd.PersistentFlags().StringVar(&netboxToken, "netbox-token", os.Getenv("NETBOX_TOKEN"), "API token for netbox")
+	RootCmd.PersistentFlags().StringVar(&bmcUser, "bmc-user", os.Getenv("BMC_USER"), "BMC user")
+	RootCmd.PersistentFlags().StringVar(&bmcPassword, "bmc-password", os.Getenv("BMC_PASS"), "BMC password")
 }
 
 func RunRootCmd(cmd *cobra.Command, args []string) error {
@@ -62,8 +66,10 @@ func RunRootCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	clusterController := &controller.ClusterController{
-		Client: mgr.GetClient(),
-		Nb:     nbc,
+		Client:      mgr.GetClient(),
+		Nb:          nbc,
+		BMCUser:     bmcUser,
+		BMCPassword: bmcPassword,
 	}
 	err = clusterController.AddToManager(mgr)
 	if err != nil {

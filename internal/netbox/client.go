@@ -83,19 +83,19 @@ func (n *NetboxClient) LookupVLANForDevice(device *models.Device) (int, string, 
 	return 0, "", fmt.Errorf("no vlan found for device %s", device.Name)
 }
 
-func (n *NetboxClient) LookupMacForIp(primaryIP string) (string, error) {
+func (n *NetboxClient) LookupMacForIp(ipStr string) (string, error) {
 	lipr := models.ListIpAddressesRequest{
-		Address: primaryIP,
+		Address: ipStr,
 	}
 	resp, err := n.ipam.ListIpAddresses(lipr)
 	if err != nil {
 		return "", err
 	}
 	if resp.Count == 0 {
-		return "", fmt.Errorf("no ip address found for ip %s", primaryIP)
+		return "", fmt.Errorf("no ip address found for ip %s", ipStr)
 	}
 	if resp.Count > 1 {
-		return "", fmt.Errorf("too many ip addresses found for ip %s", primaryIP)
+		return "", fmt.Errorf("too many ip addresses found for ip %s", ipStr)
 	}
 
 	ip := resp.Results[0]
@@ -106,10 +106,10 @@ func (n *NetboxClient) LookupMacForIp(primaryIP string) (string, error) {
 		return "", err
 	}
 	if res.Count == 0 {
-		return "", fmt.Errorf("no interfaces found for ip %s", primaryIP)
+		return "", fmt.Errorf("no interfaces found for ip %s", ipStr)
 	}
 	if res.Count > 1 {
-		return "", fmt.Errorf("too many interfaces found for ip %s", primaryIP)
+		return "", fmt.Errorf("too many interfaces found for ip %s", ipStr)
 	}
 	return res.Results[0].MacAddress, nil
 }

@@ -120,6 +120,8 @@ github.com/sapcc/go-api-declarations v1.11.2 h1:CFVxgWqrs4WBJhbA0nJNQ/0mBpAxmNFu
 github.com/sapcc/go-api-declarations v1.11.2/go.mod h1:83R3hTANhuRXt/pXDby37IJetw8l7DG41s33Tp9NXxI=
 github.com/sapcc/go-netbox-go v0.0.0-20240425095528-7233b9912165 h1:hoadPfMMxcNTOS8Ie8JNyQKGi3bau9BBNqJiO3XsoSc=
 github.com/sapcc/go-netbox-go v0.0.0-20240425095528-7233b9912165/go.mod h1:svNHmBLJaYKDerDkp+YC4gtRln93xELpwAnsDfNokUY=
+github.com/sapcc/go-netbox-go v0.0.0-20240604065631-5279aaf32498 h1:WZAtLdGQmTQGF0JmqnZAWIsMtcAchDnY9GIJpUyDHyE=
+github.com/sapcc/go-netbox-go v0.0.0-20240604065631-5279aaf32498/go.mod h1:svNHmBLJaYKDerDkp+YC4gtRln93xELpwAnsDfNokUY=
 github.com/seborama/govcr v4.5.0+incompatible h1:XvdHtXi0d4cUAn+0aWolvwfS3nmhNC8Z+yMQwn/M64I=
 github.com/seborama/govcr v4.5.0+incompatible/go.mod h1:EgcISudCCYDLzbiAImJ8i7kk4+wTA44Kp+j4S0LhASI=
 github.com/spf13/cobra v1.8.0 h1:7aJaZx1B85qltLMc546zn58BxxfZdR/W22ej9CFoEf0=
