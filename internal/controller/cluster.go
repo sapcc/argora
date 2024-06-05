@@ -32,7 +32,9 @@ const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
 
 type ClusterController struct {
 	client.Client
-	Nb *netbox.NetboxClient
+	Nb          *netbox.NetboxClient
+	BMCUser     string
+	BMCPassword string
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
@@ -155,9 +157,20 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 	}
 	// create the host
 	diskFormat := "qcow2"
-	mac, err := c.Nb.LookupMacForIp(device.PrimaryIp4.Address)
+	mac, err := c.Nb.LookupMacForIp(device.OOBIp.Address)
 	if err != nil {
 		logger.Error(err, "unable to lookup mac for ip")
+		return err
+	}
+
+	bmcSecret, err := c.createBmcSecret(ctx, cluster, device)
+	if err != nil {
+		logger.Error(err, "unable to create bmc secret")
+		return err
+	}
+	err = c.Client.Create(ctx, bmcSecret)
+	if err != nil {
+		logger.Error(err, "unable to upload bmc secret")
 		return err
 	}
 	host := &bmov1alpha1.BareMetalHost{
@@ -215,15 +228,37 @@ func (c *ClusterController) AddToManager(mgr manager.Manager) error {
 }
 
 func createRedFishUrl(device *models.Device) (string, error) {
-	ip, _, err := net.ParseCIDR(device.PrimaryIp4.Address)
+	ip, _, err := net.ParseCIDR(device.OOBIp.Address)
 	if err != nil {
 		return "", err
 	}
 	return "idrac-redfish://" + ip.String() + "/redfish/v1/Systems/System.Embedded.1", nil
 }
 
+func (c *ClusterController) createBmcSecret(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
+	user := c.BMCUser
+	password := c.BMCPassword
+	if user == "" || password == "" {
+		return nil, fmt.Errorf("bmc user or password not set")
+	}
+	return &corev1.Secret{
+		ObjectMeta: ctrl.ObjectMeta{
+			Name:      "bmc-secret-" + device.Name,
+			Namespace: cluster.Namespace,
+		},
+		StringData: map[string]string{
+			"username": user,
+			"password": password,
+		},
+	}, nil
+}
+
 func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error) {
 	switch device.DeviceType.Model {
+	case "PowerEdge R660":
+		return &bmov1alpha1.RootDeviceHints{
+			Model: "DELLBOSS VD",
+		}, nil
 	case "PowerEdge R640":
 		return &bmov1alpha1.RootDeviceHints{
 			Model: "DELLBOSS VD",
@@ -232,6 +267,14 @@ func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error)
 		return &bmov1alpha1.RootDeviceHints{
 			Model: "ThinkSystem M.2 VD",
 		}, nil
+	case "ThinkSystem SR650 v3":
+		return &bmov1alpha1.RootDeviceHints{
+			Model: "ThinkSystem M.2 VD",
+		}, nil
+	case "Proliant DL320 Gen11":
+		return &bmov1alpha1.RootDeviceHints{
+			Model: "HPE Smart Array",
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown device model for root hint: %s", device.DeviceType.Model)
 	}
@@ -239,8 +282,14 @@ func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error)
 
 func createLinkHint(device *models.Device) (string, error) {
 	switch device.DeviceType.Model {
+	case "ThinkSystem SR650":
+		return "ens*f1*", nil
+	case "ThinkSystem SR650 v3":
+		return "ens*f1*", nil
 	case "PowerEdge R640":
 
+		return "ens*f1*", nil
+	case "Proliant DL320 Gen11":
 		return "ens*f1*", nil
 	default:
 		return "", fmt.Errorf("unknown device model for link hint: %s", device.DeviceType.Model)
