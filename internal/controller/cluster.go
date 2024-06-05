@@ -11,6 +11,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net"
+	"regexp"
+	"strconv"
+	"strings"
+
 	"github.com/dspinhirne/netaddr-go/v2"
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/sapcc/argora/internal/netbox"
@@ -18,14 +23,11 @@ import (
 	"github.com/sapcc/go-netbox-go/models"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
-	"net"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"strconv"
-	"strings"
 )
 
 const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
@@ -232,7 +234,13 @@ func createRedFishUrl(device *models.Device) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "idrac-redfish://" + ip.String() + "/redfish/v1/Systems/System.Embedded.1", nil
+	var idrac = regexp.MustCompile(`PowerEdge.*`)
+	switch model := device.DeviceType.Model; {
+	case idrac.MatchString(model):
+		return "idrac-redfish://" + ip.String() + "/redfish/v1/Systems/System.Embedded.1", nil
+	default:
+		return "redfish://" + ip.String() + "/redfish/v1/Systems/1", nil
+	}
 }
 
 func (c *ClusterController) createBmcSecret(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
