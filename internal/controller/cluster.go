@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -233,9 +232,8 @@ func createRedFishUrl(device *models.Device) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var idrac = regexp.MustCompile(`PowerEdge.*`)
-	switch model := device.DeviceType.Model; {
-	case idrac.MatchString(model):
+	switch device.DeviceType.Manufacturer.Slug {
+	case "dell":
 		return "idrac-redfish://" + ip.String() + "/redfish/v1/Systems/System.Embedded.1", nil
 	default:
 		return "redfish://" + ip.String() + "/redfish/v1/Systems/1", nil
