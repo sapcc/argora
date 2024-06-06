@@ -259,11 +259,11 @@ func (c *ClusterController) createBmcSecret(ctx context.Context, cluster cluster
 }
 
 var rootHintMap = map[string]string{
-	"PowerEdge R660":       "DELLBOSS VD",
-	"PowerEdge R640":       "DELLBOSS VD",
-	"ThinkSystem SR650":    "ThinkSystem M.2 VD",
-	"ThinkSystem SR650 v3": "ThinkSystem M.2 VD",
-	"Proliant DL320 Gen11": "HPE Smart Array",
+	"poweredge-r660":       "Dell BOSS-N1",
+	"poweredge-r640":       "DELLBOSS VD",
+	"thinksystem-sr650":    "ThinkSystem M.2 VD",
+	"thinksystem-sr650-v3": "M.2 NVMe 2-Bay RAID Kit",
+	"proliant-dl320-gen11": "HPE NS204i-u Gen11 Boot Controller",
 }
 
 var linkHintMap = map[string]string{
@@ -275,7 +275,7 @@ var linkHintMap = map[string]string{
 }
 
 func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error) {
-	if hint, ok := rootHintMap[device.DeviceType.Model]; ok {
+	if hint, ok := rootHintMap[device.DeviceType.Slug]; ok {
 		return &bmov1alpha1.RootDeviceHints{
 			Model: hint,
 		}, nil
