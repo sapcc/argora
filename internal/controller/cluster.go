@@ -258,47 +258,34 @@ func (c *ClusterController) createBmcSecret(ctx context.Context, cluster cluster
 	}, nil
 }
 
+var rootHintMap = map[string]string{
+	"PowerEdge R660":       "DELLBOSS VD",
+	"PowerEdge R640":       "DELLBOSS VD",
+	"ThinkSystem SR650":    "ThinkSystem M.2 VD",
+	"ThinkSystem SR650 v3": "ThinkSystem M.2 VD",
+	"Proliant DL320 Gen11": "HPE Smart Array",
+}
+
+var linkHintMap = map[string]string{
+	"ThinkSystem SR650":    "ens*f1*",
+	"ThinkSystem SR650 v3": "ens*f1*",
+	"PowerEdge R640":       "ens*f1*",
+	"PowerEdge R660":       "ens*f1*",
+	"Proliant DL320 Gen11": "ens*f1*",
+}
+
 func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error) {
-	switch device.DeviceType.Model {
-	case "PowerEdge R660":
+	if hint, ok := rootHintMap[device.DeviceType.Model]; ok {
 		return &bmov1alpha1.RootDeviceHints{
-			Model: "DELLBOSS VD",
+			Model: hint,
 		}, nil
-	case "PowerEdge R640":
-		return &bmov1alpha1.RootDeviceHints{
-			Model: "DELLBOSS VD",
-		}, nil
-	case "ThinkSystem SR650":
-		return &bmov1alpha1.RootDeviceHints{
-			Model: "ThinkSystem M.2 VD",
-		}, nil
-	case "ThinkSystem SR650 v3":
-		return &bmov1alpha1.RootDeviceHints{
-			Model: "ThinkSystem M.2 VD",
-		}, nil
-	case "Proliant DL320 Gen11":
-		return &bmov1alpha1.RootDeviceHints{
-			Model: "HPE Smart Array",
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown device model for root hint: %s", device.DeviceType.Model)
 	}
+	return nil, fmt.Errorf("unknown device model for root hint: %s", device.DeviceType.Model)
 }
 
 func createLinkHint(device *models.Device) (string, error) {
-	switch device.DeviceType.Model {
-	case "ThinkSystem SR650":
-		return "ens*f1*", nil
-	case "ThinkSystem SR650 v3":
-		return "ens*f1*", nil
-	case "PowerEdge R640":
-
-		return "ens*f1*", nil
-	case "PowerEdge R660":
-		return "ens*f1*", nil
-	case "Proliant DL320 Gen11":
-		return "ens*f1*", nil
-	default:
-		return "", fmt.Errorf("unknown device model for link hint: %s", device.DeviceType.Model)
+	if hint, ok := linkHintMap[device.DeviceType.Model]; ok {
+		return hint, nil
 	}
+	return "", fmt.Errorf("unknown device model for link hint: %s", device.DeviceType.Model)
 }
