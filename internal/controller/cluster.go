@@ -156,13 +156,17 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		return err
 	}
 	// create the host
-	diskFormat := "qcow2"
-	mac, err := c.Nb.LookupMacForIp(device.OOBIp.Address)
+	mac, err := c.Nb.LookupMacForIp(device.PrimaryIp4.Address)
 	if err != nil {
 		logger.Error(err, "unable to lookup mac for ip")
 		return err
 	}
-
+	// get the region
+	region, err := c.Nb.GetRegionForDevice(device)
+	if err != nil {
+		logger.Error(err, "unable to lookup region for device")
+		return err
+	}
 	bmcSecret, err := c.createBmcSecret(ctx, cluster, device)
 	if err != nil {
 		logger.Error(err, "unable to create bmc secret")
@@ -182,7 +186,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 				"kubernetes.metal.cloud.sap/name":    device.Name,
 				"kubernetes.metal.cloud.sap/bb":      nameParts[1],
 				"kubernetes.metal.cloud.sap/role":    device.DeviceRole.Slug,
-				"topology.kubernetes.io/region":      "",
+				"topology.kubernetes.io/region":      region,
 				"topology.kubernetes.io/zone":        device.Site.Slug,
 			},
 		},
@@ -191,11 +195,6 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 			Architecture:          "x86_64",
 			AutomatedCleaningMode: "disabled",
 			Online:                true,
-			Image: &bmov1alpha1.Image{
-				URL:        "https://repo.qa-de-1.cloud.sap/flatcar/stable/current/flatcar_production_openstack_image.img",
-				Checksum:   "https://repo.qa-de-1.cloud.sap/flatcar/stable/current/flatcar_production_openstack_image.img.DIGESTS",
-				DiskFormat: &diskFormat,
-			},
 			BMC: bmov1alpha1.BMCDetails{
 				Address:                        redfishUrl,
 				CredentialsName:                "bmc-secret-" + device.Name,
@@ -288,6 +287,8 @@ func createLinkHint(device *models.Device) (string, error) {
 		return "ens*f1*", nil
 	case "PowerEdge R640":
 
+		return "ens*f1*", nil
+	case "PowerEdge R660":
 		return "ens*f1*", nil
 	case "Proliant DL320 Gen11":
 		return "ens*f1*", nil
