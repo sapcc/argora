@@ -14,6 +14,7 @@ import (
 	"github.com/sapcc/go-netbox-go/ipam"
 	"github.com/sapcc/go-netbox-go/models"
 	"github.com/sapcc/go-netbox-go/virtualization"
+	"sort"
 )
 
 type NetboxClient struct {
@@ -40,6 +41,18 @@ func NewNetboxClient(url string, token string) (*NetboxClient, error) {
 		dcim: dcim,
 		ipam: ipam,
 	}, nil
+}
+
+func (n *NetboxClient) GetRegionForDevice(device *models.Device) (string, error) {
+	site, err := n.dcim.GetSite(device.Site.Id)
+	if err != nil {
+		return "", err
+	}
+	region, err := n.dcim.GetRegion(site.Region.Id)
+	if err != nil {
+		return "", err
+	}
+	return region.Slug, nil
 }
 
 func (n *NetboxClient) LookupVLANForDevice(device *models.Device) (int, string, error) {
@@ -83,6 +96,7 @@ func (n *NetboxClient) LookupVLANForDevice(device *models.Device) (int, string, 
 	return 0, "", fmt.Errorf("no vlan found for device %s", device.Name)
 }
 
+// LookupMacForIp get the first interface of LAG1 and return the mac address
 func (n *NetboxClient) LookupMacForIp(ipStr string) (string, error) {
 	lipr := models.ListIpAddressesRequest{
 		Address: ipStr,
@@ -111,7 +125,24 @@ func (n *NetboxClient) LookupMacForIp(ipStr string) (string, error) {
 	if res.Count > 1 {
 		return "", fmt.Errorf("too many interfaces found for ip %s", ipStr)
 	}
-	return res.Results[0].MacAddress, nil
+	// this is now the LAG interface we need to get the first interface of this LAG
+	lir2 := models.ListInterfacesRequest{}
+	lir2.LagId = res.Results[0].Id
+	res2, err := n.dcim.ListInterfaces(lir2)
+	if err != nil {
+		return "", err
+	}
+	if res2.Count == 0 {
+		return "", fmt.Errorf("no subinterfaces found for ip %s", ipStr)
+	}
+	macs := make(map[string]string)
+	names := []string{}
+	for _, i := range res2.Results {
+		macs[i.Name] = i.MacAddress
+		names = append(names, i.Name)
+	}
+	sort.Strings(names)
+	return macs[names[0]], nil
 }
 
 func (n *NetboxClient) LookupCluster(role string, name string) ([]models.Device, error) {
