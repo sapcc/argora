@@ -7,7 +7,7 @@ toolchain go1.22.4
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.6.1
-	github.com/sapcc/go-api-declarations v1.11.2
+	github.com/sapcc/go-api-declarations v1.11.3
 	github.com/sapcc/go-netbox-go v0.0.0-20240605091551-1c1639054ace
 	github.com/spf13/cobra v1.8.0
 	k8s.io/api v0.30.1
