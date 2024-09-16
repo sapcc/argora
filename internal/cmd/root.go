@@ -9,12 +9,13 @@
 package cmd
 
 import (
+	"os"
+
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/sapcc/argora/internal/controller"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-api-declarations/bininfo"
 	"github.com/spf13/cobra"
-	"os"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -37,7 +38,7 @@ var (
 )
 
 func init() {
-	RootCmd.PersistentFlags().StringVar(&netboxUrl, "netbox-url", "https://netbox.global.cloud.sap", "URL of the netbox instance")
+	RootCmd.PersistentFlags().StringVar(&netboxUrl, "netbox-url", os.Getenv("NETBOX_URL"), "URL of the netbox instance")
 	RootCmd.PersistentFlags().StringVar(&netboxToken, "netbox-token", os.Getenv("NETBOX_TOKEN"), "API token for netbox")
 	RootCmd.PersistentFlags().StringVar(&bmcUser, "bmc-user", os.Getenv("BMC_USER"), "BMC user")
 	RootCmd.PersistentFlags().StringVar(&bmcPassword, "bmc-password", os.Getenv("BMC_PASS"), "BMC password")

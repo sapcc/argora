@@ -14,6 +14,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dspinhirne/netaddr-go/v2"
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -65,7 +66,8 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 300 * time.Second}, nil
+	//return ctrl.Result{}, nil
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
@@ -178,6 +180,13 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		logger.Error(err, "unable to upload bmc secret")
 		return err
 	}
+	labelRole := getRoleFromTags(device)
+	if labelRole == device.DeviceRole.Slug {
+		logger.Info("no role found in tags, using device role")
+	} else {
+		logger.Info("role found in tags", "role", labelRole)
+	}
+
 	host := &bmov1alpha1.BareMetalHost{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:      device.Name,
@@ -186,7 +195,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 				"kubernetes.metal.cloud.sap/cluster": cluster.Name,
 				"kubernetes.metal.cloud.sap/name":    device.Name,
 				"kubernetes.metal.cloud.sap/bb":      nameParts[1],
-				"kubernetes.metal.cloud.sap/role":    device.DeviceRole.Slug,
+				"kubernetes.metal.cloud.sap/role":    labelRole,
 				"topology.kubernetes.io/region":      region,
 				"topology.kubernetes.io/zone":        device.Site.Slug,
 			},
@@ -288,4 +297,29 @@ func createLinkHint(device *models.Device) (string, error) {
 		return hint, nil
 	}
 	return "", fmt.Errorf("unknown device model for link hint: %s", device.DeviceType.Model)
+}
+
+func getRoleFromTags(device *models.Device) string {
+	nTags := 0
+	dRole := ""
+	for _, tag := range device.Tags {
+		switch tag.Name {
+		case "ceph-HDD":
+			dRole = "ceph-osd"
+			nTags++
+		case "ceph-NVME":
+			dRole = "ceph-osd"
+			nTags++
+		case "ceph-mon":
+			dRole = "ceph-mon"
+			nTags++
+		case "KVM":
+			dRole = "kvm"
+			nTags++
+		}
+	}
+	if nTags != 1 {
+		return device.DeviceRole.Slug
+	}
+	return dRole
 }
