@@ -30,3 +30,5 @@ k8s_yaml('deployments/cluster-api-components.yaml')
 k8s_yaml('config/rbac/role.yaml')
 k8s_yaml('deployments/argora.yaml')
 k8s_yaml('deployments/test/cluster.yaml')
+k8s_yaml('deployments/secret.yaml')
+
