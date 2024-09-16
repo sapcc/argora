@@ -71,7 +71,7 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) error {
+func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device, role string) error {
 	vlan, ipStr, err := c.Nb.LookupVLANForDevice(device)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to lookup vlan for device")
@@ -83,7 +83,7 @@ func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, clus
 		return err
 	}
 	netMask := netw.Netmask().Extended()
-	linkHint, err := createLinkHint(device)
+	linkHint, err := createLinkHint(device, role)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to create link hint")
 		return err
@@ -224,7 +224,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		return err
 	}
 
-	err = c.CreateNetworkDataForDevice(ctx, cluster, device)
+	err = c.CreateNetworkDataForDevice(ctx, cluster, device, labelRole)
 	if err != nil {
 		logger.Error(err, "unable to create network data")
 		return err
@@ -275,12 +275,16 @@ var rootHintMap = map[string]string{
 	"proliant-dl320-gen11": "HPE NS204i-u Gen11 Boot Controller",
 }
 
-var linkHintMap = map[string]string{
-	"ThinkSystem SR650":    "ens*f1*",
-	"ThinkSystem SR650 v3": "ens*f1*",
-	"PowerEdge R640":       "ens*f1*",
-	"PowerEdge R660":       "ens*f1*",
-	"Proliant DL320 Gen11": "ens*f1*",
+var linkHintMapCeph = map[string]string{
+	"ThinkSystem SR650":    "en*f0np*",
+	"ThinkSystem SR650 v3": "en*1f*np*",
+	"PowerEdge R640":       "en*f1np*",
+	"PowerEdge R660":       "en*f1np*",
+	"Proliant DL320 Gen11": "en*f1np*",
+}
+
+var linkHintMapKvm = map[string]string{
+	"PowerEdge R640": "en*f0np*",
 }
 
 func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error) {
@@ -292,7 +296,13 @@ func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error)
 	return nil, fmt.Errorf("unknown device model for root hint: %s", device.DeviceType.Model)
 }
 
-func createLinkHint(device *models.Device) (string, error) {
+func createLinkHint(device *models.Device, role string) (string, error) {
+	var linkHintMap map[string]string
+	if role == "kvm" {
+		linkHintMap = linkHintMapKvm
+	} else {
+		linkHintMap = linkHintMapCeph
+	}
 	if hint, ok := linkHintMap[device.DeviceType.Model]; ok {
 		return hint, nil
 	}
