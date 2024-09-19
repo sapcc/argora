@@ -40,7 +40,7 @@ type L2 struct {
 }
 
 type L3 struct {
-	ID        string                          `json:"id"  yaml:"id"`
+	ID        int                             `json:"id"  yaml:"id"`
 	IPAddress *string                         `json:"ip_address,omitempty"  yaml:"ip_address,omitempty"`
 	Link      string                          `json:"link"  yaml:"link"`
 	Netmask   *string                         `json:"netmask,omitempty"  yaml:"netmask,omitempty"`

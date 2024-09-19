@@ -10,11 +10,12 @@ package netbox
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/sapcc/go-netbox-go/dcim"
 	"github.com/sapcc/go-netbox-go/ipam"
 	"github.com/sapcc/go-netbox-go/models"
 	"github.com/sapcc/go-netbox-go/virtualization"
-	"sort"
 )
 
 type NetboxClient struct {
@@ -55,7 +56,7 @@ func (n *NetboxClient) GetRegionForDevice(device *models.Device) (string, error)
 	return region.Slug, nil
 }
 
-func (n *NetboxClient) LookupVLANForDevice(device *models.Device) (int, string, error) {
+func (n *NetboxClient) LookupVLANForDevice(device *models.Device, role string) (int, string, error) {
 	lir := models.ListInterfacesRequest{
 		DeviceId: device.Id,
 	}
@@ -71,26 +72,43 @@ func (n *NetboxClient) LookupVLANForDevice(device *models.Device) (int, string, 
 		return 0, "", fmt.Errorf("too many interfaces found for device %s", device.Name)
 	}
 	interf := resp.Results[0]
-	for _, nestedVlan := range interf.TaggedVlans {
-		vlan, err := n.ipam.GetVlan(nestedVlan.Id)
+	if role == "kvm" {
+		lipr := models.ListIpAddressesRequest{
+			InterfaceId: interf.Id,
+		}
+		res, err := n.ipam.ListIpAddresses(lipr)
 		if err != nil {
 			return 0, "", err
 		}
-		if vlan.Role.Slug == "cc-kubernetes-transit" {
-			lipr := models.ListIpAddressesRequest{
-				InterfaceId: interf.Id,
-			}
-			res, err := n.ipam.ListIpAddresses(lipr)
+		if res.Count == 0 {
+			return 0, "", fmt.Errorf("no ip addresses found for device %s", device.Name)
+		}
+		if res.Count > 1 {
+			return 0, "", fmt.Errorf("too many ip addresses found for device %s", device.Name)
+		}
+		return 101, res.Results[0].Address, nil // hardcoded vlan id for kvm
+	} else {
+		for _, nestedVlan := range interf.TaggedVlans {
+			vlan, err := n.ipam.GetVlan(nestedVlan.Id)
 			if err != nil {
 				return 0, "", err
 			}
-			if res.Count == 0 {
-				return 0, "", fmt.Errorf("no ip addresses found for device %s", device.Name)
+			if vlan.Role.Slug == "cc-kubernetes-transit" {
+				lipr := models.ListIpAddressesRequest{
+					InterfaceId: interf.Id,
+				}
+				res, err := n.ipam.ListIpAddresses(lipr)
+				if err != nil {
+					return 0, "", err
+				}
+				if res.Count == 0 {
+					return 0, "", fmt.Errorf("no ip addresses found for device %s", device.Name)
+				}
+				if res.Count > 1 {
+					return 0, "", fmt.Errorf("too many ip addresses found for device %s", device.Name)
+				}
+				return vlan.VId, res.Results[0].Address, nil
 			}
-			if res.Count > 1 {
-				return 0, "", fmt.Errorf("too many ip addresses found for device %s", device.Name)
-			}
-			return vlan.VId, res.Results[0].Address, nil
 		}
 	}
 	return 0, "", fmt.Errorf("no vlan found for device %s", device.Name)

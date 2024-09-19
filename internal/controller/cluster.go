@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -72,7 +71,7 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
 func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device, role string) error {
-	vlan, ipStr, err := c.Nb.LookupVLANForDevice(device)
+	vlan, ipStr, err := c.Nb.LookupVLANForDevice(device, role)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to lookup vlan for device")
 		return err
@@ -91,7 +90,7 @@ func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, clus
 	nwdRaw := networkdata.NetworkData{
 		Networks: []networkdata.L3{
 			{
-				ID:        strconv.Itoa(vlan),
+				ID:        vlan,
 				Type:      networkdata.Ipv4,
 				IPAddress: &ipStr,
 				Link:      linkHint,
@@ -161,8 +160,8 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 	// create the host
 	mac, err := c.Nb.LookupMacForIp(device.PrimaryIp4.Address)
 	if err != nil {
-		logger.Error(err, "unable to lookup mac for ip")
-		return err
+		logger.Info("unable to lookup mac for ip", err)
+		mac = ""
 	}
 	// get the region
 	region, err := c.Nb.GetRegionForDevice(device)
@@ -270,6 +269,7 @@ func (c *ClusterController) createBmcSecret(ctx context.Context, cluster cluster
 var rootHintMap = map[string]string{
 	"poweredge-r660":       "Dell BOSS-N1",
 	"poweredge-r640":       "DELLBOSS VD",
+	"poweredge-r840":       "DELLBOSS VD",
 	"thinksystem-sr650":    "ThinkSystem M.2 VD",
 	"thinksystem-sr650-v3": "M.2 NVMe 2-Bay RAID Kit",
 	"proliant-dl320-gen11": "HPE NS204i-u Gen11 Boot Controller",
@@ -285,6 +285,7 @@ var linkHintMapCeph = map[string]string{
 
 var linkHintMapKvm = map[string]string{
 	"PowerEdge R640": "en*f0np*",
+	"PowerEdge R840": "en*f0np*",
 }
 
 func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error) {
