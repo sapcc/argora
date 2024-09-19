@@ -5,9 +5,9 @@ metadata:
   name: argora
 rules:
 - apiGroups:
-  - cluster.x-k8s.io
+  - ""
   resources:
-  - clusters
+  - secrets
   verbs:
   - create
   - delete
@@ -17,9 +17,9 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
+  - cluster.x-k8s.io
   resources:
-  - secrets
+  - clusters
   verbs:
   - create
   - delete
