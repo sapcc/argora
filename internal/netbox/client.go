@@ -93,50 +93,15 @@ func (n *NetboxClient) LookupVLANForDevice(device *models.Device, role string) (
 	if prefix.Count == 0 {
 		return 0, "", fmt.Errorf("no prefix found for device %s", device.Name)
 	}
-	if prefix.Count > 1 {
-		return 0, "", fmt.Errorf("too many prefixes found for device %s", device.Name)
-	}
-	return prefix.Results[0].Vlan.VId, res.Results[0].Address, nil
 
-	// if role == "kvm" {
-	// 	lipr := models.ListIpAddressesRequest{
-	// 		InterfaceId: interf.Id,
-	// 	}
-	// 	res, err := n.ipam.ListIpAddresses(lipr)
-	// 	if err != nil {
-	// 		return 0, "", err
-	// 	}
-	// 	if res.Count == 0 {
-	// 		return 0, "", fmt.Errorf("no ip addresses found for device %s", device.Name)
-	// 	}
-	// 	if res.Count > 1 {
-	// 		return 0, "", fmt.Errorf("too many ip addresses found for device %s", device.Name)
-	// 	}
-	// 	return 101, res.Results[0].Address, nil // hardcoded vlan id for kvm
-	// } else {
-	// 	for _, nestedVlan := range interf.TaggedVlans {
-	// 		vlan, err := n.ipam.GetVlan(nestedVlan.Id)
-	// 		if err != nil {
-	// 			return 0, "", err
-	// 		}
-	// 		if vlan.Role.Slug == "cc-kubernetes-transit" {
-	// 			lipr := models.ListIpAddressesRequest{
-	// 				InterfaceId: interf.Id,
-	// 			}
-	// 			res, err := n.ipam.ListIpAddresses(lipr)
-	// 			if err != nil {
-	// 				return 0, "", err
-	// 			}
-	// 			if res.Count == 0 {
-	// 				return 0, "", fmt.Errorf("no ip addresses found for device %s", device.Name)
-	// 			}
-	// 			if res.Count > 1 {
-	// 				return 0, "", fmt.Errorf("too many ip addresses found for device %s", device.Name)
-	// 			}
-	// 			return vlan.VId, res.Results[0].Address, nil
-	// 		}
-	// 	}
-	// }
+	for _, p := range prefix.Results {
+		if p.Vlan.VId != 0 {
+			return p.Vlan.VId, res.Results[0].Address, nil
+		}
+		//return 0, "", fmt.Fprintf("too many prefixes found for device %s", device.Name)
+	}
+	return 0, res.Results[0].Address, nil
+
 }
 
 // LookupMacForIp get the first interface of LAG1 and return the mac address
