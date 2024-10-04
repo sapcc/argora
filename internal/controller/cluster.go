@@ -270,7 +270,9 @@ var rootHintMap = map[string]string{
 	"poweredge-r660":       "Dell BOSS-N1",
 	"poweredge-r640":       "DELLBOSS VD",
 	"poweredge-r840":       "DELLBOSS VD",
+	"poweredge-r7615":      "DELLBOSS VD",
 	"thinksystem-sr650":    "ThinkSystem M.2 VD",
+	"sr655-v3":             "7mm NVMe 2-Bay Rear RAID Kit",
 	"thinksystem-sr650-v3": "M.2 NVMe 2-Bay RAID Kit",
 	"proliant-dl320-gen11": "HPE NS204i-u Gen11 Boot Controller",
 }
@@ -278,8 +280,10 @@ var rootHintMap = map[string]string{
 var linkHintMapCeph = map[string]string{
 	"ThinkSystem SR650":    "en*f0np*",
 	"ThinkSystem SR650 v3": "en*1f*np*",
+	"Thinksystem SR655 v3": "en*1f*np*",
 	"PowerEdge R640":       "en*f1np*",
 	"PowerEdge R660":       "en*f1np*",
+	"PowerEdge R7615":      "en*f1np*",
 	"Proliant DL320 Gen11": "en*f1np*",
 }
 
