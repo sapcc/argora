@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/dspinhirne/netaddr-go/v2"
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/sapcc/argora/internal/netbox"
@@ -34,6 +36,7 @@ const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
 type ClusterController struct {
 	client.Client
 	Nb          *netbox.NetboxClient
+	Scheme      *runtime.Scheme
 	BMCUser     string
 	BMCPassword string
 }
@@ -70,7 +73,7 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device, role string) error {
+func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, host *bmov1alpha1.BareMetalHost, cluster clusterv1.Cluster, device *models.Device, role string) error {
 	vlan, ipStr, err := c.Nb.LookupVLANForDevice(device, role)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to lookup vlan for device")
@@ -121,6 +124,10 @@ func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, clus
 			"networkData": string(ndwYaml),
 		},
 	}
+	if err := ctrl.SetControllerReference(host, result, c.Scheme); err != nil {
+		log.FromContext(ctx).Error(err, "failed to set owner reference on networkdata secret")
+		return err
+	}
 	return c.Create(ctx, result)
 }
 
@@ -136,7 +143,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 	bmh := &bmov1alpha1.BareMetalHost{}
 	err := c.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh)
 	if err == nil {
-		logger.Info("host already exists")
+		logger.Info("host already exists", "host", bmh.Name)
 		return nil
 	}
 	redfishUrl, err := createRedFishUrl(device)
@@ -223,7 +230,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		return err
 	}
 
-	err = c.CreateNetworkDataForDevice(ctx, cluster, device, labelRole)
+	err = c.CreateNetworkDataForDevice(ctx, host, cluster, device, labelRole)
 	if err != nil {
 		logger.Error(err, "unable to create network data")
 		return err
@@ -280,7 +287,7 @@ var rootHintMap = map[string]string{
 var linkHintMapCeph = map[string]string{
 	"ThinkSystem SR650":    "en*f0np*",
 	"ThinkSystem SR650 v3": "en*1f*np*",
-	"Thinksystem SR655 v3": "en*1f*np*",
+	"Thinksystem SR655 v3": "en*f*np*",
 	"PowerEdge R640":       "en*f1np*",
 	"PowerEdge R660":       "en*f1np*",
 	"PowerEdge R7615":      "en*f1np*",

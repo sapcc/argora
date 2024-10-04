@@ -68,6 +68,7 @@ func RunRootCmd(cmd *cobra.Command, args []string) error {
 	}
 	clusterController := &controller.ClusterController{
 		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
 		Nb:          nbc,
 		BMCUser:     bmcUser,
 		BMCPassword: bmcPassword,
