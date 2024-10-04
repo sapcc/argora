@@ -272,8 +272,8 @@ var rootHintMap = map[string]string{
 	"poweredge-r840":       "DELLBOSS VD",
 	"poweredge-r7615":      "DELLBOSS VD",
 	"thinksystem-sr650":    "ThinkSystem M.2 VD",
-	"sr655-v3":             "7mm NVMe 2-Bay Rear RAID Kit",
-	"thinksystem-sr650-v3": "M.2 NVMe 2-Bay RAID Kit",
+	"sr655-v3":             "NVMe 2-Bay",
+	"thinksystem-sr650-v3": "NVMe 2-Bay",
 	"proliant-dl320-gen11": "HPE NS204i-u Gen11 Boot Controller",
 }
 
