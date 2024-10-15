@@ -274,10 +274,10 @@ func (c *ClusterController) createBmcSecret(ctx context.Context, cluster cluster
 }
 
 var rootHintMap = map[string]string{
-	"poweredge-r660":       "Dell BOSS-N1",
-	"poweredge-r640":       "DELLBOSS VD",
-	"poweredge-r840":       "DELLBOSS VD",
-	"poweredge-r7615":      "DELLBOSS VD",
+	"poweredge-r660":       "BOSS",
+	"poweredge-r640":       "BOSS",
+	"poweredge-r840":       "BOSS",
+	"poweredge-r7615":      "BOSS",
 	"thinksystem-sr650":    "ThinkSystem M.2 VD",
 	"sr655-v3":             "NVMe 2-Bay",
 	"thinksystem-sr650-v3": "NVMe 2-Bay",
@@ -290,7 +290,7 @@ var linkHintMapCeph = map[string]string{
 	"Thinksystem SR655 v3": "en*f*np*",
 	"PowerEdge R640":       "en*f1np*",
 	"PowerEdge R660":       "en*f1np*",
-	"PowerEdge R7615":      "en*f1np*",
+	"PowerEdge R7615":      "en*f*np*",
 	"Proliant DL320 Gen11": "en*f1np*",
 }
 
