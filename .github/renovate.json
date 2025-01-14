@@ -6,6 +6,12 @@
     "mergeConfidence:all-badges",
     "docker:disable"
   ],
+  "assignees": [
+    "defo89",
+    "SchwarzM",
+    "xsen84",
+    "goerangudat"
+  ],
   "commitMessageAction": "Renovate: Update",
   "constraints": {
     "go": "1.23"

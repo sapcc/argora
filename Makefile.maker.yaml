@@ -16,14 +16,30 @@ golangciLint:
 
 githubWorkflow:
   ci:
-    enabled: false
-    coveralls: false
+    enabled: true
+    coveralls: true
+    ignorePaths:
+      - "**.md" # all Markdown files
+  pushContainerToGhcr:
+    enabled: true
+    platforms: "linux/amd64"
+    tagStrategy:
+      - edge
+      - latest
+      - semver
+      - sha
 
 renovate:
   enabled: true
+  assignees:
+    - defo89
+    - SchwarzM
+    - xsen84
+    - goerangudat
 
 dockerfile:
-  enabled: true
+  enabled: false
+  
 
 verbatim: |
   tilt: FORCE generate
