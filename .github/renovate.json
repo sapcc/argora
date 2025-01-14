@@ -1,13 +1,14 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:base",
+    "config:recommended",
     "default:pinDigestsDisabled",
     "mergeConfidence:all-badges",
     "docker:disable"
   ],
   "commitMessageAction": "Renovate: Update",
   "constraints": {
-    "go": "1.22"
+    "go": "1.23"
   },
   "dependencyDashboardOSVVulnerabilitySummary": "all",
   "osvVulnerabilityAlerts": true,
@@ -20,23 +21,27 @@
       "matchPackageNames": [
         "golang"
       ],
-      "allowedVersions": "1.22.x"
+      "allowedVersions": "1.23.x"
     },
     {
-      "matchPackagePatterns": [
-        "^github\\.com\\/sapcc\\/.*"
+      "matchPackageNames": [
+        "/^github\\.com\\/sapcc\\/.*/"
       ],
       "automerge": true,
       "groupName": "github.com/sapcc"
     },
     {
-      "excludePackagePatterns": [
-        "^github\\.com\\/sapcc\\/.*"
-      ],
-      "matchPackagePatterns": [
-        ".*"
+      "matchPackageNames": [
+        "!/^github\\.com\\/sapcc\\/.*/",
+        "/.*/"
       ],
       "groupName": "External dependencies"
+    },
+    {
+      "matchPackageNames": [
+        "/^k8s.io\\//"
+      ],
+      "allowedVersions": "0.28.x"
     }
   ],
   "prHourlyLimit": 0,
