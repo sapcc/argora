@@ -10,6 +10,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -17,18 +18,19 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/dspinhirne/netaddr-go/v2"
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	"github.com/sapcc/argora/internal/netbox"
-	"github.com/sapcc/argora/internal/networkdata"
-	"github.com/sapcc/go-netbox-go/models"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/dspinhirne/netaddr-go/v2"
+	"github.com/sapcc/argora/internal/netbox"
+	"github.com/sapcc/argora/internal/networkdata"
+	"github.com/sapcc/go-netbox-go/models"
+	"gopkg.in/yaml.v3"
 )
 
 const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
@@ -69,7 +71,7 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 	return ctrl.Result{RequeueAfter: 300 * time.Second}, nil
-	//return ctrl.Result{}, nil
+	// return ctrl.Result{}, nil
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
@@ -146,7 +148,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		logger.Info("host already exists", "host", bmh.Name)
 		return nil
 	}
-	redfishUrl, err := createRedFishUrl(device)
+	redfishUrl, err := createRedFishURL(device)
 	if err != nil {
 		logger.Error(err, "unable to create redfish url")
 		return err
@@ -165,7 +167,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		return err
 	}
 	// create the host
-	mac, err := c.Nb.LookupMacForIp(device.PrimaryIp4.Address)
+	mac, err := c.Nb.LookupMacForIP(device.PrimaryIp4.Address)
 	if err != nil {
 		logger.Info("unable to lookup mac for ip", err)
 		mac = ""
@@ -242,7 +244,7 @@ func (c *ClusterController) AddToManager(mgr manager.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).For(&clusterv1.Cluster{}).Complete(c)
 }
 
-func createRedFishUrl(device *models.Device) (string, error) {
+func createRedFishURL(device *models.Device) (string, error) {
 	ip, _, err := net.ParseCIDR(device.OOBIp.Address)
 	if err != nil {
 		return "", err
@@ -259,7 +261,7 @@ func (c *ClusterController) createBmcSecret(ctx context.Context, cluster cluster
 	user := c.BMCUser
 	password := c.BMCPassword
 	if user == "" || password == "" {
-		return nil, fmt.Errorf("bmc user or password not set")
+		return nil, errors.New("bmc user or password not set")
 	}
 	return &corev1.Secret{
 		ObjectMeta: ctrl.ObjectMeta{

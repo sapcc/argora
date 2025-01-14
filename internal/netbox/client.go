@@ -24,7 +24,7 @@ type NetboxClient struct {
 	ipam *ipam.Client
 }
 
-func NewNetboxClient(url string, token string) (*NetboxClient, error) {
+func NewNetboxClient(url, token string) (*NetboxClient, error) {
 	virt, err := virtualization.New(url, token, false)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (n *NetboxClient) GetRegionForDevice(device *models.Device) (string, error)
 	return region.Slug, nil
 }
 
-func (n *NetboxClient) LookupVLANForDevice(device *models.Device, role string) (int, string, error) {
+func (n *NetboxClient) LookupVLANForDevice(device *models.Device, role string) (vlanid int, address string, err error) {
 	lir := models.ListInterfacesRequest{
 		DeviceId: device.Id,
 	}
@@ -98,14 +98,13 @@ func (n *NetboxClient) LookupVLANForDevice(device *models.Device, role string) (
 		if p.Vlan.VId != 0 {
 			return p.Vlan.VId, res.Results[0].Address, nil
 		}
-		//return 0, "", fmt.Fprintf("too many prefixes found for device %s", device.Name)
+		// return 0, "", fmt.Fprintf("too many prefixes found for device %s", device.Name)
 	}
 	return 0, res.Results[0].Address, nil
-
 }
 
 // LookupMacForIp get the first interface of LAG1 and return the mac address
-func (n *NetboxClient) LookupMacForIp(ipStr string) (string, error) {
+func (n *NetboxClient) LookupMacForIP(ipStr string) (string, error) {
 	lipr := models.ListIpAddressesRequest{
 		Address: ipStr,
 	}
@@ -153,7 +152,7 @@ func (n *NetboxClient) LookupMacForIp(ipStr string) (string, error) {
 	return macs[names[0]], nil
 }
 
-func (n *NetboxClient) LookupCluster(role string, name string) ([]models.Device, error) {
+func (n *NetboxClient) LookupCluster(role, name string) ([]models.Device, error) {
 	lcp := models.ListClusterRequest{
 		Type: role,
 	}
