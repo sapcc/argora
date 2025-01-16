@@ -12,14 +12,15 @@ import (
 	"os"
 
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	"github.com/sapcc/argora/internal/controller"
-	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-api-declarations/bininfo"
 	"github.com/spf13/cobra"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"github.com/sapcc/argora/internal/controller"
+	"github.com/sapcc/argora/internal/netbox"
 )
 
 var RootCmd = &cobra.Command{
@@ -31,14 +32,14 @@ var RootCmd = &cobra.Command{
 
 var (
 	setupLog    = ctrl.Log.WithName("setup")
-	netboxUrl   string
+	netboxURL   string
 	netboxToken string
 	bmcUser     string
 	bmcPassword string
 )
 
 func init() {
-	RootCmd.PersistentFlags().StringVar(&netboxUrl, "netbox-url", os.Getenv("NETBOX_URL"), "URL of the netbox instance")
+	RootCmd.PersistentFlags().StringVar(&netboxURL, "netbox-url", os.Getenv("NETBOX_URL"), "URL of the netbox instance")
 	RootCmd.PersistentFlags().StringVar(&netboxToken, "netbox-token", os.Getenv("NETBOX_TOKEN"), "API token for netbox")
 	RootCmd.PersistentFlags().StringVar(&bmcUser, "bmc-user", os.Getenv("BMC_USER"), "BMC user")
 	RootCmd.PersistentFlags().StringVar(&bmcPassword, "bmc-password", os.Getenv("BMC_PASS"), "BMC password")
@@ -61,7 +62,7 @@ func RunRootCmd(cmd *cobra.Command, args []string) error {
 		setupLog.Error(err, "unable to register baremetal operator scheme")
 		return err
 	}
-	nbc, err := netbox.NewNetboxClient(netboxUrl, netboxToken)
+	nbc, err := netbox.NewNetboxClient(netboxURL, netboxToken)
 	if err != nil {
 		setupLog.Error(err, "unable to create netbox client")
 		return err

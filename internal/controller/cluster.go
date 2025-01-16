@@ -27,10 +27,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/dspinhirne/netaddr-go/v2"
-	"github.com/sapcc/argora/internal/netbox"
-	"github.com/sapcc/argora/internal/networkdata"
 	"github.com/sapcc/go-netbox-go/models"
 	"gopkg.in/yaml.v3"
+
+	"github.com/sapcc/argora/internal/netbox"
+	"github.com/sapcc/argora/internal/networkdata"
 )
 
 const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
@@ -148,7 +149,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		logger.Info("host already exists", "host", bmh.Name)
 		return nil
 	}
-	redfishUrl, err := createRedFishURL(device)
+	redfishURL, err := createRedFishURL(device)
 	if err != nil {
 		logger.Error(err, "unable to create redfish url")
 		return err
@@ -178,7 +179,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 		logger.Error(err, "unable to lookup region for device")
 		return err
 	}
-	bmcSecret, err := c.createBmcSecret(ctx, cluster, device)
+	bmcSecret, err := c.createBmcSecret(cluster, device)
 	if err != nil {
 		logger.Error(err, "unable to create bmc secret")
 		return err
@@ -214,7 +215,7 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 			AutomatedCleaningMode: "disabled",
 			Online:                true,
 			BMC: bmov1alpha1.BMCDetails{
-				Address:                        redfishUrl,
+				Address:                        redfishURL,
 				CredentialsName:                "bmc-secret-" + device.Name,
 				DisableCertificateVerification: true,
 			},
@@ -257,7 +258,7 @@ func createRedFishURL(device *models.Device) (string, error) {
 	}
 }
 
-func (c *ClusterController) createBmcSecret(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
+func (c *ClusterController) createBmcSecret(cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
 	user := c.BMCUser
 	password := c.BMCPassword
 	if user == "" || password == "" {

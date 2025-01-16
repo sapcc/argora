@@ -9,8 +9,9 @@
 package main
 
 import (
-	"github.com/sapcc/argora/internal/cmd"
 	"os"
+
+	"github.com/sapcc/argora/internal/cmd"
 )
 
 func main() {
