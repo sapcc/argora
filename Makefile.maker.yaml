@@ -17,7 +17,7 @@ golangciLint:
 githubWorkflow:
   ci:
     enabled: true
-    coveralls: true
+    coveralls: false
     ignorePaths:
       - "**.md" # all Markdown files
   pushContainerToGhcr:
