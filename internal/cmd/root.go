@@ -5,8 +5,9 @@ package cmd
 
 import (
 	"fmt"
-	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"os"
+
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
 	"github.com/ironcore-dev/controller-utils/cmdutils/switches"
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"

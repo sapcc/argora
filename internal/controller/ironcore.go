@@ -5,21 +5,24 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"strings"
+	"time"
+
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
-	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-netbox-go/models"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"net"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"strings"
-	"time"
+
+	"github.com/sapcc/argora/internal/netbox"
 )
 
 const (
@@ -158,7 +161,7 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		return err
 	}
 
-	metalServerName := fmt.Sprintf("%s-system-0", device.Name)
+	metalServerName := device.Name + "-system-0"
 	metalServer := &metalv1alpha1.Server{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:   metalServerName,
@@ -171,7 +174,7 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		},
 	}
 	err = c.Client.Create(ctx, metalServer)
-	if errors.IsAlreadyExists(err) {
+	if apierrors.IsAlreadyExists(err) {
 		logger.Info("server already exists", "Server", bmcSecret.Name)
 		return nil
 	}
@@ -208,10 +211,11 @@ func (c *IronCoreServerController) createBmcSecret(
 	device *models.Device,
 	labels map[string]string,
 ) (*metalv1alpha1.BMCSecret, error) {
+
 	user := c.BMCUser
 	password := c.BMCPassword
 	if user == "" || password == "" {
-		return nil, fmt.Errorf("bmc user or password not set")
+		return nil, errors.New("bmc user or password not set")
 	}
 	bmcSecret := &metalv1alpha1.BMCSecret{
 		ObjectMeta: ctrl.ObjectMeta{
@@ -224,7 +228,7 @@ func (c *IronCoreServerController) createBmcSecret(
 		},
 	}
 	err := c.Client.Create(ctx, bmcSecret)
-	if errors.IsAlreadyExists(err) {
+	if apierrors.IsAlreadyExists(err) {
 		log.FromContext(ctx).Info("bmc secret already exists", "bmcSecret", bmcSecret.Name)
 		return bmcSecret, nil
 	}
@@ -241,6 +245,7 @@ func (c *IronCoreServerController) createBmc(
 	bmcSecret *metalv1alpha1.BMCSecret,
 	labels map[string]string,
 ) (*metalv1alpha1.BMC, error) {
+
 	bmc := &metalv1alpha1.BMC{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:   device.Name,
@@ -260,7 +265,7 @@ func (c *IronCoreServerController) createBmc(
 		},
 	}
 	if err := c.Client.Create(ctx, bmc); err != nil {
-		if errors.IsAlreadyExists(err) {
+		if apierrors.IsAlreadyExists(err) {
 			log.FromContext(ctx).Info("BMC already exists", "BMC", bmc.Name)
 			return bmc, nil
 		}
@@ -272,6 +277,7 @@ func (c *IronCoreServerController) createBmc(
 func (c *IronCoreServerController) getOobIP(
 	device *models.Device,
 ) (string, error) {
+
 	oobIP := device.OOBIp.Address
 	ip, _, err := net.ParseCIDR(oobIP)
 	if err != nil {
