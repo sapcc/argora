@@ -1,16 +1,14 @@
-/*
- * Copyright (c) 2024. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
- * Morbi non lorem porttitor neque feugiat blandit. Ut vitae ipsum eget quam lacinia accumsan.
- * Etiam sed turpis ac ipsum condimentum fringilla. Maecenas magna.
- * Proin dapibus sapien vel ante. Aliquam erat volutpat. Pellentesque sagittis ligula eget metus.
- * Vestibulum commodo. Ut rhoncus gravida arcu.
- */
+// Copyright 2024 SAP SE
+// SPDX-License-Identifier: Apache-2.0
 
 package cmd
 
 import (
+	"fmt"
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"os"
 
+	"github.com/ironcore-dev/controller-utils/cmdutils/switches"
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/sapcc/go-api-declarations/bininfo"
 	"github.com/spf13/cobra"
@@ -31,11 +29,20 @@ var RootCmd = &cobra.Command{
 }
 
 var (
-	setupLog    = ctrl.Log.WithName("setup")
-	netboxURL   string
-	netboxToken string
-	bmcUser     string
-	bmcPassword string
+	setupLog       = ctrl.Log.WithName("setup")
+	netboxURL      string
+	netboxToken    string
+	bmcUser        string
+	bmcPassword    string
+	controllers    switches.Switches
+	ironCoreRoles  string
+	ironCoreRegion string
+)
+
+const (
+	// controllers
+	metal3ClusterController  = "metal3Controller"
+	ironCoreServerController = "ironCoreServerController"
 )
 
 func init() {
@@ -43,10 +50,25 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&netboxToken, "netbox-token", os.Getenv("NETBOX_TOKEN"), "API token for netbox")
 	RootCmd.PersistentFlags().StringVar(&bmcUser, "bmc-user", os.Getenv("BMC_USER"), "BMC user")
 	RootCmd.PersistentFlags().StringVar(&bmcPassword, "bmc-password", os.Getenv("BMC_PASS"), "BMC password")
+	RootCmd.PersistentFlags().StringVar(&ironCoreRoles, "ironcore-types", os.Getenv("IRONCORE_TYPES"), "Ironcore Cluster types")
+	RootCmd.PersistentFlags().StringVar(&ironCoreRegion, "ironcore-region", os.Getenv("IRONCORE_REGION"), "Ironcore Regions")
+
+	controllers = *switches.New(
+		metal3ClusterController,
+		ironCoreServerController,
+	)
+
+	RootCmd.PersistentFlags().Var(&controllers, "controllers",
+		fmt.Sprintf("Controllers to enable. All controllers: %v. Disabled-by-default controllers: %v",
+			controllers.All(),
+			controllers.DisabledByDefault(),
+		),
+	)
 }
 
 func RunRootCmd(cmd *cobra.Command, args []string) error {
 	ctrl.SetLogger(zap.New())
+
 	mgr, err := ctrl.NewManager(config.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {
 		setupLog.Error(err, "unable to create manager")
@@ -62,22 +84,43 @@ func RunRootCmd(cmd *cobra.Command, args []string) error {
 		setupLog.Error(err, "unable to register baremetal operator scheme")
 		return err
 	}
+	err = metalv1alpha1.AddToScheme(mgr.GetScheme())
+	if err != nil {
+		setupLog.Error(err, "unable to register metal operator scheme")
+		return err
+	}
 	nbc, err := netbox.NewNetboxClient(netboxURL, netboxToken)
 	if err != nil {
 		setupLog.Error(err, "unable to create netbox client")
 		return err
 	}
-	clusterController := &controller.ClusterController{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		Nb:          nbc,
-		BMCUser:     bmcUser,
-		BMCPassword: bmcPassword,
+
+	if controllers.Enabled(metal3ClusterController) {
+		if err = (&controller.Metal3ClusterController{
+			Client:      mgr.GetClient(),
+			Scheme:      mgr.GetScheme(),
+			Nb:          nbc,
+			BMCUser:     bmcUser,
+			BMCPassword: bmcPassword,
+		}).AddToManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Metal3Cluster")
+			os.Exit(1)
+		}
 	}
-	err = clusterController.AddToManager(mgr)
-	if err != nil {
-		setupLog.Error(err, "unable to add cluster controller to manager")
-		return err
+
+	if controllers.Enabled(ironCoreServerController) {
+		if err = (&controller.IronCoreServerController{
+			Client:         mgr.GetClient(),
+			Scheme:         mgr.GetScheme(),
+			Nb:             nbc,
+			BMCUser:        bmcUser,
+			BMCPassword:    bmcPassword,
+			IronCoreRoles:  ironCoreRoles,
+			IronCoreRegion: ironCoreRegion,
+		}).AddToManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "IroncoreServer")
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("starting manager")

@@ -1,10 +1,5 @@
-/*
- * Copyright (c) 2024. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
- * Morbi non lorem porttitor neque feugiat blandit. Ut vitae ipsum eget quam lacinia accumsan.
- * Etiam sed turpis ac ipsum condimentum fringilla. Maecenas magna.
- * Proin dapibus sapien vel ante. Aliquam erat volutpat. Pellentesque sagittis ligula eget metus.
- * Vestibulum commodo. Ut rhoncus gravida arcu.
- */
+// Copyright 2024 SAP SE
+// SPDX-License-Identifier: Apache-2.0
 
 package controller
 
@@ -36,9 +31,9 @@ import (
 
 const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
 
-type ClusterController struct {
+type Metal3ClusterController struct {
 	client.Client
-	Nb          *netbox.NetboxClient
+	Nb          *netbox.Client
 	Scheme      *runtime.Scheme
 	BMCUser     string
 	BMCPassword string
@@ -49,9 +44,9 @@ type ClusterController struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile looks up a cluster in netbox and creates baremetal hosts for it
-func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (c *Metal3ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling cluster")
+	logger.Info("reconciling ironcore cluster")
 	cluster := &clusterv1.Cluster{}
 	err := c.Client.Get(ctx, req.NamespacedName, cluster)
 	if client.IgnoreNotFound(err) != nil {
@@ -59,7 +54,7 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 	role := cluster.Labels[ClusterRoleLabel]
-	devices, err := c.Nb.LookupCluster(role, cluster.Name)
+	devices, _, err := c.Nb.LookupCluster(role, "", cluster.Name)
 	if err != nil {
 		logger.Error(err, "unable to lookup cluster in netbox")
 		return ctrl.Result{}, err
@@ -71,12 +66,13 @@ func (c *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 	}
-	return ctrl.Result{RequeueAfter: 300 * time.Second}, nil
-	// return ctrl.Result{}, nil
+	return ctrl.Result{
+		RequeueAfter: 300 * time.Second,
+	}, nil
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, host *bmov1alpha1.BareMetalHost, cluster clusterv1.Cluster, device *models.Device, role string) error {
+func (c *Metal3ClusterController) CreateNetworkDataForDevice(ctx context.Context, host *bmov1alpha1.BareMetalHost, cluster clusterv1.Cluster, device *models.Device, role string) error {
 	vlan, ipStr, err := c.Nb.LookupVLANForDevice(device, role)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to lookup vlan for device")
@@ -134,7 +130,7 @@ func (c *ClusterController) CreateNetworkDataForDevice(ctx context.Context, host
 	return c.Create(ctx, result)
 }
 
-func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) error {
+func (c *Metal3ClusterController) ReconcileDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "node", device.Name)
 	// check if device is active
@@ -241,8 +237,8 @@ func (c *ClusterController) ReconcileDevice(ctx context.Context, cluster cluster
 	return nil
 }
 
-func (c *ClusterController) AddToManager(mgr manager.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).For(&clusterv1.Cluster{}).Complete(c)
+func (c *Metal3ClusterController) AddToManager(mgr manager.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).Named("metal3Controller").For(&clusterv1.Cluster{}).Complete(c)
 }
 
 func createRedFishURL(device *models.Device) (string, error) {
@@ -258,7 +254,7 @@ func createRedFishURL(device *models.Device) (string, error) {
 	}
 }
 
-func (c *ClusterController) createBmcSecret(cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
+func (c *Metal3ClusterController) createBmcSecret(cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
 	user := c.BMCUser
 	password := c.BMCPassword
 	if user == "" || password == "" {
