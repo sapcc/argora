@@ -1,10 +1,5 @@
-/*
- * Copyright (c) 2024. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
- * Morbi non lorem porttitor neque feugiat blandit. Ut vitae ipsum eget quam lacinia accumsan.
- * Etiam sed turpis ac ipsum condimentum fringilla. Maecenas magna.
- * Proin dapibus sapien vel ante. Aliquam erat volutpat. Pellentesque sagittis ligula eget metus.
- * Vestibulum commodo. Ut rhoncus gravida arcu.
- */
+// Copyright 2024 SAP SE
+// SPDX-License-Identifier: Apache-2.0
 
 package netbox
 
@@ -18,13 +13,13 @@ import (
 	"github.com/sapcc/go-netbox-go/virtualization"
 )
 
-type NetboxClient struct {
+type Client struct {
 	virt *virtualization.Client
 	dcim *dcim.Client
 	ipam *ipam.Client
 }
 
-func NewNetboxClient(url, token string) (*NetboxClient, error) {
+func NewNetboxClient(url, token string) (*Client, error) {
 	virt, err := virtualization.New(url, token, false)
 	if err != nil {
 		return nil, err
@@ -37,14 +32,14 @@ func NewNetboxClient(url, token string) (*NetboxClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &NetboxClient{
+	return &Client{
 		virt: virt,
 		dcim: dcim,
 		ipam: ipam,
 	}, nil
 }
 
-func (n *NetboxClient) GetRegionForDevice(device *models.Device) (string, error) {
+func (n *Client) GetRegionForDevice(device *models.Device) (string, error) {
 	site, err := n.dcim.GetSite(device.Site.Id)
 	if err != nil {
 		return "", err
@@ -56,7 +51,7 @@ func (n *NetboxClient) GetRegionForDevice(device *models.Device) (string, error)
 	return region.Slug, nil
 }
 
-func (n *NetboxClient) LookupVLANForDevice(device *models.Device, role string) (vlanid int, address string, err error) {
+func (n *Client) LookupVLANForDevice(device *models.Device, role string) (vlanid int, address string, err error) {
 	lir := models.ListInterfacesRequest{
 		DeviceId: device.Id,
 	}
@@ -103,8 +98,8 @@ func (n *NetboxClient) LookupVLANForDevice(device *models.Device, role string) (
 	return 0, res.Results[0].Address, nil
 }
 
-// LookupMacForIp get the first interface of LAG1 and return the mac address
-func (n *NetboxClient) LookupMacForIP(ipStr string) (string, error) {
+// LookupMacForIP get the first interface of LAG1 and return the mac address
+func (n *Client) LookupMacForIP(ipStr string) (string, error) {
 	lipr := models.ListIpAddressesRequest{
 		Address: ipStr,
 	}
@@ -152,20 +147,25 @@ func (n *NetboxClient) LookupMacForIP(ipStr string) (string, error) {
 	return macs[names[0]], nil
 }
 
-func (n *NetboxClient) LookupCluster(role, name string) ([]models.Device, error) {
+func (n *Client) LookupCluster(role, region, name string) ([]models.Device, string, error) {
 	lcp := models.ListClusterRequest{
 		Type: role,
 	}
-	lcp.Name = name
+	if region != "" {
+		lcp.Region = region
+	}
+	if name != "" {
+		lcp.Name = name
+	}
 	resp, err := n.virt.ListClusters(lcp)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if resp.Count == 0 {
-		return nil, nil
+		return nil, "", nil
 	}
 	if resp.Count > 1 {
-		return nil, fmt.Errorf("too many clusters found: %d", resp.Count)
+		return nil, "", fmt.Errorf("too many clusters found: %d", resp.Count)
 	}
 	cluster := resp.Results[0]
 	ldp := models.ListDevicesRequest{
@@ -173,7 +173,7 @@ func (n *NetboxClient) LookupCluster(role, name string) ([]models.Device, error)
 	}
 	dresp, err := n.dcim.ListDevices(ldp)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return dresp.Results, nil
+	return dresp.Results, cluster.Name, nil
 }

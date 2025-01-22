@@ -20,15 +20,28 @@ def deploy_bmo_crd():
     cmd = "curl -sSL {} | kubectl apply -f -".format(m3_uri)
     local(cmd, quiet=False)
 
+def deploy_metal_crd():
+    version = "9a29dae0cfa4575cc94b3c9d9643e441cea7ef9b"
+    bmcSecret_uri = "https://raw.githubusercontent.com/ironcore-dev/metal-operator/{}/config/crd/bases/metal.ironcore.dev_bmcsecrets.yaml".format(version)
+    cmd_bmcSecret = "curl -sSL {} | kubectl apply -f -".format(bmcSecret_uri)
+    bmc_uri = "https://raw.githubusercontent.com/ironcore-dev/metal-operator/{}/config/crd/bases/metal.ironcore.dev_bmcs.yaml".format(version)
+    cmd_bmc = "curl -sSL {} | kubectl apply -f -".format(bmc_uri)
+    server_uri = "https://raw.githubusercontent.com/ironcore-dev/metal-operator/{}/config/crd/bases/metal.ironcore.dev_servers.yaml".format(version)
+    cmd = "curl -sSL {} | kubectl apply -f -".format(server_uri)
+    local(cmd_bmcSecret, quiet=False)
+    local(cmd_bmc, quiet=False)
+    local(cmd, quiet=False)
+
 docker_build('argora-dev', '.', build_args={"BININFO_BUILD_DATE": config.parse()['BININFO_BUILD_DATE'], "BININFO_VERSION": config.parse()['BININFO_VERSION'], "BININFO_COMMIT_HASH": config.parse()['BININFO_COMMIT_HASH']})
 
 deploy_cert_manager()
 #deploy_capi_crd()
 deploy_bmo_crd()
+deploy_metal_crd()
 
 k8s_yaml('deployments/cluster-api-components.yaml')
 k8s_yaml('config/rbac/role.yaml')
 k8s_yaml('deployments/argora.yaml')
-k8s_yaml('deployments/test/cluster.yaml')
+k8s_yaml('deployments/cluster.yaml')
 k8s_yaml('deployments/secret.yaml')
 

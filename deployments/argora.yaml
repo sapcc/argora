@@ -39,6 +39,9 @@ spec:
       containers:
         - name: argora
           image: argora-dev:latest
+          args:
+            - --controllers="metal3Controller"
+          #  - --controllers="ironCoreServerController"
           envFrom:
             - secretRef:
                 name: argora
