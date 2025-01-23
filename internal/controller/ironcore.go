@@ -116,14 +116,14 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		return nil
 	}
 	// check if the host already exists
-	metalServerName := device.Name + "-system-0"
-	server := &metalv1alpha1.Server{}
-	err := c.Client.Get(ctx, client.ObjectKey{Name: metalServerName, Namespace: defaultNamespace}, server)
+	bmcName := device.Name
+	bmcObj := &metalv1alpha1.BMC{}
+	err := c.Client.Get(ctx, client.ObjectKey{Name: bmcName, Namespace: defaultNamespace}, bmcObj)
 	if err == nil {
-		logger.Info("host already exists", "host", server.Name)
+		logger.Info("bmc already exists", "bmc", bmcName)
 		return nil
 	}
-	// ugly hack to get the role this is not easy to get to in netbox
+	// ugly hack to get the bb this is not easy to get to in netbox
 	nameParts := strings.Split(device.Name, "-")
 	if len(nameParts) != 2 {
 		err = fmt.Errorf("invalid device name: %s", device.Name)
@@ -163,34 +163,8 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		return err
 	}
 
-	metalServer := &metalv1alpha1.Server{
-		ObjectMeta: ctrl.ObjectMeta{
-			Name:   metalServerName,
-			Labels: commonLabels,
-		},
-		Spec: metalv1alpha1.ServerSpec{
-			BMCRef: &corev1.LocalObjectReference{
-				Name: bmc.Name,
-			},
-		},
-	}
-	err = c.Client.Create(ctx, metalServer)
-	if apierrors.IsAlreadyExists(err) {
-		logger.Info("server already exists", "Server", bmcSecret.Name)
-		return nil
-	}
-	if err != nil {
-		logger.Error(err, "unable to create Server")
-		return err
-	}
-
-	if err := c.setOwnerReferenceAndPatch(ctx, metalServer, bmcSecret); err != nil {
+	if err := c.setOwnerReferenceAndPatch(ctx, bmc, bmcSecret); err != nil {
 		logger.Error(err, "unable to set owner reference and patch bmc secret")
-		return err
-	}
-
-	if err := c.setOwnerReferenceAndPatch(ctx, metalServer, bmc); err != nil {
-		logger.Error(err, "unable to set owner reference and patch BMC")
 		return err
 	}
 
