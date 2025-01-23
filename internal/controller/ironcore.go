@@ -49,7 +49,6 @@ type IronCoreServerController struct {
 // Reconcile looks up IronCore clusters in Netbox and creates Servers for it
 func (c *IronCoreServerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling IronCore cluster")
 
 	var clusterRoles []string
 	if c.IronCoreRoles != "" {
@@ -57,6 +56,8 @@ func (c *IronCoreServerController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	for _, clusterRole := range clusterRoles {
+		logger.Info("reconciling IronCore cluster role " + clusterRole + " in " + c.IronCoreRegion)
+
 		devices, cluster, err := c.Nb.LookupCluster(clusterRole, c.IronCoreRegion, "")
 		if err != nil {
 			logger.Error(err, "unable to lookup cluster in netbox")
@@ -115,8 +116,9 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		return nil
 	}
 	// check if the host already exists
+	metalServerName := device.Name + "-system-0"
 	server := &metalv1alpha1.Server{}
-	err := c.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: defaultNamespace}, server)
+	err := c.Client.Get(ctx, client.ObjectKey{Name: metalServerName, Namespace: defaultNamespace}, server)
 	if err == nil {
 		logger.Info("host already exists", "host", server.Name)
 		return nil
@@ -161,7 +163,6 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		return err
 	}
 
-	metalServerName := device.Name + "-system-0"
 	metalServer := &metalv1alpha1.Server{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:   metalServerName,
@@ -183,23 +184,13 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		return err
 	}
 
-	if err := controllerutil.SetControllerReference(server, bmcSecret, c.Scheme); err != nil {
-		logger.Error(err, "unable to set owner reference for bmc secret")
-		return err
-	}
-	err = c.Client.Patch(ctx, bmcSecret, client.MergeFrom(bmcSecret))
-	if err != nil {
-		logger.Error(err, "unable to patch bmcSecret")
+	if err := c.setOwnerReferenceAndPatch(ctx, metalServer, bmcSecret); err != nil {
+		logger.Error(err, "unable to set owner reference and patch bmc secret")
 		return err
 	}
 
-	if err := controllerutil.SetControllerReference(server, bmc, c.Scheme); err != nil {
-		logger.Error(err, "unable to set owner reference for bmc")
-		return err
-	}
-	err = c.Client.Patch(ctx, bmc, client.MergeFrom(bmc))
-	if err != nil {
-		logger.Error(err, "unable to patch BMC")
+	if err := c.setOwnerReferenceAndPatch(ctx, metalServer, bmc); err != nil {
+		logger.Error(err, "unable to set owner reference and patch BMC")
 		return err
 	}
 
@@ -222,9 +213,9 @@ func (c *IronCoreServerController) createBmcSecret(
 			Name:   device.Name,
 			Labels: labels,
 		},
-		StringData: map[string]string{
-			"username": user,
-			"password": password,
+		Data: map[string][]byte{
+			metalv1alpha1.BMCSecretUsernameKeyName: []byte(user),
+			metalv1alpha1.BMCSecretPasswordKeyName: []byte(password),
 		},
 	}
 	err := c.Client.Create(ctx, bmcSecret)
@@ -284,4 +275,15 @@ func (c *IronCoreServerController) getOobIP(
 		return "", fmt.Errorf("uncable to parse Device OOB IP: %w", err)
 	}
 	return ip.String(), nil
+}
+
+func (c *IronCoreServerController) setOwnerReferenceAndPatch(ctx context.Context, owner, object client.Object) error {
+	deepCopiedObject := object.DeepCopyObject().(client.Object)
+	if err := controllerutil.SetControllerReference(owner, deepCopiedObject, c.Scheme); err != nil {
+		return fmt.Errorf("unable to set owner reference: %w", err)
+	}
+	if err := c.Client.Patch(ctx, deepCopiedObject, client.MergeFrom(object)); err != nil {
+		return fmt.Errorf("unable to patch object: %w", err)
+	}
+	return nil
 }
