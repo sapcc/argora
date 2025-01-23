@@ -4,8 +4,11 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"fmt"
 	"os"
+
+	"k8s.io/apimachinery/pkg/runtime"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
@@ -17,6 +20,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/sapcc/argora/internal/controller"
 	"github.com/sapcc/argora/internal/netbox"
@@ -30,12 +34,16 @@ var RootCmd = &cobra.Command{
 }
 
 var (
+	scheme         = runtime.NewScheme()
 	setupLog       = ctrl.Log.WithName("setup")
 	netboxURL      string
 	netboxToken    string
 	bmcUser        string
 	bmcPassword    string
 	controllers    switches.Switches
+	metricsAddr    string
+	secureMetrics  bool
+	enableHTTP2    bool
 	ironCoreRoles  string
 	ironCoreRegion string
 )
@@ -53,6 +61,9 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&bmcPassword, "bmc-password", os.Getenv("BMC_PASS"), "BMC password")
 	RootCmd.PersistentFlags().StringVar(&ironCoreRoles, "ironcore-types", os.Getenv("IRONCORE_TYPES"), "Ironcore Cluster types")
 	RootCmd.PersistentFlags().StringVar(&ironCoreRegion, "ironcore-region", os.Getenv("IRONCORE_REGION"), "Ironcore Regions")
+	RootCmd.PersistentFlags().StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	RootCmd.PersistentFlags().BoolVar(&secureMetrics, "metrics-secure", false, "If set the metrics endpoint is served securely")
+	RootCmd.PersistentFlags().BoolVar(&enableHTTP2, "enable-http2", false, "If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
 	controllers = *switches.New(
 		metal3ClusterController,
@@ -70,7 +81,30 @@ func init() {
 func RunRootCmd(cmd *cobra.Command, args []string) error {
 	ctrl.SetLogger(zap.New())
 
-	mgr, err := ctrl.NewManager(config.GetConfigOrDie(), ctrl.Options{})
+	// if the enable-http2 flag is false (the default), http/2 should be disabled
+	// due to its vulnerabilities. More specifically, disabling http/2 will
+	// prevent from being vulnerable to the HTTP/2 Stream Cancelation and
+	// Rapid Reset CVEs. For more information see:
+	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
+	// - https://github.com/advisories/GHSA-4374-p667-p6c8
+	disableHTTP2 := func(c *tls.Config) {
+		setupLog.Info("disabling http/2")
+		c.NextProtos = []string{"http/1.1"}
+	}
+
+	tlsOpts := []func(*tls.Config){}
+	if !enableHTTP2 {
+		tlsOpts = append(tlsOpts, disableHTTP2)
+	}
+
+	mgr, err := ctrl.NewManager(config.GetConfigOrDie(), ctrl.Options{
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress:   metricsAddr,
+			SecureServing: secureMetrics,
+			TLSOpts:       tlsOpts,
+		},
+	})
 	if err != nil {
 		setupLog.Error(err, "unable to create manager")
 		return err
