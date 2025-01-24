@@ -68,6 +68,10 @@ github.com/ironcore-dev/controller-utils v0.9.7 h1:ywNcB6lDeOe6UWxJaptbdgb9qb6cD
 github.com/ironcore-dev/controller-utils v0.9.7/go.mod h1:7X6JUmq75o4KFe05zUa9rEXnS39dSrlXqUnt9Wuiug0=
 github.com/ironcore-dev/metal-operator v0.0.0-20250110122403-9a29dae0cfa4 h1:h6OMgXUwEiwHKKNn/pwauyjWamB1s+GFPxsgDksTgIE=
 github.com/ironcore-dev/metal-operator v0.0.0-20250110122403-9a29dae0cfa4/go.mod h1:bYsdh4COQ5K0K1Z6Ssejm9t5cGbIIpMcu3d7bKTa+X4=
+github.com/ironcore-dev/metal-operator v0.0.0-20250124104409-b705a57f5ee1 h1:3As8V8RBEIq5IHv6wgrhS3ZCj8qpfiL/fTzEykG3TCc=
+github.com/ironcore-dev/metal-operator v0.0.0-20250124104409-b705a57f5ee1/go.mod h1:XEu2LqU4QIbqN5bXAbVD3SlitEOuLHtm3P/TrRzrEKg=
+github.com/ironcore-dev/metal-operator v0.0.0-20250124150016-d635c5061d9d h1:KQRviy/X0Y3RDiKEMtZOYEekHkw13l1rpqmqEue2MTc=
+github.com/ironcore-dev/metal-operator v0.0.0-20250124150016-d635c5061d9d/go.mod h1:XEu2LqU4QIbqN5bXAbVD3SlitEOuLHtm3P/TrRzrEKg=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
