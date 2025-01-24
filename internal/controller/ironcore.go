@@ -149,6 +149,8 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		"kubernetes.metal.cloud.sap/cluster": cluster,
 		"kubernetes.metal.cloud.sap/name":    device.Name,
 		"kubernetes.metal.cloud.sap/bb":      nameParts[1],
+		"kubernetes.metal.cloud.sap/type":    device.DeviceType.Slug,
+		"kubernetes.metal.cloud.sap/role":    device.DeviceRole.Slug,
 	}
 
 	bmcSecret, err := c.createBmcSecret(ctx, device, commonLabels)
