@@ -6,6 +6,7 @@ package cmd
 import (
 	"crypto/tls"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -107,6 +108,11 @@ func RunRootCmd(cmd *cobra.Command, args []string) error {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to create manager")
+		return err
+	}
+	err = corev1.AddToScheme(mgr.GetScheme())
+	if err != nil {
+		setupLog.Error(err, "unable to register core API scheme")
 		return err
 	}
 	err = clusterv1.AddToScheme(mgr.GetScheme())

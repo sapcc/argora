@@ -21,7 +21,7 @@ def deploy_bmo_crd():
     local(cmd, quiet=False)
 
 def deploy_metal_crd():
-    version = "9a29dae0cfa4575cc94b3c9d9643e441cea7ef9b"
+    version = "da2a8154c95f3e087c3dbd798b1ff28328266dab"
     bmcSecret_uri = "https://raw.githubusercontent.com/ironcore-dev/metal-operator/{}/config/crd/bases/metal.ironcore.dev_bmcsecrets.yaml".format(version)
     cmd_bmcSecret = "curl -sSL {} | kubectl apply -f -".format(bmcSecret_uri)
     bmc_uri = "https://raw.githubusercontent.com/ironcore-dev/metal-operator/{}/config/crd/bases/metal.ironcore.dev_bmcs.yaml".format(version)

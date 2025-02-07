@@ -15,7 +15,7 @@ require (
 
 require (
 	github.com/ironcore-dev/controller-utils v0.9.7
-	github.com/ironcore-dev/metal-operator v0.0.0-20250124150016-d635c5061d9d
+	github.com/ironcore-dev/metal-operator v0.0.0-20250204075245-da2a8154c95f
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.31.4
 )
