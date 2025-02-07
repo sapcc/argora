@@ -164,7 +164,7 @@ func (c *Metal3ClusterController) ReconcileDevice(ctx context.Context, cluster c
 		return err
 	}
 	// create the host
-	mac, err := c.Nb.LookupMacForIP(device.PrimaryIp4.Address)
+	mac, err := c.Nb.LookupMacForIP(device.PrimaryIP4.Address)
 	if err != nil {
 		logger.Info("unable to lookup mac for ip", err)
 		mac = ""

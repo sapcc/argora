@@ -1,4 +1,5 @@
 deployments/cluster.yaml
 deployments/secret.yaml
+deployments/test/
 build/
 

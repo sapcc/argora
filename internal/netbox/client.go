@@ -40,11 +40,11 @@ func NewNetboxClient(url, token string) (*Client, error) {
 }
 
 func (n *Client) GetRegionForDevice(device *models.Device) (string, error) {
-	site, err := n.dcim.GetSite(device.Site.Id)
+	site, err := n.dcim.GetSite(device.Site.ID)
 	if err != nil {
 		return "", err
 	}
-	region, err := n.dcim.GetRegion(site.Region.Id)
+	region, err := n.dcim.GetRegion(site.Region.ID)
 	if err != nil {
 		return "", err
 	}
@@ -53,7 +53,7 @@ func (n *Client) GetRegionForDevice(device *models.Device) (string, error) {
 
 func (n *Client) LookupVLANForDevice(device *models.Device, role string) (vlanid int, address string, err error) {
 	lir := models.ListInterfacesRequest{
-		DeviceId: device.Id,
+		DeviceID: device.ID,
 	}
 	lir.Name = "LAG1"
 	resp, err := n.dcim.ListInterfaces(lir)
@@ -68,10 +68,10 @@ func (n *Client) LookupVLANForDevice(device *models.Device, role string) (vlanid
 	}
 	interf := resp.Results[0]
 
-	lipr := models.ListIpAddressesRequest{
-		InterfaceId: interf.Id,
+	lipr := models.ListIPAddressesRequest{
+		InterfaceID: interf.ID,
 	}
-	res, err := n.ipam.ListIpAddresses(lipr)
+	res, err := n.ipam.ListIPAddresses(lipr)
 	if err != nil {
 		return 0, "", err
 	}
@@ -90,8 +90,8 @@ func (n *Client) LookupVLANForDevice(device *models.Device, role string) (vlanid
 	}
 
 	for _, p := range prefix.Results {
-		if p.Vlan.VId != 0 {
-			return p.Vlan.VId, res.Results[0].Address, nil
+		if p.Vlan.VID != 0 {
+			return p.Vlan.VID, res.Results[0].Address, nil
 		}
 		// return 0, "", fmt.Fprintf("too many prefixes found for device %s", device.Name)
 	}
@@ -100,10 +100,10 @@ func (n *Client) LookupVLANForDevice(device *models.Device, role string) (vlanid
 
 // LookupMacForIP get the first interface of LAG1 and return the mac address
 func (n *Client) LookupMacForIP(ipStr string) (string, error) {
-	lipr := models.ListIpAddressesRequest{
+	lipr := models.ListIPAddressesRequest{
 		Address: ipStr,
 	}
-	resp, err := n.ipam.ListIpAddresses(lipr)
+	resp, err := n.ipam.ListIPAddresses(lipr)
 	if err != nil {
 		return "", err
 	}
@@ -116,7 +116,7 @@ func (n *Client) LookupMacForIP(ipStr string) (string, error) {
 
 	ip := resp.Results[0]
 	lir := models.ListInterfacesRequest{}
-	lir.Id = ip.AssignedInterface.Id
+	lir.ID = ip.AssignedInterface.ID
 	res, err := n.dcim.ListInterfaces(lir)
 	if err != nil {
 		return "", err
@@ -129,7 +129,7 @@ func (n *Client) LookupMacForIP(ipStr string) (string, error) {
 	}
 	// this is now the LAG interface we need to get the first interface of this LAG
 	lir2 := models.ListInterfacesRequest{}
-	lir2.LagId = res.Results[0].Id
+	lir2.LagID = res.Results[0].ID
 	res2, err := n.dcim.ListInterfaces(lir2)
 	if err != nil {
 		return "", err
@@ -169,7 +169,7 @@ func (n *Client) LookupCluster(role, region, name string) ([]models.Device, stri
 	}
 	cluster := resp.Results[0]
 	ldp := models.ListDevicesRequest{
-		ClusterId: cluster.Id,
+		ClusterID: cluster.ID,
 	}
 	dresp, err := n.dcim.ListDevices(ldp)
 	if err != nil {
