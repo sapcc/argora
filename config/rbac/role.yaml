@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: argora
+  name: manager-role
 rules:
 - apiGroups:
   - ""
@@ -16,6 +16,32 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - argora.cloud.sap
+  resources:
+  - updaters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - argora.cloud.sap
+  resources:
+  - updaters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - argora.cloud.sap
+  resources:
+  - updaters/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - cluster.x-k8s.io
   resources:

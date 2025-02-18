@@ -8,7 +8,8 @@
 /*.env*
 /.golangci.yaml
 /.vscode/
-/build/
+/bin/
+/config/
 /CONTRIBUTING.md
 /Dockerfile
 /docs/
@@ -17,4 +18,5 @@
 /README.md
 /report.html
 /shell.nix
-/testing/
+/test/
+/hack/

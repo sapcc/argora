@@ -9,6 +9,7 @@
 run:
   timeout: 3m # 1m by default
   modules-download-mode: readonly
+  allow-parallel-runners: true
 
 output:
   # Do not print lines of code with issue.
@@ -19,11 +20,21 @@ issues:
     # It is idiomatic Go to reuse the name 'err' with ':=' for subsequent errors.
     # Ref: https://go.dev/doc/effective_go#redeclaration
     - 'declaration of "err" shadows declaration at'
+  # don't skip warning about doc comments
+  # don't exclude the default set of lint
+  exclude-use-default: false
   exclude-rules:
     - path: _test\.go
       linters:
         - bodyclose
         - dupl
+    - path: "api/*"
+      linters:
+        - lll
+    - path: "internal/*"
+      linters:
+        - dupl
+        - lll
   # '0' disables the following options.
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -107,7 +118,6 @@ linters-settings:
     require-specific: true
   stylecheck:
     dot-import-whitelist:
-      - github.com/majewsky/gg/option
       - github.com/onsi/ginkgo/v2
       - github.com/onsi/gomega
   usestdlibvars:
@@ -122,10 +132,14 @@ linters-settings:
     time-weekday: true
     tls-signature-scheme: true
   usetesting:
+    os-setenv: true
     os-temp-dir: true
   whitespace:
     # Enforce newlines (or comments) after multi-line function signatures.
     multi-func: true
+  revive:
+    rules:
+      - name: comment-spacings
 
 linters:
   # We use 'disable-all' and enable linters explicitly so that a newer version
@@ -166,6 +180,7 @@ linters:
     - sqlclosecheck
     - staticcheck
     - stylecheck
+    - tenv
     - typecheck
     - unconvert
     - unparam
@@ -173,3 +188,8 @@ linters:
     - usestdlibvars
     - usetesting
     - whitespace
+    - gocyclo
+    - lll
+    - nakedret
+    - prealloc
+    - revive

@@ -8,9 +8,9 @@ with pkgs;
 mkShell {
   nativeBuildInputs = [
     addlicense
+    ginkgo
     go-licence-detector
-    go_1_24
-    golangci-lint
+    go_1_23
     gotools # goimports
     kubernetes-controller-tools # controller-gen
     setup-envtest
