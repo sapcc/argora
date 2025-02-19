@@ -3,21 +3,21 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.17.1
-  name: updaters.argora.cloud.sap
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: updates.argora.cloud.sap
 spec:
   group: argora.cloud.sap
   names:
-    kind: Updater
-    listKind: UpdaterList
-    plural: updaters
-    singular: updater
+    kind: Update
+    listKind: UpdateList
+    plural: updates
+    singular: update
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Updater is the Schema for the updaters API.
+        description: Update is the Schema for the updates API.
         properties:
           apiVersion:
             description: |-
@@ -37,15 +37,15 @@ spec:
           metadata:
             type: object
           spec:
-            description: UpdaterSpec defines the desired state of Updater.
+            description: UpdateSpec defines the desired state of Update.
             properties:
               foo:
-                description: Foo is an example field of Updater. Edit updater_types.go
+                description: Foo is an example field of Update. Edit update_types.go
                   to remove/update
                 type: string
             type: object
           status:
-            description: UpdaterStatus defines the observed state of Updater.
+            description: UpdateStatus defines the observed state of Update.
             type: object
         type: object
     served: true

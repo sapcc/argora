@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("Updater Controller", func() {
+var _ = Describe("Update Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -40,13 +40,13 @@ var _ = Describe("Updater Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		updater := &argorav1alpha1.Updater{}
+		update := &argorav1alpha1.Update{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind Updater")
-			err := k8sClient.Get(ctx, typeNamespacedName, updater)
+			By("creating the custom resource for the Kind Update")
+			err := k8sClient.Get(ctx, typeNamespacedName, update)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &argorav1alpha1.Updater{
+				resource := &argorav1alpha1.Update{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,17 +59,17 @@ var _ = Describe("Updater Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &argorav1alpha1.Updater{}
+			resource := &argorav1alpha1.Update{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance Updater")
+			By("Cleanup the specific resource instance Update")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &UpdaterReconciler{
+			controllerReconciler := &UpdateReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}

@@ -12,6 +12,9 @@ import (
 	"time"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	"github.com/sapcc/argora/internal/config"
+	"github.com/sapcc/argora/internal/controller/periodic"
+	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-netbox-go/models"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,10 +22,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	"github.com/sapcc/argora/internal/netbox"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
@@ -31,14 +35,23 @@ const (
 	defaultNamespace   = "default"
 )
 
-type IronCoreServerController struct {
+type IronCoreReconciler struct {
 	client.Client
-	Nb             *netbox.Client
-	Scheme         *runtime.Scheme
-	BMCUser        string
-	BMCPassword    string
-	IronCoreRegion string
-	IronCoreRoles  string
+	scheme            *runtime.Scheme
+	cfg               *config.Config
+	reconcileInterval time.Duration
+	eventChannel      chan event.GenericEvent
+}
+
+func NewIronCoreReconciler(client client.Client, scheme *runtime.Scheme, config *config.Config, reconcileInterval time.Duration) *IronCoreReconciler {
+	eventChannel := make(chan event.GenericEvent)
+	return &IronCoreReconciler{
+		Client:            client,
+		scheme:            scheme,
+		cfg:               config,
+		reconcileInterval: reconcileInterval,
+		eventChannel:      eventChannel,
+	}
 }
 
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
@@ -46,25 +59,37 @@ type IronCoreServerController struct {
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
-// Reconcile looks up IronCore clusters in Netbox and creates Servers for it
-func (c *IronCoreServerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	logger.Info("reconciling ironcore")
+
+	err := r.cfg.Reload()
+	if err != nil {
+		logger.Error(err, "unable to reload configuration")
+		return ctrl.Result{}, err
+	}
+
+	nbc, err := netbox.NewNetboxClient(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	if err != nil {
+		logger.Error(err, "unable to create netbox client")
+		return ctrl.Result{}, err
+	}
 
 	var clusterRoles []string
-	if c.IronCoreRoles != "" {
-		clusterRoles = strings.Split(c.IronCoreRoles, ",")
+	if r.cfg.IronCoreRoles != "" {
+		clusterRoles = strings.Split(r.cfg.IronCoreRoles, ",")
 	}
 
 	for _, clusterRole := range clusterRoles {
-		logger.Info("reconciling IronCore cluster role " + clusterRole + " in " + c.IronCoreRegion)
+		logger.Info("reconciling IronCore cluster role " + clusterRole + " in " + r.cfg.IronCoreRegion)
 
-		devices, cluster, err := c.Nb.LookupCluster(clusterRole, c.IronCoreRegion, "")
+		devices, cluster, err := nbc.LookupCluster(clusterRole, r.cfg.IronCoreRegion, "")
 		if err != nil {
 			logger.Error(err, "unable to lookup cluster in netbox")
 			return ctrl.Result{}, err
 		}
 		for _, device := range devices {
-			err = c.ReconcileDevice(ctx, cluster, &device)
+			err = r.ReconcileDevice(ctx, nbc, cluster, &device)
 			if err != nil {
 				logger.Error(err, "unable to reconcile device")
 				return ctrl.Result{}, err
@@ -75,39 +100,27 @@ func (c *IronCoreServerController) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-type PeriodicReconciler struct {
-	controller *IronCoreServerController
-}
-
-func (r *PeriodicReconciler) Start(ctx context.Context) error {
-	// Trigger the Reconcile method immediately
-	_, err := r.controller.Reconcile(ctx, ctrl.Request{})
+func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
+	src := source.Channel(r.eventChannel, handler.Funcs{})
+	runner, err := periodic.NewRunner(
+		periodic.WithClient(mgr.GetClient()),
+		periodic.WithInterval(r.reconcileInterval),
+		periodic.WithEventChannel(r.eventChannel),
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create periodic runner: %w", err)
+	}
+	if err := mgr.Add(runner); err != nil {
+		return fmt.Errorf("unable to add periodic runner: %w", err)
 	}
 
-	ticker := time.NewTicker(60 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			_, err := r.controller.Reconcile(ctx, ctrl.Request{})
-			if err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			return nil
-		}
-	}
+	return ctrl.NewControllerManagedBy(mgr).
+		Named("ironCore").
+		WatchesRawSource(src).
+		Complete(r)
 }
 
-func (c *IronCoreServerController) AddToManager(mgr manager.Manager) error {
-	// Add the custom Runnable to the manager
-	return mgr.Add(&PeriodicReconciler{controller: c})
-}
-
-func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster string, device *models.Device) error {
+func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, nbc *netbox.Client, cluster string, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "node", device.Name)
 	// check if device is active
@@ -118,7 +131,7 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 	// check if the host already exists
 	bmcName := device.Name
 	bmcObj := &metalv1alpha1.BMC{}
-	err := c.Client.Get(ctx, client.ObjectKey{Name: bmcName, Namespace: defaultNamespace}, bmcObj)
+	err := r.Client.Get(ctx, client.ObjectKey{Name: bmcName, Namespace: defaultNamespace}, bmcObj)
 	if err == nil {
 		logger.Info("bmc already exists", "bmc", bmcName)
 		return nil
@@ -131,13 +144,13 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		return err
 	}
 	// get the region
-	region, err := c.Nb.GetRegionForDevice(device)
+	region, err := nbc.GetRegionForDevice(device)
 	if err != nil {
 		logger.Error(err, "unable to lookup region for device")
 		return err
 	}
 
-	oobIP, err := c.getOobIP(device)
+	oobIP, err := r.getOobIP(device)
 	if err != nil {
 		logger.Error(err, "unable to get OOB IP")
 		return err
@@ -153,19 +166,19 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 		"kubernetes.metal.cloud.sap/role":    device.DeviceRole.Slug,
 	}
 
-	bmcSecret, err := c.createBmcSecret(ctx, device, commonLabels)
+	bmcSecret, err := r.createBmcSecret(ctx, device, commonLabels)
 	if err != nil {
 		logger.Error(err, "unable to create bmc secret")
 		return err
 	}
 
-	bmc, err := c.createBmc(ctx, device, oobIP, bmcSecret, commonLabels)
+	bmc, err := r.createBmc(ctx, device, oobIP, bmcSecret, commonLabels)
 	if err != nil {
 		logger.Error(err, "unable to create BMC")
 		return err
 	}
 
-	if err := c.setOwnerReferenceAndPatch(ctx, bmc, bmcSecret); err != nil {
+	if err := r.setOwnerReferenceAndPatch(ctx, bmc, bmcSecret); err != nil {
 		logger.Error(err, "unable to set owner reference and patch bmc secret")
 		return err
 	}
@@ -173,14 +186,14 @@ func (c *IronCoreServerController) ReconcileDevice(ctx context.Context, cluster 
 	return nil
 }
 
-func (c *IronCoreServerController) createBmcSecret(
+func (r *IronCoreReconciler) createBmcSecret(
 	ctx context.Context,
 	device *models.Device,
 	labels map[string]string,
 ) (*metalv1alpha1.BMCSecret, error) {
 
-	user := c.BMCUser
-	password := c.BMCPassword
+	user := r.cfg.BMCUser
+	password := r.cfg.BMCPassword
 	if user == "" || password == "" {
 		return nil, errors.New("bmc user or password not set")
 	}
@@ -194,7 +207,7 @@ func (c *IronCoreServerController) createBmcSecret(
 			metalv1alpha1.BMCSecretPasswordKeyName: []byte(password),
 		},
 	}
-	err := c.Client.Create(ctx, bmcSecret)
+	err := r.Client.Create(ctx, bmcSecret)
 	if apierrors.IsAlreadyExists(err) {
 		log.FromContext(ctx).Info("bmc secret already exists", "bmcSecret", bmcSecret.Name)
 		return bmcSecret, nil
@@ -205,7 +218,7 @@ func (c *IronCoreServerController) createBmcSecret(
 	return bmcSecret, nil
 }
 
-func (c *IronCoreServerController) createBmc(
+func (r *IronCoreReconciler) createBmc(
 	ctx context.Context,
 	device *models.Device,
 	oobIP string,
@@ -231,7 +244,7 @@ func (c *IronCoreServerController) createBmc(
 			},
 		},
 	}
-	if err := c.Client.Create(ctx, bmc); err != nil {
+	if err := r.Client.Create(ctx, bmc); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			log.FromContext(ctx).Info("BMC already exists", "BMC", bmc.Name)
 			return bmc, nil
@@ -241,7 +254,7 @@ func (c *IronCoreServerController) createBmc(
 	return bmc, nil
 }
 
-func (c *IronCoreServerController) getOobIP(
+func (r *IronCoreReconciler) getOobIP(
 	device *models.Device,
 ) (string, error) {
 
@@ -253,12 +266,12 @@ func (c *IronCoreServerController) getOobIP(
 	return ip.String(), nil
 }
 
-func (c *IronCoreServerController) setOwnerReferenceAndPatch(ctx context.Context, owner, object client.Object) error {
+func (r *IronCoreReconciler) setOwnerReferenceAndPatch(ctx context.Context, owner, object client.Object) error {
 	deepCopiedObject := object.DeepCopyObject().(client.Object)
-	if err := controllerutil.SetControllerReference(owner, deepCopiedObject, c.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(owner, deepCopiedObject, r.scheme); err != nil {
 		return fmt.Errorf("unable to set owner reference: %w", err)
 	}
-	if err := c.Client.Patch(ctx, deepCopiedObject, client.MergeFrom(object)); err != nil {
+	if err := r.Client.Patch(ctx, deepCopiedObject, client.MergeFrom(object)); err != nil {
 		return fmt.Errorf("unable to patch object: %w", err)
 	}
 	return nil

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config
+data:
+  config.json: |
+    {
+      ironCoreRoles: "{{ .Values.ironcore_roles }}",
+      ironCoreRegion: "{{ .Values.ironcore.region | b64enc }}",
+      ironCoreClusterTypes: "{{ .Values.ironcore.clusterTypes | b64enc }}",
+      serverController: "{{ .Values.controllers }}",
+      k8sServiceHost: "{{ .Values.env.kubernetesServiceHost | b64enc }}"
+    }

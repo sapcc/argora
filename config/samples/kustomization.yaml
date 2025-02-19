@@ -1,4 +1,4 @@
 ## Append samples of your project ##
 resources:
-- argora_v1alpha1_updater.yaml
+- argora_v1alpha1_update.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

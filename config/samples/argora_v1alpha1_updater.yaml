@@ -1,8 +1,8 @@
 apiVersion: argora.cloud.sap/v1alpha1
-kind: Updater
+kind: Update
 metadata:
   labels:
     app.kubernetes.io/name: argora
     app.kubernetes.io/managed-by: kustomize
-  name: updater-sample
+  name: update-sample
 spec:

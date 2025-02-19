@@ -19,13 +19,12 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"os"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	"github.com/ironcore-dev/controller-utils/cmdutils/switches"
+
 	"github.com/sapcc/go-api-declarations/bininfo"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -37,28 +36,27 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
-	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	ironcorev1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
+	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller"
-	"github.com/sapcc/argora/internal/netbox"
 	// +kubebuilder:scaffold:imports
 )
 
 const (
-	rateLimiterBurstDefault       = 200
-	rateLimiterFrequencyDefault   = 30
-	failureBaseDelayDefault       = 1 * time.Second
-	failureMaxDelayDefault        = 1000 * time.Second
-	reconciliationIntervalDefault = 5 * time.Minute
+	rateLimiterBurstDefault     = 200
+	rateLimiterFrequencyDefault = 30
+	failureBaseDelayDefault     = 1 * time.Second
+	failureMaxDelayDefault      = 1000 * time.Second
+	reconcileIntervalDefault    = 5 * time.Minute
 
-	metal3ClusterController  = "metal3Controller"
-	ironCoreServerController = "ironCoreServerController"
+	controllerMetal3   = "metal3"
+	controllerIronCore = "ironCore"
 )
 
 var (
@@ -73,19 +71,11 @@ type FlagVar struct {
 	secureMetrics        bool
 	enableHTTP2          bool
 
-	failureBaseDelay       time.Duration
-	failureMaxDelay        time.Duration
-	rateLimiterFrequency   int
-	rateLimiterBurst       int
-	reconciliationInterval time.Duration
-
-	netboxURL      string
-	netboxToken    string
-	bmcUser        string
-	bmcPassword    string
-	controllers    switches.Switches
-	ironCoreRoles  string
-	ironCoreRegion string
+	failureBaseDelay     time.Duration
+	failureMaxDelay      time.Duration
+	rateLimiterFrequency int
+	rateLimiterBurst     int
+	reconcileInterval    time.Duration
 }
 
 func init() {
@@ -94,8 +84,8 @@ func init() {
 
 	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
-	utilruntime.Must(bmov1alpha1.AddToScheme(scheme))
-	utilruntime.Must(metalv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(ironcorev1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -103,7 +93,7 @@ func init() {
 func main() {
 	setupLog.Info("argora", "version", bininfo.Version())
 
-	flagVar := defineFlagVar()
+	flagVar := createFlagVar()
 	opts := zap.Options{
 		Development: true,
 	}
@@ -146,14 +136,6 @@ func main() {
 		TLSOpts:       tlsOpts,
 	}
 
-	if flagVar.secureMetrics {
-		// FilterProvider is used to protect the metrics endpoint with authn/authz.
-		// These configurations ensure that only authorized users and service accounts
-		// can access the metrics endpoint. The RBAC are configured in 'config/rbac/kustomization.yaml'. More info:
-		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.0/pkg/metrics/filters#WithAuthenticationAndAuthorization
-		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
-	}
-
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -177,12 +159,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.UpdaterReconciler{
-		Client:                 mgr.GetClient(),
-		Scheme:                 mgr.GetScheme(),
-		ReconciliationInterval: flagVar.reconciliationInterval,
-	}).SetupWithManager(mgr, rateLimiter); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Updater")
+	cfg := config.NewDefaultConfiguration(mgr.GetClient())
+
+	if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), cfg).SetupWithManager(mgr, rateLimiter); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Metal3")
+		os.Exit(1)
+	}
+
+	if err = controller.NewIronCoreReconciler(mgr.GetClient(), mgr.GetScheme(), cfg, flagVar.reconcileInterval).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "IronCore")
+		os.Exit(1)
+	}
+
+	if err = controller.NewUpdateReconciler(mgr, cfg, flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Update")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
@@ -196,40 +186,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	nbc, err := netbox.NewNetboxClient(flagVar.netboxURL, flagVar.netboxToken)
-	if err != nil {
-		setupLog.Error(err, "unable to create Netbox client")
-		os.Exit(1)
-	}
-
-	if flagVar.controllers.Enabled(metal3ClusterController) {
-		if err = (&controller.Metal3ClusterController{
-			Client:      mgr.GetClient(),
-			Scheme:      mgr.GetScheme(),
-			Nb:          nbc,
-			BMCUser:     flagVar.bmcUser,
-			BMCPassword: flagVar.bmcPassword,
-		}).AddToManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "Metal3Cluster")
-			os.Exit(1)
-		}
-	}
-
-	if flagVar.controllers.Enabled(ironCoreServerController) {
-		if err = (&controller.IronCoreServerController{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			Nb:             nbc,
-			BMCUser:        flagVar.bmcUser,
-			BMCPassword:    flagVar.bmcPassword,
-			IronCoreRoles:  flagVar.ironCoreRoles,
-			IronCoreRegion: flagVar.ironCoreRegion,
-		}).AddToManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "IroncoreServer")
-			os.Exit(1)
-		}
-	}
-
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
@@ -237,7 +193,7 @@ func main() {
 	}
 }
 
-func defineFlagVar() *FlagVar {
+func createFlagVar() *FlagVar {
 	flagVar := new(FlagVar)
 
 	flag.StringVar(&flagVar.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -250,21 +206,7 @@ func defineFlagVar() *FlagVar {
 	flag.IntVar(&flagVar.rateLimiterFrequency, "rate-limiter-frequency", rateLimiterFrequencyDefault, "Indicates the bucket rate limiter frequency, signifying no. of events per second.")
 	flag.DurationVar(&flagVar.failureBaseDelay, "failure-base-delay", failureBaseDelayDefault, "Indicates the failure base delay for rate limiter.")
 	flag.DurationVar(&flagVar.failureMaxDelay, "failure-max-delay", failureMaxDelayDefault, "Indicates the failure max delay.")
-	flag.DurationVar(&flagVar.reconciliationInterval, "reconciliation-interval", reconciliationIntervalDefault, "Indicates the time based reconciliation interval.")
-
-	flag.StringVar(&flagVar.netboxURL, "netbox-url", os.Getenv("NETBOX_URL"), "URL of the Netbox instance")
-	flag.StringVar(&flagVar.netboxToken, "netbox-token", os.Getenv("NETBOX_TOKEN"), "API token for Netbox")
-	flag.StringVar(&flagVar.bmcUser, "bmc-user", os.Getenv("BMC_USER"), "BMC user")
-	flag.StringVar(&flagVar.bmcPassword, "bmc-password", os.Getenv("BMC_PASS"), "BMC password")
-	flag.StringVar(&flagVar.ironCoreRoles, "ironcore-types", os.Getenv("IRONCORE_TYPES"), "Ironcore cluster types")
-	flag.StringVar(&flagVar.ironCoreRegion, "ironcore-region", os.Getenv("IRONCORE_REGION"), "Ironcore regions")
-
-	flagVar.controllers = *switches.New(
-		metal3ClusterController,
-		ironCoreServerController,
-	)
-
-	flag.Var(&flagVar.controllers, "controllers", fmt.Sprintf("Controllers to enable. All controllers: %v. Disabled-by-default controllers: %v", flagVar.controllers.All(), flagVar.controllers.DisabledByDefault()))
+	flag.DurationVar(&flagVar.reconcileInterval, "reconcile-interval", reconcileIntervalDefault, "Indicates the time based reconcile interval.")
 
 	return flagVar
 }

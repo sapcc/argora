@@ -23,17 +23,17 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// UpdaterSpec defines the desired state of Updater.
-type UpdaterSpec struct {
+// UpdateSpec defines the desired state of Update.
+type UpdateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Updater. Edit updater_types.go to remove/update
+	// Foo is an example field of Update. Edit update_types.go to remove/update
 	Foo string `json:"foo,omitempty"`
 }
 
-// UpdaterStatus defines the observed state of Updater.
-type UpdaterStatus struct {
+// UpdateStatus defines the observed state of Update.
+type UpdateStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
@@ -41,24 +41,24 @@ type UpdaterStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// Updater is the Schema for the updaters API.
-type Updater struct {
+// Update is the Schema for the updates API.
+type Update struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   UpdaterSpec   `json:"spec,omitempty"`
-	Status UpdaterStatus `json:"status,omitempty"`
+	Spec   UpdateSpec   `json:"spec,omitempty"`
+	Status UpdateStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// UpdaterList contains a list of Updater.
-type UpdaterList struct {
+// UpdateList contains a list of Update.
+type UpdateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Updater `json:"items"`
+	Items           []Update `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Updater{}, &UpdaterList{})
+	SchemeBuilder.Register(&Update{}, &UpdateList{})
 }

@@ -11,32 +11,43 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/workqueue"
 
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/dspinhirne/netaddr-go/v2"
 	"github.com/sapcc/go-netbox-go/models"
 	"gopkg.in/yaml.v3"
 
+	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/networkdata"
 )
 
 const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
 
-type Metal3ClusterController struct {
+type Metal3Reconciler struct {
 	client.Client
-	Nb          *netbox.Client
-	Scheme      *runtime.Scheme
-	BMCUser     string
-	BMCPassword string
+	scheme *runtime.Scheme
+	cfg    *config.Config
+}
+
+func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *config.Config) *Metal3Reconciler {
+	return &Metal3Reconciler{
+		Client: client,
+		scheme: scheme,
+		cfg:    cfg,
+	}
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
@@ -44,36 +55,174 @@ type Metal3ClusterController struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile looks up a cluster in netbox and creates baremetal hosts for it
-func (c *Metal3ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling ironcore cluster")
+	logger.Info("reconciling metal3")
+
+	err := r.cfg.Reload()
+	if err != nil {
+		logger.Error(err, "unable to reload configuration")
+		return ctrl.Result{}, err
+	}
+
+	nbc, err := netbox.NewNetboxClient(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	if err != nil {
+		logger.Error(err, "unable to create netbox client")
+		return ctrl.Result{}, err
+	}
+
 	cluster := &clusterv1.Cluster{}
-	err := c.Client.Get(ctx, req.NamespacedName, cluster)
+	err = r.Client.Get(ctx, req.NamespacedName, cluster)
 	if client.IgnoreNotFound(err) != nil {
 		logger.Error(err, "unable to get cluster")
 		return ctrl.Result{}, err
 	}
+
 	role := cluster.Labels[ClusterRoleLabel]
-	devices, _, err := c.Nb.LookupCluster(role, "", cluster.Name)
+	devices, _, err := nbc.LookupCluster(role, "", cluster.Name)
 	if err != nil {
 		logger.Error(err, "unable to lookup cluster in netbox")
 		return ctrl.Result{}, err
 	}
+
 	for _, device := range devices {
-		err = c.ReconcileDevice(ctx, *cluster, &device)
+		err = r.ReconcileDevice(ctx, nbc, *cluster, &device)
 		if err != nil {
 			logger.Error(err, "unable to reconcile device")
 			return ctrl.Result{}, err
 		}
 	}
-	return ctrl.Result{
-		RequeueAfter: 300 * time.Second,
-	}, nil
+
+	return ctrl.Result{RequeueAfter: 300 * time.Second}, nil
+}
+
+func (r *Metal3Reconciler) SetupWithManager(mgr manager.Manager, rateLimiter RateLimiter) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&clusterv1.Cluster{}).
+		WithEventFilter(predicate.Or[client.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
+		WithOptions(controller.Options{
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter[ctrl.Request](
+				workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](rateLimiter.BaseDelay,
+					rateLimiter.FailureMaxDelay),
+				&workqueue.TypedBucketRateLimiter[ctrl.Request]{
+					Limiter: rate.NewLimiter(rate.Limit(rateLimiter.Frequency), rateLimiter.Burst),
+				},
+			),
+		}).
+		Named("metal3").
+		Complete(r)
+}
+
+func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, nbc *netbox.Client, cluster clusterv1.Cluster, device *models.Device) error {
+	logger := log.FromContext(ctx)
+	logger.Info("reconciling device", "node", device.Name)
+	// check if device is active
+	if device.Status.Value != "active" {
+		logger.Info("device is not active")
+		return nil
+	}
+	// check if the host already exists
+	bmh := &bmov1alpha1.BareMetalHost{}
+	err := r.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh)
+	if err == nil {
+		logger.Info("host already exists", "host", bmh.Name)
+		return nil
+	}
+	redfishURL, err := createRedFishURL(device)
+	if err != nil {
+		logger.Error(err, "unable to create redfish url")
+		return err
+	}
+	// ugly hack to get the role this is not easy to get to in netbox
+	nameParts := strings.Split(device.Name, "-")
+	if len(nameParts) != 2 {
+		err = fmt.Errorf("invalid device name: %s", device.Name)
+		logger.Error(err, "error splitting name")
+		return err
+	}
+	// create the root device hint
+	rootHint, err := createRootHint(device)
+	if err != nil {
+		logger.Error(err, "unable to create root hint")
+		return err
+	}
+	// create the host
+	mac, err := nbc.LookupMacForIP(device.PrimaryIP4.Address)
+	if err != nil {
+		logger.Info("unable to lookup mac for ip", err)
+		mac = ""
+	}
+	// get the region
+	region, err := nbc.GetRegionForDevice(device)
+	if err != nil {
+		logger.Error(err, "unable to lookup region for device")
+		return err
+	}
+	bmcSecret, err := r.createBmcSecret(cluster, device)
+	if err != nil {
+		logger.Error(err, "unable to create bmc secret")
+		return err
+	}
+	err = r.Client.Create(ctx, bmcSecret)
+	if err != nil {
+		logger.Error(err, "unable to upload bmc secret")
+		return err
+	}
+	labelRole := getRoleFromTags(device)
+	if labelRole == device.DeviceRole.Slug {
+		logger.Info("no role found in tags, using device role")
+	} else {
+		logger.Info("role found in tags", "role", labelRole)
+	}
+
+	host := &bmov1alpha1.BareMetalHost{
+		ObjectMeta: ctrl.ObjectMeta{
+			Name:      device.Name,
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				"kubernetes.metal.cloud.sap/cluster": cluster.Name,
+				"kubernetes.metal.cloud.sap/name":    device.Name,
+				"kubernetes.metal.cloud.sap/bb":      nameParts[1],
+				"kubernetes.metal.cloud.sap/role":    labelRole,
+				"topology.kubernetes.io/region":      region,
+				"topology.kubernetes.io/zone":        device.Site.Slug,
+			},
+		},
+
+		Spec: bmov1alpha1.BareMetalHostSpec{
+			Architecture:          "x86_64",
+			AutomatedCleaningMode: "disabled",
+			Online:                true,
+			BMC: bmov1alpha1.BMCDetails{
+				Address:                        redfishURL,
+				CredentialsName:                "bmc-secret-" + device.Name,
+				DisableCertificateVerification: true,
+			},
+			BootMACAddress: mac,
+			NetworkData: &corev1.SecretReference{
+				Name:      "networkdata-" + device.Name,
+				Namespace: cluster.Namespace,
+			},
+			RootDeviceHints: rootHint,
+		},
+	}
+	err = r.Client.Create(ctx, host)
+	if err != nil {
+		logger.Error(err, "unable to create baremetal host")
+		return err
+	}
+
+	err = r.CreateNetworkDataForDevice(ctx, nbc, host, cluster, device, labelRole)
+	if err != nil {
+		logger.Error(err, "unable to create network data")
+		return err
+	}
+	return nil
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (c *Metal3ClusterController) CreateNetworkDataForDevice(ctx context.Context, host *bmov1alpha1.BareMetalHost, cluster clusterv1.Cluster, device *models.Device, role string) error {
-	vlan, ipStr, err := c.Nb.LookupVLANForDevice(device, role)
+func (r *Metal3Reconciler) CreateNetworkDataForDevice(ctx context.Context, nbc *netbox.Client, host *bmov1alpha1.BareMetalHost, cluster clusterv1.Cluster, device *models.Device, role string) error {
+	vlan, ipStr, err := nbc.LookupVLANForDevice(device, role)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to lookup vlan for device")
 		return err
@@ -123,122 +272,11 @@ func (c *Metal3ClusterController) CreateNetworkDataForDevice(ctx context.Context
 			"networkData": string(ndwYaml),
 		},
 	}
-	if err := ctrl.SetControllerReference(host, result, c.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(host, result, r.scheme); err != nil {
 		log.FromContext(ctx).Error(err, "failed to set owner reference on networkdata secret")
 		return err
 	}
-	return c.Create(ctx, result)
-}
-
-func (c *Metal3ClusterController) ReconcileDevice(ctx context.Context, cluster clusterv1.Cluster, device *models.Device) error {
-	logger := log.FromContext(ctx)
-	logger.Info("reconciling device", "node", device.Name)
-	// check if device is active
-	if device.Status.Value != "active" {
-		logger.Info("device is not active")
-		return nil
-	}
-	// check if the host already exists
-	bmh := &bmov1alpha1.BareMetalHost{}
-	err := c.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh)
-	if err == nil {
-		logger.Info("host already exists", "host", bmh.Name)
-		return nil
-	}
-	redfishURL, err := createRedFishURL(device)
-	if err != nil {
-		logger.Error(err, "unable to create redfish url")
-		return err
-	}
-	// ugly hack to get the role this is not easy to get to in netbox
-	nameParts := strings.Split(device.Name, "-")
-	if len(nameParts) != 2 {
-		err = fmt.Errorf("invalid device name: %s", device.Name)
-		logger.Error(err, "error splitting name")
-		return err
-	}
-	// create the root device hint
-	rootHint, err := createRootHint(device)
-	if err != nil {
-		logger.Error(err, "unable to create root hint")
-		return err
-	}
-	// create the host
-	mac, err := c.Nb.LookupMacForIP(device.PrimaryIP4.Address)
-	if err != nil {
-		logger.Info("unable to lookup mac for ip", err)
-		mac = ""
-	}
-	// get the region
-	region, err := c.Nb.GetRegionForDevice(device)
-	if err != nil {
-		logger.Error(err, "unable to lookup region for device")
-		return err
-	}
-	bmcSecret, err := c.createBmcSecret(cluster, device)
-	if err != nil {
-		logger.Error(err, "unable to create bmc secret")
-		return err
-	}
-	err = c.Client.Create(ctx, bmcSecret)
-	if err != nil {
-		logger.Error(err, "unable to upload bmc secret")
-		return err
-	}
-	labelRole := getRoleFromTags(device)
-	if labelRole == device.DeviceRole.Slug {
-		logger.Info("no role found in tags, using device role")
-	} else {
-		logger.Info("role found in tags", "role", labelRole)
-	}
-
-	host := &bmov1alpha1.BareMetalHost{
-		ObjectMeta: ctrl.ObjectMeta{
-			Name:      device.Name,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				"kubernetes.metal.cloud.sap/cluster": cluster.Name,
-				"kubernetes.metal.cloud.sap/name":    device.Name,
-				"kubernetes.metal.cloud.sap/bb":      nameParts[1],
-				"kubernetes.metal.cloud.sap/role":    labelRole,
-				"topology.kubernetes.io/region":      region,
-				"topology.kubernetes.io/zone":        device.Site.Slug,
-			},
-		},
-
-		Spec: bmov1alpha1.BareMetalHostSpec{
-			Architecture:          "x86_64",
-			AutomatedCleaningMode: "disabled",
-			Online:                true,
-			BMC: bmov1alpha1.BMCDetails{
-				Address:                        redfishURL,
-				CredentialsName:                "bmc-secret-" + device.Name,
-				DisableCertificateVerification: true,
-			},
-			BootMACAddress: mac,
-			NetworkData: &corev1.SecretReference{
-				Name:      "networkdata-" + device.Name,
-				Namespace: cluster.Namespace,
-			},
-			RootDeviceHints: rootHint,
-		},
-	}
-	err = c.Client.Create(ctx, host)
-	if err != nil {
-		logger.Error(err, "unable to create baremetal host")
-		return err
-	}
-
-	err = c.CreateNetworkDataForDevice(ctx, host, cluster, device, labelRole)
-	if err != nil {
-		logger.Error(err, "unable to create network data")
-		return err
-	}
-	return nil
-}
-
-func (c *Metal3ClusterController) AddToManager(mgr manager.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).Named("metal3Controller").For(&clusterv1.Cluster{}).Complete(c)
+	return r.Create(ctx, result)
 }
 
 func createRedFishURL(device *models.Device) (string, error) {
@@ -254,9 +292,9 @@ func createRedFishURL(device *models.Device) (string, error) {
 	}
 }
 
-func (c *Metal3ClusterController) createBmcSecret(cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
-	user := c.BMCUser
-	password := c.BMCPassword
+func (r *Metal3Reconciler) createBmcSecret(cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
+	user := r.cfg.BMCUser
+	password := r.cfg.BMCPassword
 	if user == "" || password == "" {
 		return nil, errors.New("bmc user or password not set")
 	}

@@ -14,7 +14,7 @@ resources:
   controller: true
   domain: cloud.sap
   group: argora
-  kind: Updater
+  kind: Update
   path: https:/github.com/sapcc/argora/api/v1alpha1
   version: v1alpha1
 version: "3"

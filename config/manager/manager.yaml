@@ -42,13 +42,10 @@ spec:
         - /manager
         args:
           - --leader-elect
+          - --metrics-bind-address={{ .Values.metrics.bindAddress }}
           - --health-probe-bind-address=:8081
-          - --controllers="ironCoreServerController"
-        image: controller:latest
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         name: manager
-        envFrom:
-          - secretRef:
-            name: argora
         ports: []
         securityContext:
           allowPrivilegeEscalation: false

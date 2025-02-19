@@ -19,7 +19,7 @@ rules:
 - apiGroups:
   - argora.cloud.sap
   resources:
-  - updaters
+  - updates
   verbs:
   - create
   - delete
@@ -31,13 +31,13 @@ rules:
 - apiGroups:
   - argora.cloud.sap
   resources:
-  - updaters/finalizers
+  - updates/finalizers
   verbs:
   - update
 - apiGroups:
   - argora.cloud.sap
   resources:
-  - updaters/status
+  - updates/status
   verbs:
   - get
   - patch

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
+	"github.com/sapcc/argora/internal/config"
 	"golang.org/x/time/rate"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,34 +33,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-// UpdaterReconciler reconciles a Updater object
-type UpdaterReconciler struct {
+// UpdateReconciler reconciles a Update object
+type UpdateReconciler struct {
 	client.Client
-	Scheme                 *runtime.Scheme
-	ReconciliationInterval time.Duration
+	Scheme            *runtime.Scheme
+	Config            *config.Config
+	ReconcileInterval time.Duration
 }
 
-type RateLimiter struct {
-	Burst           int
-	Frequency       int
-	BaseDelay       time.Duration
-	FailureMaxDelay time.Duration
+func NewUpdateReconciler(mgr ctrl.Manager, cfg *config.Config, reconcileInterval time.Duration) *UpdateReconciler {
+	return &UpdateReconciler{
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Config:            cfg,
+		ReconcileInterval: reconcileInterval,
+	}
 }
 
-// +kubebuilder:rbac:groups=argora.cloud.sap,resources=updaters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=argora.cloud.sap,resources=updaters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=argora.cloud.sap,resources=updaters/finalizers,verbs=update
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=updates,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=updates/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=updates/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Updater object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.0/pkg/reconcile
-func (r *UpdaterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
@@ -68,9 +64,9 @@ func (r *UpdaterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *UpdaterReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter RateLimiter) error {
+func (r *UpdateReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter RateLimiter) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&argorav1alpha1.Updater{}).
+		For(&argorav1alpha1.Update{}).
 		WithEventFilter(predicate.Or[client.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		WithOptions(controller.Options{
 			RateLimiter: workqueue.NewTypedMaxOfRateLimiter[ctrl.Request](
@@ -81,6 +77,6 @@ func (r *UpdaterReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter RateL
 				},
 			),
 		}).
-		Named("updater").
+		Named("update").
 		Complete(r)
 }
