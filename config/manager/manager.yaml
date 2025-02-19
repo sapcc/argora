@@ -42,7 +42,6 @@ spec:
         - /manager
         args:
           - --leader-elect
-          - --metrics-bind-address={{ .Values.metrics.bindAddress }}
           - --health-probe-bind-address=:8081
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         name: manager

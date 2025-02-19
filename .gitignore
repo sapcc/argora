@@ -27,7 +27,9 @@ go.work
 *~
 
 # custom
-argora-manifest.yaml
+helm-values.yaml
+argora-deployment.yaml
+templates/argora-manifest.yaml
 deployments/cluster.yaml
 deployments/secret.yaml
 build/

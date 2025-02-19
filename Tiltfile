@@ -44,4 +44,3 @@ k8s_yaml('config/rbac/role.yaml')
 k8s_yaml('deployments/argora.yaml')
 k8s_yaml('deployments/cluster.yaml')
 k8s_yaml('deployments/secret.yaml')
-
