@@ -12,8 +12,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type FileReader interface {
+	ReadFile(fileName string) ([]byte, error)
+}
+
+type ConfigReader struct{}
+
+func (f *ConfigReader) ReadFile(fileName string) ([]byte, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	byteValue, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return byteValue, nil
+}
+
 type Config struct {
 	client client.Client
+	reader FileReader
 
 	// /etc/config/config.json
 	IronCoreRoles        string `json:"ironCoreRoles"`
@@ -30,7 +52,7 @@ type Config struct {
 }
 
 func NewDefaultConfiguration(client client.Client) *Config {
-	return &Config{client, "", "", "", "", "", "", "", "", ""}
+	return &Config{client, &ConfigReader{}, "", "", "", "", "", "", "", "", ""}
 }
 
 func (c *Config) Validate() error {
@@ -75,13 +97,7 @@ func (c *Config) Reload() error {
 }
 
 func (c *Config) readJsonAndUnmarshal(fileName string) error {
-	file, err := os.Open(fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	byteValue, err := io.ReadAll(file)
+	byteValue, err := c.reader.ReadFile(fileName)
 	if err != nil {
 		return err
 	}
