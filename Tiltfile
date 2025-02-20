@@ -39,7 +39,7 @@ deploy_cert_manager()
 deploy_bmo_crd()
 deploy_metal_crd()
 
-k8s_yaml('deployments/cluster-api-components.yaml')
+k8s_yaml('hack/cluster-api-components.yaml')
 k8s_yaml('config/rbac/role.yaml')
 k8s_yaml('deployments/argora.yaml')
 k8s_yaml('deployments/cluster.yaml')

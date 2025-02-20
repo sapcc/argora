@@ -43,7 +43,7 @@ dockerfile:
   enabled: false
 
 verbatim: |
-  tilt: FORCE generate-kb
+  tilt: FORCE gen
     tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
   ##@ kubebuilder
@@ -69,8 +69,8 @@ verbatim: |
   SHELL = /usr/bin/env bash -o pipefail
   .SHELLFLAGS = -ec
 
-  .PHONY: kb-all
-  kb-all: kb-build
+  .PHONY: all
+  all: build
 
   ##@ General
 
@@ -85,30 +85,30 @@ verbatim: |
   # More info on the awk command:
   # http://linuxcommand.org/lc3_adv_awk.php
 
-  .PHONY: kb-help
-  kb-help: ## Display this help.
+  .PHONY: help2
+  help2: ## Display this help.
     @awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
   ##@ Development
 
-  .PHONY: kb-manifests
-  kb-manifests: kb-controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+  .PHONY: manifests
+  manifests: controller-gen
     $(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-  .PHONY: kb-generate
-  kb-generate: kb-controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+  .PHONY: gen
+  gen: controller-gen
     $(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-  .PHONY: kb-fmt
-  kb-fmt: ## Run go fmt against code.
+  .PHONY: fmt
+  fmt: ## Run go fmt against code.
     go fmt ./...
 
-  .PHONY: kb-vet
-  kb-vet: ## Run go vet against code.
+  .PHONY: vet
+  vet: ## Run go vet against code.
     go vet ./...
 
-  .PHONY: kb-test
-  kb-test: kb-manifests kb-generate kb-fmt kb-vet kb-setup-envtest ## Run tests.
+  .PHONY: test
+  test: manifests gen fmt vet setup-envtest ## Run tests.
     KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
   # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
@@ -116,8 +116,8 @@ verbatim: |
   # Prometheus and CertManager are installed by default; skip with:
   # - PROMETHEUS_INSTALL_SKIP=true
   # - CERT_MANAGER_INSTALL_SKIP=true
-  .PHONY: kb-test-e2e
-  kb-test-e2e: kb-manifests kb-generate kb-fmt kb-vet ## Run the e2e tests. Expected an isolated environment using Kind.
+  .PHONY: test-e2e
+  test-e2e: manifests gen fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
     @command -v kind >/dev/null 2>&1 || { \
       echo "Kind is not installed. Please install Kind manually."; \
       exit 1; \
@@ -128,37 +128,37 @@ verbatim: |
     }
     go test ./test/e2e/ -v -ginkgo.v
 
-  .PHONY: kb-lint
-  kb-lint: kb-golangci-lint ## Run golangci-lint linter
+  .PHONY: lint
+  lint: golangci-lint ## Run golangci-lint linter
     $(GOLANGCI_LINT) run
 
-  .PHONY: kb-lint-fix
-  kb-lint-fix: kb-golangci-lint ## Run golangci-lint linter and perform fixes
+  .PHONY: lint-fix
+  lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
     $(GOLANGCI_LINT) run --fix
 
-  .PHONY: kb-lint-config
-  kb-lint-config: kb-golangci-lint ## Verify golangci-lint linter configuration
+  .PHONY: lint-config
+  lint-config: golangci-lint ## Verify golangci-lint linter configuration
     $(GOLANGCI_LINT) config verify
 
   ##@ Build
 
-  .PHONY: kb-build
-  kb-build: kb-manifests kb-generate kb-fmt kb-vet ## Build manager binary.
-    env $(GO_BUILDENV) go build $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=argora -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' -o bin/manager cmd/manager/main.go
+  .PHONY: build-manager
+  build-manager: manifests gen fmt vet ## Build manager binary.
+    go build -o bin/manager cmd/manager/main.go
 
-  .PHONY: kb-run
-  kb-run: kb-manifests kb-generate kb-fmt kb-vet ## Run a controller from your host.
-    env $(GO_BUILDENV) go run $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=argora -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' cmd/manager/main.go
+  .PHONY: run
+  run: manifests gen fmt vet ## Run a controller from your host.
+    go run ./cmd/manager/main.go
 
   # If you wish to build the manager image targeting other platforms you can use the --platform flag.
   # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
   # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-  .PHONY: kb-docker-build
-  kb-docker-build: ## Build docker image with the manager.
+  .PHONY: docker-build
+  docker-build: ## Build docker image with the manager.
     $(CONTAINER_TOOL) build -t ${IMG} --build-arg TARGETOS=${TARGETOS} --build-arg TARGETARCH=${TARGETARCH} --build-arg BININFO_VERSION=$(BININFO_VERSION) --build-arg BININFO_COMMIT_HASH=$(BININFO_COMMIT_HASH) --build-arg BININFO_BUILD_DATE=$(BININFO_BUILD_DATE) .
 
-  .PHONY: kb-docker-push
-  kb-docker-push: ## Push docker image with the manager.
+  .PHONY: docker-push
+  docker-push: ## Push docker image with the manager.
     $(CONTAINER_TOOL) push ${IMG}
 
   # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
@@ -168,8 +168,8 @@ verbatim: |
   # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
   # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
   PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
-  .PHONY: kb-docker-buildx
-  kb-docker-buildx: ## Build and push docker image for the manager for cross-platform support
+  .PHONY: docker-buildx
+  docker-buildx: ## Build and push docker image for the manager for cross-platform support
     # copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
     sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
     - $(CONTAINER_TOOL) buildx create --name argora-builder
@@ -178,42 +178,43 @@ verbatim: |
     - $(CONTAINER_TOOL) buildx rm argora-builder
     rm Dockerfile.cross
 
-  .PHONY: kb-build-installer
-  kb-build-installer: kb-manifests kb-generate kb-kustomize ## Generate a consolidated YAML with CRDs and deployment.
-    mkdir -p dist
+  .PHONY: build-installer
+  build-installer: manifests gen kustomize
+    mkdir -p templates
     cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-    $(KUSTOMIZE) build config/default > dist/install.yaml
+    $(KUSTOMIZE) build config/default > templates/install.yaml
 
   ##@ Deployment
 
-  ifndef ignore-not-found
-    ignore-not-found = false
-  endif
+  .PHONY: helm-lint
+  helm-lint: helm build-installer
+    helm lint . -f helm-values.yaml
 
-  .PHONY: kb-gen-manifest
-  kb-gen-manifest: kb-kustomize
-    $(KUSTOMIZE) build config/default > templates/argora-manifest.yaml
+  .PHONY: helm-build
+  helm-build: helm build-installer
+    mkdir -p dist
+    helm template . -s templates/install.yaml -f helm-values.yaml > dist/install.yaml
 
-  .PHONY: kb-gen-helm
-  kb-gen-helm: helm kb-gen-manifest
-    helm template . -s templates/argora-manifest.yaml -f helm-values.yaml > argora-deployment.yaml
+  .PHONY: helm-deploy
+  helm-install: helm build-installer
+    helm template . -s templates/install.yaml -f helm-values.yaml | $(KUBECTL) apply -f -
 
-  .PHONY: kb-install
-  kb-install: kb-manifests kb-kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+  .PHONY: install-crd
+  install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
     $(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
 
-  .PHONY: kb-uninstall
-  kb-uninstall: kb-manifests kb-kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-    $(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+  .PHONY: uninstall
+  uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+    $(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=false -f -
 
-  .PHONY: kb-deploy
-  kb-deploy: kb-manifests kb-kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+  .PHONY: deploy
+  deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
     cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
     $(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
-  .PHONY: kb-undeploy
-  kb-undeploy: kb-kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-    $(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+  .PHONY: undeploy
+  undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+    $(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=false -f -
 
   ##@ Dependencies
 
@@ -240,31 +241,31 @@ verbatim: |
   GOLANGCI_LINT_VERSION ?= v1.63.4
   HELM_VERSION ?= v3.17.0
 
-  .PHONY: kb-kustomize
-  kb-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+  .PHONY: kustomize
+  kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
   $(KUSTOMIZE): $(LOCALBIN)
     $(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
 
-  .PHONY: kb-controller-gen
-  kb-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
+  .PHONY: controller-gen
+  controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
   $(CONTROLLER_GEN): $(LOCALBIN)
     $(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
 
-  .PHONY: kb-setup-envtest
-  kb-setup-envtest: kb-envtest ## Download the binaries required for ENVTEST in the local bin directory.
+  .PHONY: setup-envtest
+  setup-envtest: envtest ## Download the binaries required for ENVTEST in the local bin directory.
     @echo "Setting up envtest binaries for Kubernetes version $(ENVTEST_K8S_VERSION)..."
     @$(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path || { \
       echo "Error: Failed to set up envtest binaries for version $(ENVTEST_K8S_VERSION)."; \
       exit 1; \
     }
 
-  .PHONY: kb-envtest
-  kb-envtest: $(ENVTEST) ## Download setup-envtest locally if necessary.
+  .PHONY: envtest
+  envtest: $(ENVTEST) ## Download setup-envtest locally if necessary.
   $(ENVTEST): $(LOCALBIN)
     $(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,$(ENVTEST_VERSION))
 
-  .PHONY: kb-golangci-lint
-  kb-golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
+  .PHONY: golangci-lint
+  golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
   $(GOLANGCI_LINT): $(LOCALBIN)
     $(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 

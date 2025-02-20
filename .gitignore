@@ -28,8 +28,6 @@ go.work
 
 # custom
 helm-values.yaml
-argora-deployment.yaml
-templates/argora-manifest.yaml
-deployments/cluster.yaml
-deployments/secret.yaml
+templates/
+dist/
 build/
