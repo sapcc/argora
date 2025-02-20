@@ -1,0 +1,101 @@
+package virtualization
+
+import (
+	"fmt"
+
+	"github.com/sapcc/argora/internal/netbox"
+	"github.com/sapcc/go-netbox-go/models"
+)
+
+type ListClusterRequest struct {
+	role, region, name string
+}
+
+type ListClusterOption func(c *ListClusterRequest)
+
+func NewListClusterRequest(opts ...ListClusterOption) *ListClusterRequest {
+	r := &ListClusterRequest{}
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	return r
+}
+
+func WithName(name string) ListClusterOption {
+	opt := func(r *ListClusterRequest) {
+		r.name = name
+	}
+
+	return opt
+}
+
+func WithRole(role string) ListClusterOption {
+	opt := func(r *ListClusterRequest) {
+		r.role = role
+	}
+
+	return opt
+}
+
+func WithRegion(region string) ListClusterOption {
+	opt := func(r *ListClusterRequest) {
+		r.region = region
+	}
+
+	return opt
+}
+
+func (r *ListClusterRequest) BuildRequest() models.ListClusterRequest {
+	listClusterRequest := models.ListClusterRequest{}
+	if r.name != "" {
+		listClusterRequest.Name = r.name
+	}
+	if r.region != "" {
+		listClusterRequest.Region = r.region
+	}
+	if r.role != "" {
+		listClusterRequest.Type = r.role
+	}
+	return listClusterRequest
+}
+
+type Virtualization struct {
+	client *netbox.NetboxClient
+}
+
+func NewVirtualization(client *netbox.NetboxClient) *Virtualization {
+	return &Virtualization{client: client}
+}
+
+func (v *Virtualization) GetClusterByName(clusterName string) (*models.Cluster, error) {
+	listClusterRequest := NewListClusterRequest(
+		WithName(clusterName),
+	).BuildRequest()
+
+	res, err := v.client.Virtualization.ListClusters(listClusterRequest)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list clusters by name %s: %w", clusterName, err)
+	}
+
+	if res.Count != 1 {
+		return nil, fmt.Errorf("unexpected number of clusters found (%d)", res.Count)
+	}
+	return &res.Results[0], nil
+}
+
+func (v *Virtualization) GetClusterByNameRegionRole(name, region, role string) (*models.Cluster, error) {
+	listClusterRequest := NewListClusterRequest(
+		WithName(name),
+		WithRegion(region),
+		WithRole(role),
+	).BuildRequest()
+	res, err := v.client.Virtualization.ListClusters(listClusterRequest)
+	if err != nil {
+		return nil, err
+	}
+	if res.Count != 1 {
+		return nil, fmt.Errorf("unexpected number of clusters found (%d)", res.Count)
+	}
+	return &res.Results[0], nil
+}
