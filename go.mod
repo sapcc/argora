@@ -9,13 +9,13 @@ require (
 	github.com/sapcc/go-netbox-go v0.0.0-20250219092905-3a11a9ca5f56
 	github.com/spf13/cobra v1.9.1
 	k8s.io/api v0.32.1
-	sigs.k8s.io/cluster-api v1.9.4
+	sigs.k8s.io/cluster-api v1.9.5
 	sigs.k8s.io/controller-runtime v0.20.2
 )
 
 require (
 	github.com/ironcore-dev/controller-utils v0.9.7
-	github.com/ironcore-dev/metal-operator v0.0.0-20250212221453-94f63c040f9d
+	github.com/ironcore-dev/metal-operator v0.0.0-20250219080152-9d17dc8848f8
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.32.1
 )

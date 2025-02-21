@@ -64,8 +64,8 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/ironcore-dev/controller-utils v0.9.7 h1:ywNcB6lDeOe6UWxJaptbdgb9qb6cDx4+jxBcIGkMQD8=
 github.com/ironcore-dev/controller-utils v0.9.7/go.mod h1:7X6JUmq75o4KFe05zUa9rEXnS39dSrlXqUnt9Wuiug0=
-github.com/ironcore-dev/metal-operator v0.0.0-20250212221453-94f63c040f9d h1:vua8/BwctKH41KsnRUpCpYCMDYmnbXNvBQGZMZ+UnNM=
-github.com/ironcore-dev/metal-operator v0.0.0-20250212221453-94f63c040f9d/go.mod h1:Jm5WKsWlVFkfxJT8yiEx73a0/mRAEVWbWhBl2UReRbM=
+github.com/ironcore-dev/metal-operator v0.0.0-20250219080152-9d17dc8848f8 h1:KAMg5j1ReaZHGa6pmT4NesbZKaGPSM+l5gjfL+PqyFQ=
+github.com/ironcore-dev/metal-operator v0.0.0-20250219080152-9d17dc8848f8/go.mod h1:Jc25ptmavt6Mkt7N1C4OjPEi7Hvm8tNB6oeliAMMBfw=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
@@ -238,8 +238,8 @@ k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f h1:GA7//TjRY9yWGy1poLzYYJ
 k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f/go.mod h1:R/HEjbvWI0qdfb8viZUeVZm0X6IZnxAydC7YU42CMw4=
 k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 h1:M3sRQVHv7vB20Xc2ybTt7ODCeFj6JSWYFzOFnYeS6Ro=
 k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
-sigs.k8s.io/cluster-api v1.9.4 h1:pa2Ho50F9Js/Vv/Jy11TcpmGiqY2ukXCoDj/dY25Y7M=
-sigs.k8s.io/cluster-api v1.9.4/go.mod h1:9DjpPCxJJo7/mH+KceINNJHr9c5X9S9HEp2B8JG3Uv8=
+sigs.k8s.io/cluster-api v1.9.5 h1:68164Q201Y5ANVkhyrOZenoMbfL2SEBjVYZs/ihhSro=
+sigs.k8s.io/cluster-api v1.9.5/go.mod h1:DyqyZ4jRvKGKewDRn1Q4OCHaVjsdTogymbO6mrgHEDI=
 sigs.k8s.io/controller-runtime v0.20.2 h1:/439OZVxoEc02psi1h4QO3bHzTgu49bb347Xp4gW1pc=
 sigs.k8s.io/controller-runtime v0.20.2/go.mod h1:xg2XB0K5ShQzAgsoujxuKN4LNXR2LfwwHsPj7Iaw+XY=
 sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 h1:/Rv+M11QRah1itp8VhT6HoVx1Ray9eB4DBr+K+/sCJ8=
