@@ -70,6 +70,7 @@ var _ = Describe("IPAM", func() {
 
 			_, err := ipamClient.GetVlanByName("non-existent-vlan")
 			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of VLANs found (0)"))
 		})
 	})
 
@@ -99,6 +100,7 @@ var _ = Describe("IPAM", func() {
 
 			_, err := ipamClient.GetIPAddressByAddress("192.168.1.2")
 			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of IP addresses found (0)"))
 		})
 	})
 
@@ -133,6 +135,7 @@ var _ = Describe("IPAM", func() {
 
 			_, err := ipamClient.GetIPAddressesForInterface(1)
 			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to list IP addresses for interface ID 1: error listing IP addresses"))
 		})
 	})
 
@@ -175,6 +178,7 @@ var _ = Describe("IPAM", func() {
 
 			_, err := ipamClient.GetIPAddressForInterface(1)
 			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of IP addresses found (2)"))
 		})
 	})
 
@@ -198,6 +202,7 @@ var _ = Describe("IPAM", func() {
 
 			_, err := ipamClient.GetPrefixesContaining("192.168.1.1")
 			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("prefixes containing 192.168.1.1 not found"))
 		})
 	})
 })

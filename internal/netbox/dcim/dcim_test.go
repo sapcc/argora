@@ -1,0 +1,393 @@
+package dcim_test
+
+import (
+	"fmt"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/sapcc/argora/internal/netbox/dcim"
+	"github.com/sapcc/go-netbox-go/common"
+	"github.com/sapcc/go-netbox-go/models"
+)
+
+type MockDCIMClient struct {
+	ListDevicesFunc     func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error)
+	ListDeviceRolesFunc func(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error)
+	GetRegionFunc       func(id int) (*models.Region, error)
+	GetSiteFunc         func(id int) (*models.Site, error)
+	ListInterfacesFunc  func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error)
+	ListPlatformsFunc   func(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
+}
+
+func (d *MockDCIMClient) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+	return d.ListDevicesFunc(opts)
+}
+
+func (d *MockDCIMClient) ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
+	return d.ListDeviceRolesFunc(opts)
+}
+
+func (d *MockDCIMClient) GetRegion(id int) (*models.Region, error) {
+	return d.GetRegionFunc(id)
+}
+
+func (d *MockDCIMClient) GetSite(id int) (*models.Site, error) {
+	return d.GetSiteFunc(id)
+}
+
+func (d *MockDCIMClient) ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+	return d.ListInterfacesFunc(opts)
+}
+
+func (d *MockDCIMClient) ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error) {
+	return d.ListPlatformsFunc(opts)
+}
+
+var _ = Describe("DCIM", func() {
+	var (
+		mockClient *MockDCIMClient
+		dcimClient *dcim.DCIM
+	)
+
+	BeforeEach(func() {
+		mockClient = &MockDCIMClient{}
+		dcimClient = dcim.NewDCIM(mockClient)
+	})
+
+	Describe("GetDeviceByName", func() {
+		It("should return the device when found", func() {
+			mockClient.ListDevicesFunc = func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+				return &models.ListDevicesResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 1,
+					},
+					Results: []models.Device{{Name: "device1"}},
+				}, nil
+			}
+
+			device, err := dcimClient.GetDeviceByName("device1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(device.Name).To(Equal("device1"))
+		})
+
+		It("should return an error when device is not found", func() {
+			mockClient.ListDevicesFunc = func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+				return &models.ListDevicesResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 0,
+					},
+					Results: []models.Device{},
+				}, nil
+			}
+
+			_, err := dcimClient.GetDeviceByName("device1")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of devices found (0)"))
+		})
+	})
+
+	Describe("GetDeviceByID", func() {
+		It("should return the device when found", func() {
+			mockClient.ListDevicesFunc = func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+				return &models.ListDevicesResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 1,
+					},
+					Results: []models.Device{{ID: 1}},
+				}, nil
+			}
+
+			device, err := dcimClient.GetDeviceByID(1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(device.ID).To(Equal(1))
+		})
+
+		It("should return an error when device is not found", func() {
+			mockClient.ListDevicesFunc = func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+				return &models.ListDevicesResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 0,
+					},
+					Results: []models.Device{},
+				}, nil
+			}
+
+			_, err := dcimClient.GetDeviceByID(1)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of devices found (0)"))
+		})
+	})
+
+	Describe("GetDevicesByClusterID", func() {
+		It("should return the devices when found", func() {
+			mockClient.ListDevicesFunc = func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+				return &models.ListDevicesResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 2,
+					},
+					Results: []models.Device{{ID: 1}, {ID: 2}},
+				}, nil
+			}
+
+			devices, err := dcimClient.GetDevicesByClusterID(1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(devices).To(HaveLen(2))
+		})
+
+		It("should return an error when no devices are found", func() {
+			mockClient.ListDevicesFunc = func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+				return &models.ListDevicesResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 0,
+					},
+					Results: []models.Device{},
+				}, nil
+			}
+
+			devices, err := dcimClient.GetDevicesByClusterID(1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(devices).To(HaveLen(0))
+		})
+	})
+
+	Describe("GetRoleByName", func() {
+		It("should return the role when found", func() {
+			mockClient.ListDeviceRolesFunc = func(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
+				return &models.ListDeviceRolesResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 1,
+					},
+					Results: []models.DeviceRole{
+						{
+							NestedDeviceRole: models.NestedDeviceRole{
+								Name: "role1",
+							},
+						},
+					},
+				}, nil
+			}
+
+			role, err := dcimClient.GetRoleByName("role1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(role.Name).To(Equal("role1"))
+		})
+
+		It("should return an error when role is not found", func() {
+			mockClient.ListDeviceRolesFunc = func(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
+				return &models.ListDeviceRolesResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 0,
+					},
+					Results: []models.DeviceRole{},
+				}, nil
+			}
+
+			_, err := dcimClient.GetRoleByName("role1")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of roles found (0)"))
+		})
+	})
+
+	Describe("GetRegionForDevice", func() {
+		It("should return the region slug when found", func() {
+			mockClient.GetSiteFunc = func(id int) (*models.Site, error) {
+				return &models.Site{
+					Region: models.NestedRegion{ID: 1},
+				}, nil
+			}
+			mockClient.GetRegionFunc = func(id int) (*models.Region, error) {
+				return &models.Region{Slug: "region1"}, nil
+			}
+
+			region, err := dcimClient.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(region).To(Equal("region1"))
+		})
+
+		It("should return an error when site is not found", func() {
+			mockClient.GetSiteFunc = func(id int) (*models.Site, error) {
+				return nil, fmt.Errorf("site not found")
+			}
+
+			_, err := dcimClient.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to get site for ID 1: site not found"))
+		})
+
+		It("should return an error when region is not found", func() {
+			mockClient.GetSiteFunc = func(id int) (*models.Site, error) {
+				return &models.Site{Region: models.NestedRegion{ID: 1}}, nil
+			}
+			mockClient.GetRegionFunc = func(id int) (*models.Region, error) {
+				return nil, fmt.Errorf("region not found")
+			}
+
+			_, err := dcimClient.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to get region for ID 1: region not found"))
+		})
+	})
+
+	Describe("GetInterfaceByID", func() {
+		It("should return the interface when found", func() {
+			mockClient.ListInterfacesFunc = func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+				return &models.ListInterfacesResponse{
+					Results: []models.Interface{
+						{
+							NestedInterface: models.NestedInterface{ID: 1},
+						},
+					},
+				}, nil
+			}
+
+			iface, err := dcimClient.GetInterfaceByID(1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(iface.ID).To(Equal(1))
+		})
+
+		It("should return an error when interface is not found", func() {
+			mockClient.ListInterfacesFunc = func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+				return &models.ListInterfacesResponse{
+					Results: []models.Interface{},
+				}, nil
+			}
+
+			_, err := dcimClient.GetInterfaceByID(1)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("interface with ID 1 not found"))
+		})
+	})
+
+	Describe("GetInterfacesForDevice", func() {
+		It("should return the interfaces when found", func() {
+			mockClient.ListInterfacesFunc = func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+				return &models.ListInterfacesResponse{
+					Results: []models.Interface{
+						{
+							NestedInterface: models.NestedInterface{ID: 1},
+						},
+						{
+							NestedInterface: models.NestedInterface{ID: 2},
+						},
+					},
+				}, nil
+			}
+
+			ifaces, err := dcimClient.GetInterfacesForDevice(&models.Device{ID: 1})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ifaces).To(HaveLen(2))
+		})
+
+		It("should return an error when no interfaces are found", func() {
+			mockClient.ListInterfacesFunc = func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+				return &models.ListInterfacesResponse{
+					Results: []models.Interface{},
+				}, nil
+			}
+
+			ifaces, err := dcimClient.GetInterfacesForDevice(&models.Device{ID: 1})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ifaces).To(HaveLen(0))
+		})
+	})
+
+	Describe("GetInterfaceForDevice", func() {
+		It("should return the interface when found", func() {
+			mockClient.ListInterfacesFunc = func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+				return &models.ListInterfacesResponse{
+					Results: []models.Interface{
+						{
+							NestedInterface: models.NestedInterface{ID: 1},
+							Name:            "eth0",
+						},
+					},
+				}, nil
+			}
+
+			iface, err := dcimClient.GetInterfaceForDevice(&models.Device{ID: 1}, "eth0")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(iface.Name).To(Equal("eth0"))
+		})
+
+		It("should return an error when interface is not found", func() {
+			mockClient.ListInterfacesFunc = func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+				return &models.ListInterfacesResponse{
+					Results: []models.Interface{},
+				}, nil
+			}
+
+			_, err := dcimClient.GetInterfaceForDevice(&models.Device{ID: 1}, "eth0")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("eth0 interface not found"))
+		})
+	})
+
+	Describe("GetInterfacesByLagID", func() {
+		It("should return the interfaces when found", func() {
+			mockClient.ListInterfacesFunc = func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+				return &models.ListInterfacesResponse{
+					Results: []models.Interface{
+						{
+							NestedInterface: models.NestedInterface{ID: 1},
+						},
+						{
+							NestedInterface: models.NestedInterface{ID: 2},
+						},
+					},
+				}, nil
+			}
+
+			ifaces, err := dcimClient.GetInterfacesByLagID(1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ifaces).To(HaveLen(2))
+		})
+
+		It("should return an error when no interfaces are found", func() {
+			mockClient.ListInterfacesFunc = func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+				return &models.ListInterfacesResponse{
+					Results: []models.Interface{},
+				}, nil
+			}
+
+			ifaces, err := dcimClient.GetInterfacesByLagID(1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ifaces).To(HaveLen(0))
+		})
+	})
+
+	Describe("GetPlatformByName", func() {
+		It("should return the platform when found", func() {
+			mockClient.ListPlatformsFunc = func(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error) {
+				return &models.ListPlatformsResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 1,
+					},
+					Results: []models.Platform{
+						{
+							NestedPlatform: models.NestedPlatform{Name: "platform1"},
+						},
+					},
+				}, nil
+			}
+
+			platform, err := dcimClient.GetPlatformByName("platform1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(platform.Name).To(Equal("platform1"))
+		})
+
+		It("should return an error when platform is not found", func() {
+			mockClient.ListPlatformsFunc = func(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error) {
+				return &models.ListPlatformsResponse{
+					ReturnValues: common.ReturnValues{
+						Count: 0,
+					},
+					Results: []models.Platform{},
+				}, nil
+			}
+
+			_, err := dcimClient.GetPlatformByName("platform1")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of platforms found (0)"))
+		})
+	})
+})
