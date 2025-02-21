@@ -71,7 +71,7 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	nbc, err := netbox.NewNetboxClient(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	nb, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err
@@ -85,20 +85,20 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	for _, clusterRole := range clusterRoles {
 		logger.Info("reconciling IronCore cluster role " + clusterRole + " in " + r.cfg.IronCoreRegion)
 
-		cluster, err := virtualization.NewVirtualization(nbc).GetClusterByNameRegionRole("", r.cfg.IronCoreRegion, clusterRole)
+		cluster, err := virtualization.NewVirtualization(nb.Virtualization).GetClusterByNameRegionRole("", r.cfg.IronCoreRegion, clusterRole)
 		if err != nil {
 			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "role", clusterRole)
 			return ctrl.Result{}, err
 		}
 
-		devices, err := dcim.NewDCIM(nbc).GetDevicesByClusterID(cluster.ID)
+		devices, err := dcim.NewDCIM(nb.DCIM).GetDevicesByClusterID(cluster.ID)
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
 			return ctrl.Result{}, err
 		}
 
 		for _, device := range devices {
-			err = r.ReconcileDevice(ctx, nbc, cluster.Name, &device)
+			err = r.ReconcileDevice(ctx, nb, cluster.Name, &device)
 			if err != nil {
 				logger.Error(err, "unable to reconcile device")
 				return ctrl.Result{}, err
@@ -129,7 +129,7 @@ func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
 		Complete(r)
 }
 
-func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, nbc *netbox.NetboxClient, cluster string, device *models.Device) error {
+func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, nb *netbox.Netbox, cluster string, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "node", device.Name)
 	// check if device is active
@@ -153,7 +153,7 @@ func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, nbc *netbox.Ne
 		return err
 	}
 	// get the region
-	region, err := dcim.NewDCIM(nbc).GetRegionForDevice(device)
+	region, err := dcim.NewDCIM(nb.DCIM).GetRegionForDevice(device)
 	if err != nil {
 		logger.Error(err, "unable to lookup region for device")
 		return err

@@ -1,10 +1,17 @@
 package extras_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/argora/internal/netbox/extras"
 )
+
+func TestConfig(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Extras Suite")
+}
 
 var _ = Describe("ListTagsRequest", func() {
 	Context("BuildRequest", func() {

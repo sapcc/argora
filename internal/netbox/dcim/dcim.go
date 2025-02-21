@@ -3,199 +3,56 @@ package dcim
 import (
 	"fmt"
 
-	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-netbox-go/models"
 )
 
-type ListDevicesRequest struct {
-	name      string
-	id        int
-	clusterID int
+type DCIMClient interface {
+	GetRegion(id int) (*models.Region, error)
+	GetSite(id int) (*models.Site, error)
+
+	ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error)
+	ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error)
+	ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error)
+	ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
 }
 
-type ListDevicesRequestOption func(c *ListDevicesRequest)
-
-func NewListDevicesRequest(opts ...ListDevicesRequestOption) *ListDevicesRequest {
-	r := &ListDevicesRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
+type DCIMCLientWrapper struct {
+	client DCIMClient
 }
 
-func DeviceWithName(name string) ListDevicesRequestOption {
-	opt := func(r *ListDevicesRequest) {
-		r.name = name
-	}
-
-	return opt
+func NewDCIMCLientWrapper(client DCIMClient) *DCIMCLientWrapper {
+	return &DCIMCLientWrapper{client: client}
 }
 
-func DeviceWithID(id int) ListDevicesRequestOption {
-	opt := func(r *ListDevicesRequest) {
-		r.id = id
-	}
-
-	return opt
+func (d *DCIMCLientWrapper) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+	return d.client.ListDevices(opts)
 }
 
-func DeviceWithClusterID(clusterID int) ListDevicesRequestOption {
-	opt := func(r *ListDevicesRequest) {
-		r.clusterID = clusterID
-	}
-
-	return opt
+func (d *DCIMCLientWrapper) ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
+	return d.client.ListDeviceRoles(opts)
 }
 
-func (r *ListDevicesRequest) BuildRequest() models.ListDevicesRequest {
-	listDevicesRequest := models.ListDevicesRequest{}
-	if r.name != "" {
-		listDevicesRequest.Name = r.name
-	}
-	if r.id != 0 {
-		listDevicesRequest.ID = r.id
-	}
-	if r.clusterID != 0 {
-		listDevicesRequest.ClusterID = r.clusterID
-	}
-	return listDevicesRequest
+func (d *DCIMCLientWrapper) GetRegion(id int) (*models.Region, error) {
+	return d.client.GetRegion(id)
 }
 
-type ListDeviceRolesRequest struct {
-	name string
+func (d *DCIMCLientWrapper) GetSite(id int) (*models.Site, error) {
+	return d.client.GetSite(id)
 }
 
-type ListDeviceRolesRequestOption func(c *ListDeviceRolesRequest)
-
-func NewListDeviceRolesRequest(opts ...ListDeviceRolesRequestOption) *ListDeviceRolesRequest {
-	r := &ListDeviceRolesRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
+func (d *DCIMCLientWrapper) ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+	return d.client.ListInterfaces(opts)
 }
 
-func RoleWithName(name string) ListDeviceRolesRequestOption {
-	opt := func(r *ListDeviceRolesRequest) {
-		r.name = name
-	}
-
-	return opt
-}
-
-func (r *ListDeviceRolesRequest) BuildRequest() models.ListDeviceRolesRequest {
-	listDeviceRolesRequest := models.ListDeviceRolesRequest{}
-	if r.name != "" {
-		listDeviceRolesRequest.Name = r.name
-	}
-	return listDeviceRolesRequest
-}
-
-type ListInterfacesRequest struct {
-	name     string
-	id       int
-	deviceID int
-	lagID    int
-}
-
-type ListInterfacesRequestOption func(c *ListInterfacesRequest)
-
-func NewListInterfacesRequest(opts ...ListInterfacesRequestOption) *ListInterfacesRequest {
-	r := &ListInterfacesRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
-}
-
-func InterfaceWithName(name string) ListInterfacesRequestOption {
-	opt := func(r *ListInterfacesRequest) {
-		r.name = name
-	}
-
-	return opt
-}
-
-func InterfaceWithID(id int) ListInterfacesRequestOption {
-	opt := func(r *ListInterfacesRequest) {
-		r.id = id
-	}
-
-	return opt
-}
-
-func InterfaceWithDeviceID(deviceID int) ListInterfacesRequestOption {
-	opt := func(r *ListInterfacesRequest) {
-		r.deviceID = deviceID
-	}
-
-	return opt
-}
-
-func InterfaceWithLagID(lagID int) ListInterfacesRequestOption {
-	opt := func(r *ListInterfacesRequest) {
-		r.lagID = lagID
-	}
-
-	return opt
-}
-
-func (r *ListInterfacesRequest) BuildRequest() models.ListInterfacesRequest {
-	listInterfacesRequest := models.ListInterfacesRequest{}
-	if r.name != "" {
-		listInterfacesRequest.Name = r.name
-	}
-	if r.id != 0 {
-		listInterfacesRequest.ID = r.id
-	}
-	if r.deviceID != 0 {
-		listInterfacesRequest.DeviceID = r.deviceID
-	}
-	if r.lagID != 0 {
-		listInterfacesRequest.LagID = r.lagID
-	}
-	return listInterfacesRequest
-}
-
-type ListPlatformsRequest struct {
-	name string
-}
-
-type ListPlatformsRequestOption func(c *ListPlatformsRequest)
-
-func NewListPlatformsRequest(opts ...ListPlatformsRequestOption) *ListPlatformsRequest {
-	r := &ListPlatformsRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
-}
-
-func PlatformWithName(name string) ListPlatformsRequestOption {
-	opt := func(r *ListPlatformsRequest) {
-		r.name = name
-	}
-
-	return opt
-}
-
-func (r *ListPlatformsRequest) BuildRequest() models.ListPlatformsRequest {
-	listPlatformRequest := models.ListPlatformsRequest{}
-	if r.name != "" {
-		listPlatformRequest.Name = r.name
-	}
-	return listPlatformRequest
+func (d *DCIMCLientWrapper) ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error) {
+	return d.client.ListPlatforms(opts)
 }
 
 type DCIM struct {
-	client *netbox.NetboxClient
+	client DCIMClient
 }
 
-func NewDCIM(client *netbox.NetboxClient) *DCIM {
+func NewDCIM(client DCIMClient) *DCIM {
 	return &DCIM{client: client}
 }
 
@@ -204,7 +61,7 @@ func (d *DCIM) GetDeviceByName(deviceName string) (*models.Device, error) {
 		DeviceWithName(deviceName),
 	).BuildRequest()
 
-	res, err := d.client.DCIM.ListDevices(listDevicesRequest)
+	res, err := d.client.ListDevices(listDevicesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list devices by name %s: %w", deviceName, err)
 	}
@@ -219,7 +76,7 @@ func (d *DCIM) GetDeviceByID(id int) (*models.Device, error) {
 		DeviceWithID(id),
 	).BuildRequest()
 
-	res, err := d.client.DCIM.ListDevices(listDevicesRequest)
+	res, err := d.client.ListDevices(listDevicesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list devices for id %d: %w", id, err)
 	}
@@ -234,7 +91,7 @@ func (d *DCIM) GetDevicesByClusterID(clusterID int) ([]models.Device, error) {
 		DeviceWithClusterID(clusterID),
 	).BuildRequest()
 
-	res, err := d.client.DCIM.ListDevices(listDevicesRequest)
+	res, err := d.client.ListDevices(listDevicesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to liste devices by cluster ID %d: %w", clusterID, err)
 	}
@@ -246,7 +103,7 @@ func (d *DCIM) GetRoleByName(roleName string) (*models.DeviceRole, error) {
 		RoleWithName(roleName),
 	).BuildRequest()
 
-	res, err := d.client.DCIM.ListDeviceRoles(listDeviceRolesRequest)
+	res, err := d.client.ListDeviceRoles(listDeviceRolesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list roles by name %s: %w", roleName, err)
 	}
@@ -257,11 +114,11 @@ func (d *DCIM) GetRoleByName(roleName string) (*models.DeviceRole, error) {
 }
 
 func (d *DCIM) GetRegionForDevice(device *models.Device) (string, error) {
-	site, err := d.client.DCIM.GetSite(device.Site.ID)
+	site, err := d.client.GetSite(device.Site.ID)
 	if err != nil {
 		return "", fmt.Errorf("unable to get site for ID %d: %w", device.Site.ID, err)
 	}
-	region, err := d.client.DCIM.GetRegion(site.Region.ID)
+	region, err := d.client.GetRegion(site.Region.ID)
 	if err != nil {
 		return "", fmt.Errorf("unable to get region for ID %d: %w", site.Region.ID, err)
 	}
@@ -273,7 +130,7 @@ func (d *DCIM) GetInterfaceByID(id int) (*models.Interface, error) {
 		InterfaceWithID(id),
 	).BuildRequest()
 
-	rir, err := d.client.DCIM.ListInterfaces(listInterfacesRequest)
+	rir, err := d.client.ListInterfaces(listInterfacesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list interface for ID %d: %w", id, err)
 	}
@@ -288,7 +145,7 @@ func (d *DCIM) GetInterfacesForDevice(device *models.Device) ([]models.Interface
 		InterfaceWithDeviceID(device.ID),
 	).BuildRequest()
 
-	rir, err := d.client.DCIM.ListInterfaces(listInterfacesRequest)
+	rir, err := d.client.ListInterfaces(listInterfacesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list interfaces for device: %s: %w", device.Name, err)
 	}
@@ -301,7 +158,7 @@ func (d *DCIM) GetInterfaceForDevice(device *models.Device, ifaceName string) (*
 		InterfaceWithDeviceID(device.ID),
 	).BuildRequest()
 
-	rir, err := d.client.DCIM.ListInterfaces(listInterfacesRequest)
+	rir, err := d.client.ListInterfaces(listInterfacesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list interfaces by name %s (device ID: %d): %w", ifaceName, device.ID, err)
 	}
@@ -316,7 +173,7 @@ func (d *DCIM) GetInterfacesByLagID(lagID int) ([]models.Interface, error) {
 		InterfaceWithLagID(lagID),
 	).BuildRequest()
 
-	rir, err := d.client.DCIM.ListInterfaces(listInterfacesRequest)
+	rir, err := d.client.ListInterfaces(listInterfacesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list interfaces for LAG ID %d: %w", lagID, err)
 	}
@@ -328,7 +185,7 @@ func (d *DCIM) GetPlatformByName(platformName string) (*models.Platform, error) 
 		PlatformWithName(platformName),
 	).BuildRequest()
 
-	res, err := d.client.DCIM.ListPlatforms(listPlatformsRequest)
+	res, err := d.client.ListPlatforms(listPlatformsRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list platforms by name %s: %w", platformName, err)
 	}

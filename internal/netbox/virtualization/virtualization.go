@@ -3,68 +3,30 @@ package virtualization
 import (
 	"fmt"
 
-	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-netbox-go/models"
 )
 
-type ListClusterRequest struct {
-	role, region, name string
+type VirtualizationClient interface {
+	ListClusters(opts models.ListClusterRequest) (*models.ListClusterResponse, error)
 }
 
-type ListClusterOption func(c *ListClusterRequest)
-
-func NewListClusterRequest(opts ...ListClusterOption) *ListClusterRequest {
-	r := &ListClusterRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
+func (vcw *VirtualizationCLientWrapper) ListClusters(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
+	return vcw.client.ListClusters(opts)
 }
 
-func WithName(name string) ListClusterOption {
-	opt := func(r *ListClusterRequest) {
-		r.name = name
-	}
-
-	return opt
+type VirtualizationCLientWrapper struct {
+	client VirtualizationClient
 }
 
-func WithRole(role string) ListClusterOption {
-	opt := func(r *ListClusterRequest) {
-		r.role = role
-	}
-
-	return opt
-}
-
-func WithRegion(region string) ListClusterOption {
-	opt := func(r *ListClusterRequest) {
-		r.region = region
-	}
-
-	return opt
-}
-
-func (r *ListClusterRequest) BuildRequest() models.ListClusterRequest {
-	listClusterRequest := models.ListClusterRequest{}
-	if r.name != "" {
-		listClusterRequest.Name = r.name
-	}
-	if r.region != "" {
-		listClusterRequest.Region = r.region
-	}
-	if r.role != "" {
-		listClusterRequest.Type = r.role
-	}
-	return listClusterRequest
+func NewVirtualizationCLientWrapper(client VirtualizationClient) *VirtualizationCLientWrapper {
+	return &VirtualizationCLientWrapper{client: client}
 }
 
 type Virtualization struct {
-	client *netbox.NetboxClient
+	client VirtualizationClient
 }
 
-func NewVirtualization(client *netbox.NetboxClient) *Virtualization {
+func NewVirtualization(client VirtualizationClient) *Virtualization {
 	return &Virtualization{client: client}
 }
 
@@ -73,7 +35,7 @@ func (v *Virtualization) GetClusterByName(clusterName string) (*models.Cluster, 
 		WithName(clusterName),
 	).BuildRequest()
 
-	res, err := v.client.Virtualization.ListClusters(listClusterRequest)
+	res, err := v.client.ListClusters(listClusterRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list clusters by name %s: %w", clusterName, err)
 	}
@@ -90,7 +52,7 @@ func (v *Virtualization) GetClusterByNameRegionRole(name, region, role string) (
 		WithRegion(region),
 		WithRole(role),
 	).BuildRequest()
-	res, err := v.client.Virtualization.ListClusters(listClusterRequest)
+	res, err := v.client.ListClusters(listClusterRequest)
 	if err != nil {
 		return nil, err
 	}

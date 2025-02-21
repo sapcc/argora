@@ -10,14 +10,14 @@ import (
 	"github.com/sapcc/go-netbox-go/virtualization"
 )
 
-type NetboxClient struct {
+type Netbox struct {
 	Virtualization *virtualization.Client
 	DCIM           *dcim.Client
 	IPAM           *ipam.Client
 	Extras         *extras.Client
 }
 
-func NewNetboxClient(url, token string) (*NetboxClient, error) {
+func NewNetbox(url, token string) (*Netbox, error) {
 	virtualization, err := virtualization.New(url, token, false)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func NewNetboxClient(url, token string) (*NetboxClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &NetboxClient{
+	return &Netbox{
 		Virtualization: virtualization,
 		DCIM:           dcim,
 		IPAM:           ipam,

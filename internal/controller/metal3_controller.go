@@ -69,35 +69,35 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	nbc, err := netbox.NewNetboxClient(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	nb, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err
 	}
 
-	cluster := &clusterv1.Cluster{}
-	err = r.Client.Get(ctx, req.NamespacedName, cluster)
+	capiCluster := &clusterv1.Cluster{}
+	err = r.Client.Get(ctx, req.NamespacedName, capiCluster)
 	if client.IgnoreNotFound(err) != nil { // TODO: why ignoring not found errors ?
 		logger.Error(err, "unable to get cluster")
 		return ctrl.Result{}, err
 	}
 
-	role := cluster.Labels[ClusterRoleLabel]
+	role := capiCluster.Labels[ClusterRoleLabel]
 
-	nbCluster, err := virtualization.NewVirtualization(nbc).GetClusterByNameRegionRole(cluster.Name, "", role)
+	cluster, err := virtualization.NewVirtualization(nb.Virtualization).GetClusterByNameRegionRole(capiCluster.Name, "", role)
 	if err != nil {
-		logger.Error(err, "unable to find cluster in netbox", "name", cluster.Name, "role", role)
+		logger.Error(err, "unable to find cluster in netbox", "name", capiCluster.Name, "role", role)
 		return ctrl.Result{}, err
 	}
 
-	devices, err := dcim.NewDCIM(nbc).GetDevicesByClusterID(nbCluster.ID)
+	devices, err := dcim.NewDCIM(nb.DCIM).GetDevicesByClusterID(cluster.ID)
 	if err != nil {
-		logger.Error(err, "unable to find devices for cluster", "name", nbCluster.Name, "ID", nbCluster.ID)
+		logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 		return ctrl.Result{}, err
 	}
 
 	for _, device := range devices {
-		err = r.ReconcileDevice(ctx, nbc, *cluster, &device)
+		err = r.ReconcileDevice(ctx, nb, capiCluster, &device)
 		if err != nil {
 			logger.Error(err, "unable to reconcile device")
 			return ctrl.Result{}, err
@@ -124,7 +124,7 @@ func (r *Metal3Reconciler) SetupWithManager(mgr manager.Manager, rateLimiter Rat
 		Complete(r)
 }
 
-func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, nbc *netbox.NetboxClient, cluster clusterv1.Cluster, device *models.Device) error {
+func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, nb *netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "node", device.Name)
 	// check if device is active
@@ -158,8 +158,8 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, nbc *netbox.Netb
 		return err
 	}
 	// create the host
-	dcim := dcim.NewDCIM(nbc)
-	mac, err := getMacForIP(nbc, device.PrimaryIP4.Address)
+	dcim := dcim.NewDCIM(nb.DCIM)
+	mac, err := getMacForIP(nb, device.PrimaryIP4.Address)
 	if err != nil {
 		logger.Info("unable to lookup mac for ip", err)
 		mac = ""
@@ -224,7 +224,7 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, nbc *netbox.Netb
 		return err
 	}
 
-	err = r.CreateNetworkDataForDevice(ctx, nbc, host, cluster, device, labelRole)
+	err = r.CreateNetworkDataForDevice(ctx, nb, host, cluster, device, labelRole)
 	if err != nil {
 		logger.Error(err, "unable to create network data")
 		return err
@@ -233,13 +233,13 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, nbc *netbox.Netb
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (r *Metal3Reconciler) CreateNetworkDataForDevice(ctx context.Context, nbc *netbox.NetboxClient, host *bmov1alpha1.BareMetalHost, cluster clusterv1.Cluster, device *models.Device, labelRole string) error {
-	iface, err := dcim.NewDCIM(nbc).GetInterfaceForDevice(device, labelRole)
+func (r *Metal3Reconciler) CreateNetworkDataForDevice(ctx context.Context, nb *netbox.Netbox, host *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, labelRole string) error {
+	iface, err := dcim.NewDCIM(nb.DCIM).GetInterfaceForDevice(device, labelRole)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to find interface for device", "device", device.Name, "interface", labelRole)
 		return err
 	}
-	ipam := ipam.NewIPAM(nbc)
+	ipam := ipam.NewIPAM(nb.IPAM)
 	ip, err := ipam.GetIPAddressForInterface(iface.ID)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to get IP for interface", "interface ID", iface.ID)
@@ -322,7 +322,7 @@ func createRedFishURL(device *models.Device) (string, error) {
 	}
 }
 
-func (r *Metal3Reconciler) createBmcSecret(cluster clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
+func (r *Metal3Reconciler) createBmcSecret(cluster *clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
 	user := r.cfg.BMCUser
 	password := r.cfg.BMCPassword
 	if user == "" || password == "" {
@@ -413,14 +413,14 @@ func getRoleFromTags(device *models.Device) string {
 	return dRole
 }
 
-func getMacForIP(nbc *netbox.NetboxClient, ipAddress string) (string, error) {
-	ipam := ipam.NewIPAM(nbc)
+func getMacForIP(nb *netbox.Netbox, ipAddress string) (string, error) {
+	ipam := ipam.NewIPAM(nb.IPAM)
 	ip, err := ipam.GetIPAddressByAddress(ipAddress)
 	if err != nil {
 		return "", err
 	}
 
-	dcim := dcim.NewDCIM(nbc)
+	dcim := dcim.NewDCIM(nb.DCIM)
 	assignedIface, err := dcim.GetInterfaceByID(ip.AssignedInterface.ID)
 	if err != nil {
 		return "", err

@@ -3,120 +3,40 @@ package ipam
 import (
 	"fmt"
 
-	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-netbox-go/models"
 )
 
-type ListVlanRequest struct {
-	name string
+type IPAMClient interface {
+	ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error)
+	ListIPAddresses(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error)
+	ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error)
 }
 
-type ListVlanRequestOption func(c *ListVlanRequest)
-
-func NewListVlanRequest(opts ...ListVlanRequestOption) *ListVlanRequest {
-	r := &ListVlanRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
+func (w *IPAMCLientWrapper) ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error) {
+	return w.client.ListVlans(opts)
 }
 
-func VlanWithName(name string) ListVlanRequestOption {
-	opt := func(r *ListVlanRequest) {
-		r.name = name
-	}
-
-	return opt
+func (w *IPAMCLientWrapper) ListIPAddresses(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+	return w.client.ListIPAddresses(opts)
 }
 
-func (r *ListVlanRequest) BuildRequest() models.ListVlanRequest {
-	listVlanRequest := models.ListVlanRequest{}
-	if r.name != "" {
-		listVlanRequest.Name = r.name
-	}
-	return listVlanRequest
+func (w *IPAMCLientWrapper) ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+	return w.client.ListPrefixes(opts)
 }
 
-type ListIPAddressesRequest struct {
-	interfaceID int
-	address     string
+type IPAMCLientWrapper struct {
+	client IPAMClient
 }
 
-type ListIPAddressesRequestOption func(c *ListIPAddressesRequest)
-
-func NewListIPAddressesRequest(opts ...ListIPAddressesRequestOption) *ListIPAddressesRequest {
-	r := &ListIPAddressesRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
-}
-
-func IPAddressesWithInterfaceID(interfaceID int) ListIPAddressesRequestOption {
-	opt := func(r *ListIPAddressesRequest) {
-		r.interfaceID = interfaceID
-	}
-
-	return opt
-}
-
-func IPAddressesWithAddress(address string) ListIPAddressesRequestOption {
-	opt := func(r *ListIPAddressesRequest) {
-		r.address = address
-	}
-
-	return opt
-}
-
-func (r *ListIPAddressesRequest) BuildRequest() models.ListIPAddressesRequest {
-	listIPAddressesRequest := models.ListIPAddressesRequest{}
-	if r.interfaceID != 0 {
-		listIPAddressesRequest.InterfaceID = r.interfaceID
-	}
-	if r.address != "" {
-		listIPAddressesRequest.Address = r.address
-	}
-	return listIPAddressesRequest
-}
-
-type ListPrefixesRequest struct {
-	contains string
-}
-
-type ListPrefixesRequestOption func(c *ListPrefixesRequest)
-
-func NewListPrefixesRequest(opts ...ListPrefixesRequestOption) *ListPrefixesRequest {
-	r := &ListPrefixesRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
-}
-
-func PrefixWithContains(contains string) ListPrefixesRequestOption {
-	opt := func(r *ListPrefixesRequest) {
-		r.contains = contains
-	}
-
-	return opt
-}
-
-func (r *ListPrefixesRequest) BuildRequest() models.ListPrefixesRequest {
-	listPrefixesRequest := models.ListPrefixesRequest{}
-	if r.contains != "" {
-		listPrefixesRequest.Contains = r.contains
-	}
-	return listPrefixesRequest
+func NewIPAMCLientWrapper(client IPAMClient) *IPAMCLientWrapper {
+	return &IPAMCLientWrapper{client: client}
 }
 
 type IPAM struct {
-	client *netbox.NetboxClient
+	client IPAMClient
 }
 
-func NewIPAM(client *netbox.NetboxClient) *IPAM {
+func NewIPAM(client IPAMClient) *IPAM {
 	return &IPAM{client: client}
 }
 
@@ -125,7 +45,7 @@ func (i *IPAM) GetVlanByName(vlanName string) (*models.Vlan, error) {
 		VlanWithName(vlanName),
 	).BuildRequest()
 
-	res, err := i.client.IPAM.ListVlans(ListVlanRequest)
+	res, err := i.client.ListVlans(ListVlanRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list VLANs by name %s: %w", vlanName, err)
 	}
@@ -140,7 +60,7 @@ func (i *IPAM) GetIPAddressByAddress(address string) (*models.IPAddress, error) 
 		IPAddressesWithAddress(address),
 	).BuildRequest()
 
-	res, err := i.client.IPAM.ListIPAddresses(ListIPAddressesRequest)
+	res, err := i.client.ListIPAddresses(ListIPAddressesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list IP addresses with address %s: %w", address, err)
 	}
@@ -155,7 +75,7 @@ func (i *IPAM) GetIPAddressesForInterface(interfaceID int) ([]models.IPAddress, 
 		IPAddressesWithInterfaceID(interfaceID),
 	).BuildRequest()
 
-	res, err := i.client.IPAM.ListIPAddresses(ListIPAddressesRequest)
+	res, err := i.client.ListIPAddresses(ListIPAddressesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list IP addresses for interface ID %d: %w", interfaceID, err)
 	}
@@ -178,7 +98,7 @@ func (i *IPAM) GetPrefixesContaining(contains string) ([]models.Prefix, error) {
 		PrefixWithContains(contains),
 	).BuildRequest()
 
-	res, err := i.client.IPAM.ListPrefixes(ListPrefixesRequest)
+	res, err := i.client.ListPrefixes(ListPrefixesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list prefixes containing %s: %w", contains, err)
 	}

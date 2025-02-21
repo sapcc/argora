@@ -3,46 +3,30 @@ package extras
 import (
 	"fmt"
 
-	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-netbox-go/models"
 )
 
-type ListTagsRequest struct {
-	name string
+type ExtrasClient interface {
+	ListTags(opts models.ListTagsRequest) (*models.ListTagsResponse, error)
 }
 
-type ListClusterOption func(c *ListTagsRequest)
-
-func NewListTagsRequest(opts ...ListClusterOption) *ListTagsRequest {
-	r := &ListTagsRequest{}
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
+type ExtrasCLientWrapper struct {
+	client ExtrasClient
 }
 
-func WithName(name string) ListClusterOption {
-	opt := func(r *ListTagsRequest) {
-		r.name = name
-	}
-
-	return opt
+func NewExtrasCLientWrapper(client ExtrasClient) *ExtrasCLientWrapper {
+	return &ExtrasCLientWrapper{client: client}
 }
 
-func (r *ListTagsRequest) BuildRequest() models.ListTagsRequest {
-	listTagsRequest := models.ListTagsRequest{}
-	if r.name != "" {
-		listTagsRequest.Name = r.name
-	}
-	return listTagsRequest
+func (d *ExtrasCLientWrapper) ListDevices(opts models.ListTagsRequest) (*models.ListTagsResponse, error) {
+	return d.client.ListTags(opts)
 }
 
 type Extras struct {
-	client *netbox.NetboxClient
+	client ExtrasClient
 }
 
-func NewExtras(client *netbox.NetboxClient) *Extras {
+func NewExtras(client ExtrasClient) *Extras {
 	return &Extras{client: client}
 }
 
@@ -51,7 +35,7 @@ func (e *Extras) GetTagByName(tagName string) (*models.Tag, error) {
 		WithName(tagName),
 	).BuildRequest()
 
-	res, err := e.client.Extras.ListTags(listTagsRequest)
+	res, err := e.client.ListTags(listTagsRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list tags by name %s: %w", tagName, err)
 	}
