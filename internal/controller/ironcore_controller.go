@@ -71,36 +71,36 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	nb, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err
 	}
 
-	var clusterRoles []string
+	var roles []string
 	if r.cfg.IronCoreRoles != "" {
-		clusterRoles = strings.Split(r.cfg.IronCoreRoles, ",")
+		roles = strings.Split(r.cfg.IronCoreRoles, ",")
 	}
 
-	for _, clusterRole := range clusterRoles {
-		logger.Info("reconciling IronCore cluster role " + clusterRole + " in " + r.cfg.IronCoreRegion)
+	for _, role := range roles {
+		logger.Info("reconciling IronCore cluster role " + role + " in " + r.cfg.IronCoreRegion)
 
-		cluster, err := virtualization.NewVirtualization(nb.Virtualization).GetClusterByNameRegionRole("", r.cfg.IronCoreRegion, clusterRole)
+		cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType("", r.cfg.IronCoreRegion, role)
 		if err != nil {
-			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "role", clusterRole)
+			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", role)
 			return ctrl.Result{}, err
 		}
 
-		devices, err := dcim.NewDCIM(nb.DCIM).GetDevicesByClusterID(cluster.ID)
+		devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
 			return ctrl.Result{}, err
 		}
 
 		for _, device := range devices {
-			err = r.ReconcileDevice(ctx, nb, cluster.Name, &device)
+			err = r.ReconcileDevice(ctx, netBox, cluster.Name, &device)
 			if err != nil {
-				logger.Error(err, "unable to reconcile device")
+				logger.Error(err, "unable to reconcile device", "device", device.Name, "deviceID", device.ID)
 				return ctrl.Result{}, err
 			}
 		}
@@ -116,9 +116,11 @@ func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
 		periodic.WithInterval(r.reconcileInterval),
 		periodic.WithEventChannel(r.eventChannel),
 	)
+
 	if err != nil {
 		return fmt.Errorf("unable to create periodic runner: %w", err)
 	}
+
 	if err := mgr.Add(runner); err != nil {
 		return fmt.Errorf("unable to add periodic runner: %w", err)
 	}
@@ -129,40 +131,34 @@ func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
 		Complete(r)
 }
 
-func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, nb *netbox.Netbox, cluster string, device *models.Device) error {
+func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, netBox *netbox.Netbox, cluster string, device *models.Device) error {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling device", "node", device.Name)
-	// check if device is active
+	logger.Info("reconciling device", "device", device.Name)
+
 	if device.Status.Value != "active" {
-		logger.Info("device is not active")
+		logger.Info("device is not active", "status", device.Status.Value)
 		return nil
-	}
-	// check if the host already exists
-	bmcName := device.Name
-	bmcObj := &metalv1alpha1.BMC{}
-	err := r.Client.Get(ctx, client.ObjectKey{Name: bmcName, Namespace: defaultNamespace}, bmcObj)
-	if err == nil {
-		logger.Info("bmc already exists", "bmc", bmcName)
-		return nil
-	}
-	// ugly hack to get the bb this is not easy to get to in netbox
-	nameParts := strings.Split(device.Name, "-")
-	if len(nameParts) != 2 {
-		err = fmt.Errorf("invalid device name: %s", device.Name)
-		logger.Error(err, "error splitting name")
-		return err
-	}
-	// get the region
-	region, err := dcim.NewDCIM(nb.DCIM).GetRegionForDevice(device)
-	if err != nil {
-		logger.Error(err, "unable to lookup region for device")
-		return err
 	}
 
-	oobIP, err := r.getOobIP(device)
+	bmcObj := &metalv1alpha1.BMC{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: defaultNamespace}, bmcObj); err == nil {
+		logger.Info("bmc already exists", "bmc", device.Name)
+		return nil
+	}
+
+	deviceNameParts := strings.Split(device.Name, "-")
+	if len(deviceNameParts) != 2 {
+		return fmt.Errorf("unable to split in two device name: %s", device.Name)
+	}
+
+	region, err := dcim.NewDCIM(netBox.DCIM).GetRegionForDevice(device)
 	if err != nil {
-		logger.Error(err, "unable to get OOB IP")
-		return err
+		return fmt.Errorf("unable to get region for device: %w", err)
+	}
+
+	oobIP, err := getOobIP(device)
+	if err != nil {
+		return fmt.Errorf("unable to get OOB IP: %w", err)
 	}
 
 	commonLabels := map[string]string{
@@ -170,42 +166,37 @@ func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, nb *netbox.Net
 		"topology.kubernetes.io/zone":        device.Site.Slug,
 		"kubernetes.metal.cloud.sap/cluster": cluster,
 		"kubernetes.metal.cloud.sap/name":    device.Name,
-		"kubernetes.metal.cloud.sap/bb":      nameParts[1],
+		"kubernetes.metal.cloud.sap/bb":      deviceNameParts[1],
 		"kubernetes.metal.cloud.sap/type":    device.DeviceType.Slug,
 		"kubernetes.metal.cloud.sap/role":    device.DeviceRole.Slug,
 	}
 
 	bmcSecret, err := r.createBmcSecret(ctx, device, commonLabels)
 	if err != nil {
-		logger.Error(err, "unable to create bmc secret")
-		return err
+		return fmt.Errorf("unable to create bmc secret: %w", err)
 	}
 
 	bmc, err := r.createBmc(ctx, device, oobIP, bmcSecret, commonLabels)
 	if err != nil {
-		logger.Error(err, "unable to create BMC")
-		return err
+		return fmt.Errorf("unable to create bmc: %w", err)
 	}
 
 	if err := r.setOwnerReferenceAndPatch(ctx, bmc, bmcSecret); err != nil {
-		logger.Error(err, "unable to set owner reference and patch bmc secret")
 		return err
 	}
-
 	return nil
 }
 
-func (r *IronCoreReconciler) createBmcSecret(
-	ctx context.Context,
-	device *models.Device,
-	labels map[string]string,
-) (*metalv1alpha1.BMCSecret, error) {
+func (r *IronCoreReconciler) createBmcSecret(ctx context.Context, device *models.Device, labels map[string]string) (*metalv1alpha1.BMCSecret, error) {
+	logger := log.FromContext(ctx)
 
 	user := r.cfg.BMCUser
 	password := r.cfg.BMCPassword
+
 	if user == "" || password == "" {
 		return nil, errors.New("bmc user or password not set")
 	}
+
 	bmcSecret := &metalv1alpha1.BMCSecret{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:   device.Name,
@@ -216,24 +207,25 @@ func (r *IronCoreReconciler) createBmcSecret(
 			metalv1alpha1.BMCSecretPasswordKeyName: []byte(password),
 		},
 	}
-	err := r.Client.Create(ctx, bmcSecret)
-	if apierrors.IsAlreadyExists(err) {
-		log.FromContext(ctx).Info("bmc secret already exists", "bmcSecret", bmcSecret.Name)
-		return bmcSecret, nil
+
+	if err := r.Client.Create(ctx, bmcSecret); err != nil {
+		if apierrors.IsAlreadyExists(err) { // TODO: if its already exists, can we assume that the secret is correct?
+			logger.Info("bmc secret already exists", "bmcSecret", bmcSecret.Name)
+			return bmcSecret, nil
+		}
+		return nil, err
 	}
-	if err != nil {
-		return nil, fmt.Errorf("unable to create bmc secret: %w", err)
-	}
+
 	return bmcSecret, nil
 }
 
-func (r *IronCoreReconciler) createBmc(
-	ctx context.Context,
-	device *models.Device,
-	oobIP string,
-	bmcSecret *metalv1alpha1.BMCSecret,
-	labels map[string]string,
-) (*metalv1alpha1.BMC, error) {
+func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Device, oobIP string, bmcSecret *metalv1alpha1.BMCSecret, labels map[string]string) (*metalv1alpha1.BMC, error) {
+	logger := log.FromContext(ctx)
+
+	ip, err := metalv1alpha1.ParseIP(oobIP)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse OOB IP: %w", err)
+	}
 
 	bmc := &metalv1alpha1.BMC{
 		ObjectMeta: ctrl.ObjectMeta{
@@ -242,7 +234,7 @@ func (r *IronCoreReconciler) createBmc(
 		},
 		Spec: metalv1alpha1.BMCSpec{
 			Endpoint: &metalv1alpha1.InlineEndpoint{
-				IP: metalv1alpha1.MustParseIP(oobIP),
+				IP: ip,
 			},
 			Protocol: metalv1alpha1.Protocol{
 				Name: bmcProtocolRedfish,
@@ -253,35 +245,38 @@ func (r *IronCoreReconciler) createBmc(
 			},
 		},
 	}
+
 	if err := r.Client.Create(ctx, bmc); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			log.FromContext(ctx).Info("BMC already exists", "BMC", bmc.Name)
+		if apierrors.IsAlreadyExists(err) { // TODO: if its already exists, can we assume that the BMC is correct?
+			logger.Info("BMC already exists", "BMC", bmc.Name)
 			return bmc, nil
 		}
 		return nil, fmt.Errorf("unable to create BMC: %w", err)
 	}
+
 	return bmc, nil
 }
 
-func (r *IronCoreReconciler) getOobIP(
-	device *models.Device,
-) (string, error) {
-
-	oobIP := device.OOBIp.Address
-	ip, _, err := net.ParseCIDR(oobIP)
-	if err != nil {
-		return "", fmt.Errorf("uncable to parse Device OOB IP: %w", err)
-	}
-	return ip.String(), nil
-}
-
-func (r *IronCoreReconciler) setOwnerReferenceAndPatch(ctx context.Context, owner, object client.Object) error {
-	deepCopiedObject := object.DeepCopyObject().(client.Object)
-	if err := controllerutil.SetControllerReference(owner, deepCopiedObject, r.scheme); err != nil {
+func (r *IronCoreReconciler) setOwnerReferenceAndPatch(ctx context.Context, bmc *metalv1alpha1.BMC, bmcSecret *metalv1alpha1.BMCSecret) error {
+	bmcSecretBase := bmcSecret.DeepCopy()
+	if err := controllerutil.SetControllerReference(bmc, bmcSecret, r.scheme); err != nil {
 		return fmt.Errorf("unable to set owner reference: %w", err)
 	}
-	if err := r.Client.Patch(ctx, deepCopiedObject, client.MergeFrom(object)); err != nil {
+
+	if err := r.Client.Patch(ctx, bmcSecret, client.MergeFrom(bmcSecretBase)); err != nil {
 		return fmt.Errorf("unable to patch object: %w", err)
 	}
+
 	return nil
+}
+
+func getOobIP(device *models.Device) (string, error) {
+	oobIP := device.OOBIp.Address
+	ip, _, err := net.ParseCIDR(oobIP)
+
+	if err != nil {
+		return "", fmt.Errorf("uncable to parse device OOB IP: %w", err)
+	}
+
+	return ip.String(), nil
 }

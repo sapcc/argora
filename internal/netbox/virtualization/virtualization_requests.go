@@ -5,7 +5,7 @@ import (
 )
 
 type ListClusterRequest struct {
-	role, region, name string
+	clusterType, region, name string
 }
 
 type ListClusterOption func(c *ListClusterRequest)
@@ -27,9 +27,9 @@ func WithName(name string) ListClusterOption {
 	return opt
 }
 
-func WithRole(role string) ListClusterOption {
+func WithType(clusterType string) ListClusterOption {
 	opt := func(r *ListClusterRequest) {
-		r.role = role
+		r.clusterType = clusterType
 	}
 
 	return opt
@@ -51,8 +51,8 @@ func (r *ListClusterRequest) BuildRequest() models.ListClusterRequest {
 	if r.region != "" {
 		listClusterRequest.Region = r.region
 	}
-	if r.role != "" {
-		listClusterRequest.Type = r.role
+	if r.clusterType != "" {
+		listClusterRequest.Type = r.clusterType
 	}
 	return listClusterRequest
 }

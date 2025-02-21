@@ -46,12 +46,13 @@ func (v *Virtualization) GetClusterByName(clusterName string) (*models.Cluster, 
 	return &res.Results[0], nil
 }
 
-func (v *Virtualization) GetClusterByNameRegionRole(name, region, role string) (*models.Cluster, error) {
+func (v *Virtualization) GetClusterByNameRegionType(name, region, clusterType string) (*models.Cluster, error) {
 	listClusterRequest := NewListClusterRequest(
 		WithName(name),
 		WithRegion(region),
-		WithRole(role),
+		WithType(clusterType),
 	).BuildRequest()
+
 	res, err := v.client.ListClusters(listClusterRequest)
 	if err != nil {
 		return nil, err

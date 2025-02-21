@@ -161,7 +161,7 @@ func main() {
 
 	cfg := config.NewDefaultConfiguration(mgr.GetClient())
 
-	// if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), cfg).SetupWithManager(mgr, rateLimiter); err != nil {
+	// if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), cfg, flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 	// 	setupLog.Error(err, "unable to create controller", "controller", "metal3")
 	// 	os.Exit(1)
 	// }

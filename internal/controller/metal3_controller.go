@@ -40,17 +40,47 @@ import (
 
 const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
 
+var (
+	rootHintMap = map[string]string{
+		"poweredge-r660":       "BOSS",
+		"poweredge-r640":       "BOSS",
+		"poweredge-r840":       "BOSS",
+		"poweredge-r7615":      "BOSS",
+		"thinksystem-sr650":    "ThinkSystem M.2 VD",
+		"sr655-v3":             "NVMe 2-Bay",
+		"thinksystem-sr650-v3": "NVMe 2-Bay",
+		"proliant-dl320-gen11": "HPE NS204i-u Gen11 Boot Controller",
+	}
+
+	linkHintMapCeph = map[string]string{
+		"ThinkSystem SR650":    "en*f0np*",
+		"ThinkSystem SR650 v3": "en*1f*np*",
+		"Thinksystem SR655 v3": "en*f*np*",
+		"PowerEdge R640":       "en*f1np*",
+		"PowerEdge R660":       "en*f1np*",
+		"PowerEdge R7615":      "en*f*np*",
+		"Proliant DL320 Gen11": "en*f1np*",
+	}
+
+	linkHintMapKvm = map[string]string{
+		"PowerEdge R640": "en*f0np*",
+		"PowerEdge R840": "en*f0np*",
+	}
+)
+
 type Metal3Reconciler struct {
 	client.Client
-	scheme *runtime.Scheme
-	cfg    *config.Config
+	scheme            *runtime.Scheme
+	cfg               *config.Config
+	reconcileInterval time.Duration
 }
 
-func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *config.Config) *Metal3Reconciler {
+func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *config.Config, reconcileInterval time.Duration) *Metal3Reconciler {
 	return &Metal3Reconciler{
-		Client: client,
-		scheme: scheme,
-		cfg:    cfg,
+		Client:            client,
+		scheme:            scheme,
+		cfg:               cfg,
+		reconcileInterval: reconcileInterval,
 	}
 }
 
@@ -69,7 +99,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	nb, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err
@@ -78,33 +108,32 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	capiCluster := &clusterv1.Cluster{}
 	err = r.Client.Get(ctx, req.NamespacedName, capiCluster)
 	if client.IgnoreNotFound(err) != nil { // TODO: why ignoring not found errors ?
-		logger.Error(err, "unable to get cluster")
+		logger.Error(err, "unable to get CAPI cluster")
 		return ctrl.Result{}, err
 	}
 
-	role := capiCluster.Labels[ClusterRoleLabel]
-
-	cluster, err := virtualization.NewVirtualization(nb.Virtualization).GetClusterByNameRegionRole(capiCluster.Name, "", role)
+	clusterType := capiCluster.Labels[ClusterRoleLabel]
+	cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType(capiCluster.Name, "", clusterType)
 	if err != nil {
-		logger.Error(err, "unable to find cluster in netbox", "name", capiCluster.Name, "role", role)
+		logger.Error(err, "unable to find cluster in netbox", "name", capiCluster.Name, "type", clusterType)
 		return ctrl.Result{}, err
 	}
 
-	devices, err := dcim.NewDCIM(nb.DCIM).GetDevicesByClusterID(cluster.ID)
+	devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
 	if err != nil {
 		logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 		return ctrl.Result{}, err
 	}
 
 	for _, device := range devices {
-		err = r.ReconcileDevice(ctx, nb, capiCluster, &device)
+		err = r.ReconcileDevice(ctx, netBox, capiCluster, &device)
 		if err != nil {
-			logger.Error(err, "unable to reconcile device")
+			logger.Error(err, "unable to reconcile device", "device", device.Name, "deviceID", device.ID)
 			return ctrl.Result{}, err
 		}
 	}
 
-	return ctrl.Result{RequeueAfter: 300 * time.Second}, nil
+	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
 func (r *Metal3Reconciler) SetupWithManager(mgr manager.Manager, rateLimiter RateLimiter) error {
@@ -124,78 +153,74 @@ func (r *Metal3Reconciler) SetupWithManager(mgr manager.Manager, rateLimiter Rat
 		Complete(r)
 }
 
-func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, nb *netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
+func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, netBox *netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling device", "node", device.Name)
-	// check if device is active
+	logger.Info("reconciling device", "device", device.Name, "deviceID", device.ID)
+
 	if device.Status.Value != "active" {
-		logger.Info("device is not active")
+		logger.Info("device is not active", "status", device.Status.Value)
 		return nil
 	}
-	// check if the host already exists
+
 	bmh := &bmov1alpha1.BareMetalHost{}
-	err := r.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh)
-	if err == nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh); err == nil {
 		logger.Info("host already exists", "host", bmh.Name)
 		return nil
 	}
+
 	redfishURL, err := createRedFishURL(device)
 	if err != nil {
-		logger.Error(err, "unable to create redfish url")
-		return err
+		return errors.New("unable to create redfish url")
 	}
-	// ugly hack to get the role this is not easy to get to in netbox
-	nameParts := strings.Split(device.Name, "-")
-	if len(nameParts) != 2 {
-		err = fmt.Errorf("invalid device name: %s", device.Name)
-		logger.Error(err, "error splitting name")
-		return err
+
+	deviceNameParts := strings.Split(device.Name, "-")
+	if len(deviceNameParts) != 2 {
+		return fmt.Errorf("unable to split in two device name: %s", device.Name)
 	}
-	// create the root device hint
+
 	rootHint, err := createRootHint(device)
 	if err != nil {
-		logger.Error(err, "unable to create root hint")
-		return err
+		return fmt.Errorf("unable to create root hint: %w", err)
 	}
-	// create the host
-	dcim := dcim.NewDCIM(nb.DCIM)
-	mac, err := getMacForIP(nb, device.PrimaryIP4.Address)
+
+	mac, err := getMacForIP(netBox, device.PrimaryIP4.Address)
 	if err != nil {
 		logger.Info("unable to lookup mac for ip", err)
 		mac = ""
 	}
-	// get the region
+
+	dcim := dcim.NewDCIM(netBox.DCIM)
 	region, err := dcim.GetRegionForDevice(device)
 	if err != nil {
-		logger.Error(err, "unable to get region for device")
-		return err
-	}
-	bmcSecret, err := r.createBmcSecret(cluster, device)
-	if err != nil {
-		logger.Error(err, "unable to create bmc secret")
-		return err
-	}
-	err = r.Client.Create(ctx, bmcSecret)
-	if err != nil {
-		logger.Error(err, "unable to upload bmc secret")
-		return err
-	}
-	labelRole := getRoleFromTags(device)
-	if labelRole == device.DeviceRole.Slug {
-		logger.Info("no role found in tags, using device role")
-	} else {
-		logger.Info("role found in tags", "role", labelRole)
+		return fmt.Errorf("unable to get region for device: %w", err)
 	}
 
-	host := &bmov1alpha1.BareMetalHost{
+	bmcSecret, err := r.createBmcSecret(cluster, device) // TODO: not setting owner reference, e.g. owned by BareMetalHost ?
+	if err != nil {                                      // TODO: what is secret already exist ?
+		return fmt.Errorf("unable to create bmc secret: %w", err)
+	}
+
+	if err = r.Client.Create(ctx, bmcSecret); err != nil {
+		return fmt.Errorf("unable to upload bmc secret: %w", err)
+	}
+
+	role := getRoleFromTags(device)
+	if role == device.DeviceRole.Slug {
+		logger.Info("no role found in tags, using device role")
+	} else {
+		logger.Info("role found in tags", "role", role)
+	}
+
+	secretName := "networkdata-" + device.Name
+	bareMetalHost := &bmov1alpha1.BareMetalHost{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:      device.Name,
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
 				"kubernetes.metal.cloud.sap/cluster": cluster.Name,
 				"kubernetes.metal.cloud.sap/name":    device.Name,
-				"kubernetes.metal.cloud.sap/bb":      nameParts[1],
-				"kubernetes.metal.cloud.sap/role":    labelRole,
+				"kubernetes.metal.cloud.sap/bb":      deviceNameParts[1],
+				"kubernetes.metal.cloud.sap/role":    role,
 				"topology.kubernetes.io/region":      region,
 				"topology.kubernetes.io/zone":        device.Site.Slug,
 			},
@@ -207,68 +232,67 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, nb *netbox.Netbo
 			Online:                true,
 			BMC: bmov1alpha1.BMCDetails{
 				Address:                        redfishURL,
-				CredentialsName:                "bmc-secret-" + device.Name,
+				CredentialsName:                bmcSecret.Name,
 				DisableCertificateVerification: true,
 			},
 			BootMACAddress: mac,
 			NetworkData: &corev1.SecretReference{
-				Name:      "networkdata-" + device.Name,
+				Name:      secretName,
 				Namespace: cluster.Namespace,
 			},
 			RootDeviceHints: rootHint,
 		},
 	}
-	err = r.Client.Create(ctx, host)
-	if err != nil {
-		logger.Error(err, "unable to create baremetal host")
-		return err
+
+	if err = r.Client.Create(ctx, bareMetalHost); err != nil {
+		return fmt.Errorf("unable to create baremetal host: %w", err)
 	}
 
-	err = r.CreateNetworkDataForDevice(ctx, nb, host, cluster, device, labelRole)
-	if err != nil {
-		logger.Error(err, "unable to create network data")
-		return err
+	if err = r.CreateNetworkDataForDevice(ctx, netBox, bareMetalHost, cluster, device, role, secretName); err != nil {
+		return fmt.Errorf("unable to create network data: %w", err)
 	}
+
 	return nil
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (r *Metal3Reconciler) CreateNetworkDataForDevice(ctx context.Context, nb *netbox.Netbox, host *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, labelRole string) error {
-	iface, err := dcim.NewDCIM(nb.DCIM).GetInterfaceForDevice(device, labelRole)
+func (r *Metal3Reconciler) CreateNetworkDataForDevice(ctx context.Context, netBox *netbox.Netbox, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role string, secretName string) error {
+	iface, err := dcim.NewDCIM(netBox.DCIM).GetInterfaceForDevice(device, "LAG1")
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to find interface for device", "device", device.Name, "interface", labelRole)
-		return err
+		return fmt.Errorf("unable to find interface LAG1 for device %s: %w", device.Name, err)
 	}
-	ipam := ipam.NewIPAM(nb.IPAM)
+
+	ipam := ipam.NewIPAM(netBox.IPAM)
 	ip, err := ipam.GetIPAddressForInterface(iface.ID)
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to get IP for interface", "interface ID", iface.ID)
-		return err
+		return fmt.Errorf("unable to get IP for interface ID %d: %w", iface.ID, err)
 	}
+
 	prefixes, err := ipam.GetPrefixesContaining(ip.Address)
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to get prefixes containing", "IP", ip.Address)
-		return err
+		return fmt.Errorf("unable to get prefixes containing IP %s: %w", ip.Address, err)
 	}
+
 	vlanID := 0
-	for _, p := range prefixes {
-		if p.Vlan.VID != 0 {
-			vlanID = p.Vlan.VID
+	for _, prefix := range prefixes {
+		if prefix.Vlan.VID != 0 {
+			vlanID = prefix.Vlan.VID
 			break
 		}
 	}
+
 	netw, err := netaddr.ParseIPv4Net(ip.Address)
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to parse IP address", "IP", ip.Address)
-		return err
+		return fmt.Errorf("unable to parse IP address %s: %w", ip.Address, err)
 	}
-	netMask := netw.Netmask().Extended()
-	linkHint, err := createLinkHint(device, labelRole)
+
+	linkHint, err := createLinkHint(device, role)
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to create link hint")
-		return err
+		return fmt.Errorf("unable to create link hint for device %s and role %s: %w", device.Name, role, err)
 	}
-	nwdRaw := networkdata.NetworkData{
+
+	netMask := netw.Netmask().Extended()
+	nwData := networkdata.NetworkData{
 		Networks: []networkdata.L3{
 			{
 				ID:        vlanID,
@@ -287,26 +311,48 @@ func (r *Metal3Reconciler) CreateNetworkDataForDevice(ctx context.Context, nb *n
 			},
 		},
 	}
-	ndwYaml, err := yaml.Marshal(nwdRaw)
+
+	nwDataYaml, err := yaml.Marshal(nwData)
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to marshal network data")
-		return err
+		return fmt.Errorf("unable to marshal network data: %w", err)
 	}
-	result := &corev1.Secret{
+
+	nwDataSecret := &corev1.Secret{
 		ObjectMeta: ctrl.ObjectMeta{
-			Name:      "networkdata-" + device.Name,
+			Name:      secretName,
 			Namespace: cluster.Namespace,
 		},
 		Type: "",
 		StringData: map[string]string{
-			"networkData": string(ndwYaml),
+			"networkData": string(nwDataYaml),
 		},
 	}
-	if err := ctrl.SetControllerReference(host, result, r.scheme); err != nil {
-		log.FromContext(ctx).Error(err, "failed to set owner reference on networkdata secret")
-		return err
+
+	if err := ctrl.SetControllerReference(bareMetalHost, nwDataSecret, r.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on networkdata secret: %w", err)
 	}
-	return r.Create(ctx, result)
+
+	return r.Create(ctx, nwDataSecret)
+}
+
+func (r *Metal3Reconciler) createBmcSecret(cluster *clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
+	user := r.cfg.BMCUser
+	password := r.cfg.BMCPassword
+
+	if user == "" || password == "" {
+		return nil, errors.New("bmc user or password not set")
+	}
+
+	return &corev1.Secret{
+		ObjectMeta: ctrl.ObjectMeta{
+			Name:      "bmc-secret-" + device.Name,
+			Namespace: cluster.Namespace,
+		},
+		StringData: map[string]string{
+			"username": user,
+			"password": password,
+		},
+	}, nil
 }
 
 func createRedFishURL(device *models.Device) (string, error) {
@@ -322,50 +368,6 @@ func createRedFishURL(device *models.Device) (string, error) {
 	}
 }
 
-func (r *Metal3Reconciler) createBmcSecret(cluster *clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
-	user := r.cfg.BMCUser
-	password := r.cfg.BMCPassword
-	if user == "" || password == "" {
-		return nil, errors.New("bmc user or password not set")
-	}
-	return &corev1.Secret{
-		ObjectMeta: ctrl.ObjectMeta{
-			Name:      "bmc-secret-" + device.Name,
-			Namespace: cluster.Namespace,
-		},
-		StringData: map[string]string{
-			"username": user,
-			"password": password,
-		},
-	}, nil
-}
-
-var rootHintMap = map[string]string{
-	"poweredge-r660":       "BOSS",
-	"poweredge-r640":       "BOSS",
-	"poweredge-r840":       "BOSS",
-	"poweredge-r7615":      "BOSS",
-	"thinksystem-sr650":    "ThinkSystem M.2 VD",
-	"sr655-v3":             "NVMe 2-Bay",
-	"thinksystem-sr650-v3": "NVMe 2-Bay",
-	"proliant-dl320-gen11": "HPE NS204i-u Gen11 Boot Controller",
-}
-
-var linkHintMapCeph = map[string]string{
-	"ThinkSystem SR650":    "en*f0np*",
-	"ThinkSystem SR650 v3": "en*1f*np*",
-	"Thinksystem SR655 v3": "en*f*np*",
-	"PowerEdge R640":       "en*f1np*",
-	"PowerEdge R660":       "en*f1np*",
-	"PowerEdge R7615":      "en*f*np*",
-	"Proliant DL320 Gen11": "en*f1np*",
-}
-
-var linkHintMapKvm = map[string]string{
-	"PowerEdge R640": "en*f0np*",
-	"PowerEdge R840": "en*f0np*",
-}
-
 func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error) {
 	if hint, ok := rootHintMap[device.DeviceType.Slug]; ok {
 		return &bmov1alpha1.RootDeviceHints{
@@ -376,51 +378,54 @@ func createRootHint(device *models.Device) (*bmov1alpha1.RootDeviceHints, error)
 }
 
 func createLinkHint(device *models.Device, role string) (string, error) {
-	var linkHintMap map[string]string
 	if role == "kvm" {
-		linkHintMap = linkHintMapKvm
+		if hint, ok := linkHintMapKvm[device.DeviceType.Model]; ok {
+			return hint, nil
+		}
 	} else {
-		linkHintMap = linkHintMapCeph
+		if hint, ok := linkHintMapCeph[device.DeviceType.Model]; ok {
+			return hint, nil
+		}
 	}
-	if hint, ok := linkHintMap[device.DeviceType.Model]; ok {
-		return hint, nil
-	}
+
 	return "", fmt.Errorf("unknown device model for link hint: %s", device.DeviceType.Model)
 }
 
 func getRoleFromTags(device *models.Device) string {
-	nTags := 0
-	dRole := ""
+	tagsCount := 0
+	deviceRole := ""
+
 	for _, tag := range device.Tags {
 		switch tag.Name {
 		case "ceph-HDD":
-			dRole = "ceph-osd"
-			nTags++
+			deviceRole = "ceph-osd"
+			tagsCount++
 		case "ceph-NVME":
-			dRole = "ceph-osd"
-			nTags++
+			deviceRole = "ceph-osd"
+			tagsCount++
 		case "ceph-mon":
-			dRole = "ceph-mon"
-			nTags++
+			deviceRole = "ceph-mon"
+			tagsCount++
 		case "KVM":
-			dRole = "kvm"
-			nTags++
+			deviceRole = "kvm"
+			tagsCount++
 		}
 	}
-	if nTags != 1 {
+
+	if tagsCount != 1 { // TODO: what about having multiple tags?
 		return device.DeviceRole.Slug
 	}
-	return dRole
+	return deviceRole
 }
 
-func getMacForIP(nb *netbox.Netbox, ipAddress string) (string, error) {
-	ipam := ipam.NewIPAM(nb.IPAM)
+func getMacForIP(netBox *netbox.Netbox, ipAddress string) (string, error) {
+	ipam := ipam.NewIPAM(netBox.IPAM)
 	ip, err := ipam.GetIPAddressByAddress(ipAddress)
 	if err != nil {
 		return "", err
 	}
 
-	dcim := dcim.NewDCIM(nb.DCIM)
+	dcim := dcim.NewDCIM(netBox.DCIM)
 	assignedIface, err := dcim.GetInterfaceByID(ip.AssignedInterface.ID)
 	if err != nil {
 		return "", err

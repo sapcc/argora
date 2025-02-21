@@ -90,7 +90,7 @@ var _ = Describe("Virtualization", func() {
 		})
 	})
 
-	Describe("GetClusterByNameRegionRole", func() {
+	Describe("GetClusterByNameRegionType", func() {
 		It("should return the cluster when found", func() {
 			expectedCluster := models.Cluster{Name: "test-cluster"}
 			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
@@ -102,7 +102,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByNameRegionRole("test-cluster", "test-region", "test-role")
+			cluster, err := virtualizationClient.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cluster).To(Equal(&expectedCluster))
 		})
@@ -117,7 +117,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByNameRegionRole("test-cluster", "test-region", "test-role")
+			cluster, err := virtualizationClient.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of clusters found (0)"))
 			Expect(cluster).To(BeNil())
@@ -133,7 +133,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByNameRegionRole("test-cluster", "test-region", "test-role")
+			cluster, err := virtualizationClient.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of clusters found (2)"))
 			Expect(cluster).To(BeNil())
@@ -144,7 +144,7 @@ var _ = Describe("Virtualization", func() {
 				return nil, errors.New("client error")
 			}
 
-			cluster, err := virtualizationClient.GetClusterByNameRegionRole("test-cluster", "test-region", "test-role")
+			cluster, err := virtualizationClient.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("client error"))
 			Expect(cluster).To(BeNil())
