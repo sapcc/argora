@@ -170,7 +170,7 @@ helm-build: helm build-installer
 	helm template . -s templates/install.yaml -f helm-values.yaml > dist/install.yaml
 
 .PHONY: helm-deploy
-helm-install: helm build-installer
+helm-deploy: helm build-installer
 	helm template . -s templates/install.yaml -f helm-values.yaml | $(KUBECTL) apply -f -
 
 .PHONY: install-crd
