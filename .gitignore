@@ -31,3 +31,4 @@ helm-values.yaml
 templates/
 dist/
 build/
+hack/cluster.yaml

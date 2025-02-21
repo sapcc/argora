@@ -4,8 +4,10 @@
 package config
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 
@@ -38,11 +40,9 @@ type Config struct {
 	reader FileReader
 
 	// /etc/config/config.json
-	IronCoreRoles        string `json:"ironCoreRoles"`
-	IronCoreRegion       string `json:"ironCoreRegion"`
-	IronCoreClusterTypes string `json:"ironCoreClusterTypes"`
-	ServerController     string `json:"serverController"`
-	K8sServiceHost       string `json:"k8sServiceHost"`
+	IronCoreRoles    string `json:"ironCoreRoles"`
+	IronCoreRegion   string `json:"ironCoreRegion"`
+	ServerController string `json:"serverController"`
 
 	// /etc/credentials/credentials.json
 	NetboxUrl   string `json:"netboxUrl"`
@@ -52,7 +52,7 @@ type Config struct {
 }
 
 func NewDefaultConfiguration(client client.Client) *Config {
-	return &Config{client, &ConfigReader{}, "", "", "", "", "", "", "", "", ""}
+	return &Config{client, &ConfigReader{}, "", "", "", "", "", "", ""}
 }
 
 func (c *Config) Validate() error {
@@ -62,14 +62,8 @@ func (c *Config) Validate() error {
 	if c.IronCoreRegion == "" {
 		return errors.New("ironcore region is required")
 	}
-	if c.IronCoreClusterTypes == "" {
-		return errors.New("ironcore cluster types are required")
-	}
 	if c.ServerController == "" {
 		return errors.New("server controller name is required")
-	}
-	if c.K8sServiceHost == "" {
-		return errors.New("k8s service host is required")
 	}
 	if c.NetboxUrl == "" {
 		return errors.New("netbox URL is required")
@@ -88,10 +82,10 @@ func (c *Config) Validate() error {
 
 func (c *Config) Reload() error {
 	if err := c.readJsonAndUnmarshal("/etc/config/config.json"); err != nil {
-		return err
+		return fmt.Errorf("unable to read config.json: %w", err)
 	}
 	if err := c.readJsonAndUnmarshal("/etc/credentials/credentials.json"); err != nil {
-		return err
+		return fmt.Errorf("unable to read credentials.json: %w", err)
 	}
 	return c.Validate()
 }
@@ -102,10 +96,30 @@ func (c *Config) readJsonAndUnmarshal(fileName string) error {
 		return err
 	}
 
-	err = json.Unmarshal(byteValue, &c)
-	if err != nil {
+	if err = json.Unmarshal(byteValue, &c); err != nil {
+		return err
+	}
+
+	if c.NetboxUrl, err = decodeBase64(c.NetboxUrl); err != nil {
+		return err
+	}
+
+	if c.NetboxToken, err = decodeBase64(c.NetboxToken); err != nil {
+		return err
+	}
+
+	if c.BMCUser, err = decodeBase64(c.BMCUser); err != nil {
+		return err
+	}
+
+	if c.BMCPassword, err = decodeBase64(c.BMCPassword); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func decodeBase64(message string) (string, error) {
+	bytes, err := base64.StdEncoding.DecodeString(message)
+	return string(bytes), err
 }

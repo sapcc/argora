@@ -24,13 +24,11 @@ var _ = Describe("Config", func() {
 
 		cfg.IronCoreRoles = "role1"
 		cfg.IronCoreRegion = "region1"
-		cfg.IronCoreClusterTypes = "type1"
 		cfg.ServerController = "controller1"
-		cfg.K8sServiceHost = "host1"
-		cfg.NetboxUrl = "http://netbox"
-		cfg.NetboxToken = "token"
-		cfg.BMCUser = "user"
-		cfg.BMCPassword = "password"
+		cfg.NetboxUrl = "aHR0cDovL25ldGJveA=="
+		cfg.NetboxToken = "InRva2VuIg=="
+		cfg.BMCUser = "dXNlcg=="
+		cfg.BMCPassword = "cGFzc3dvcmQ="
 	})
 
 	Describe("Validate", func() {
@@ -54,7 +52,7 @@ var _ = Describe("Config", func() {
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("ironcore roles are required"))
+				Expect(err).To(MatchError("ironcore roles are required"))
 			})
 		})
 
@@ -68,21 +66,7 @@ var _ = Describe("Config", func() {
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("ironcore region is required"))
-			})
-		})
-
-		Context("when IronCoreClusterTypes is empty", func() {
-			It("should return an error", func() {
-				// given
-				cfg.IronCoreClusterTypes = ""
-
-				// when
-				err := cfg.Validate()
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("ironcore cluster types are required"))
+				Expect(err).To(MatchError("ironcore region is required"))
 			})
 		})
 
@@ -96,21 +80,7 @@ var _ = Describe("Config", func() {
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("server controller name is required"))
-			})
-		})
-
-		Context("when K8sServiceHost is empty", func() {
-			It("should return an error", func() {
-				// given
-				cfg.K8sServiceHost = ""
-
-				// when
-				err := cfg.Validate()
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("k8s service host is required"))
+				Expect(err).To(MatchError("server controller name is required"))
 			})
 		})
 
@@ -124,7 +94,7 @@ var _ = Describe("Config", func() {
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("netbox URL is required"))
+				Expect(err).To(MatchError("netbox URL is required"))
 			})
 		})
 
@@ -138,7 +108,7 @@ var _ = Describe("Config", func() {
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("netbox token is required"))
+				Expect(err).To(MatchError("netbox token is required"))
 			})
 		})
 
@@ -152,7 +122,7 @@ var _ = Describe("Config", func() {
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("bmc user is required"))
+				Expect(err).To(MatchError("bmc user is required"))
 			})
 		})
 
@@ -166,7 +136,7 @@ var _ = Describe("Config", func() {
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("bmc password is required"))
+				Expect(err).To(MatchError("bmc password is required"))
 			})
 		})
 	})
@@ -194,7 +164,7 @@ var _ = Describe("Reload", func() {
 			fileContent: make(map[string]string),
 			returnError: false,
 		}
-		cfg = &Config{client, fileReaderMock, "", "", "", "", "", "", "", "", ""}
+		cfg = &Config{client, fileReaderMock, "", "", "", "", "", "", ""}
 	})
 
 	Context("when all fields are valid", func() {
@@ -203,15 +173,13 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"ironCoreClusterTypes": "type1",
-				"serverController": "controller1",
-				"k8sServiceHost": "host1"
+				"serverController": "controller1"
 			}`
 			credentialsJson := `{
-				"netboxUrl": "http://netbox",
-				"netboxToken": "token",
-				"bmcUsername": "user",
-				"bmcPassword": "password"
+				"netboxUrl": "aHR0cDovL25ldGJveA==",
+				"netboxToken": "dG9rZW4=",
+				"bmcUsername": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ="
 			}`
 
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
@@ -229,10 +197,10 @@ var _ = Describe("Reload", func() {
 		It("should return an error", func() {
 			// given
 			credentialsJson := `{
-				"netboxUrl": "http://netbox",
-				"netboxToken": "token",
-				"bmcUsername": "user",
-				"bmcPassword": "password"
+				"netboxUrl": "aHR0cDovL25ldGJveA==",
+				"netboxToken": "dG9rZW4=",
+				"bmcUsername": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ="
 			}`
 
 			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
@@ -242,6 +210,7 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to read config.json: unexpected end of JSON input"))
 		})
 	})
 
@@ -251,9 +220,7 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"ironCoreClusterTypes": "type1",
-				"serverController": "controller1",
-				"k8sServiceHost": "host1"
+				"serverController": "controller1"
 			}`
 
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
@@ -263,7 +230,7 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("unexpected end of JSON input"))
+			Expect(err).To(MatchError("unable to read credentials.json: unexpected end of JSON input"))
 		})
 	})
 
@@ -272,10 +239,10 @@ var _ = Describe("Reload", func() {
 			// given
 			configJson := `a`
 			credentialsJson := `{
-				"netboxUrl": "http://netbox",
-				"netboxToken": "token",
-				"bmcUsername": "user",
-				"bmcPassword": "password"
+				"netboxUrl": "aHR0cDovL25ldGJveA==",
+				"netboxToken": "InRva2VuIg==",
+				"bmcUsername": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ="
 			}`
 
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
@@ -286,7 +253,7 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("invalid character 'a' looking for beginning of value"))
+			Expect(err).To(MatchError("unable to read config.json: invalid character 'a' looking for beginning of value"))
 		})
 	})
 
@@ -296,9 +263,7 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"ironCoreClusterTypes": "type1",
-				"serverController": "controller1",
-				"k8sServiceHost": "host1"
+				"serverController": "controller1"
 			}`
 			credentialsJson := `b`
 
@@ -309,7 +274,7 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("invalid character 'b' looking for beginning of value"))
+			Expect(err).To(MatchError("unable to read credentials.json: invalid character 'b' looking for beginning of value"))
 		})
 	})
 
@@ -323,6 +288,97 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
+		})
+	})
+})
+
+var _ = Describe("readJsonAndUnmarshal", func() {
+	var cfg *Config
+	var fileReaderMock *FileReaderMock
+
+	BeforeEach(func() {
+		client := fake.NewClientBuilder().Build()
+		fileReaderMock = &FileReaderMock{
+			fileContent: make(map[string]string),
+			returnError: false,
+		}
+		cfg = &Config{client, fileReaderMock, "", "", "", "", "", "", ""}
+	})
+
+	Context("when the file is read successfully", func() {
+		It("should unmarshal the JSON and decode base64 fields", func() {
+			// given
+			jsonContent := `{
+				"ironCoreRoles": "role1",
+				"ironCoreRegion": "region1",
+				"serverController": "controller1",
+				"netboxUrl": "aHR0cDovL25ldGJveA==",
+				"netboxToken": "dG9rZW4=",
+				"bmcUsername": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ="
+			}`
+			fileReaderMock.fileContent["/etc/config/config.json"] = jsonContent
+
+			// when
+			err := cfg.readJsonAndUnmarshal("/etc/config/config.json")
+
+			// then
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.IronCoreRoles).To(Equal("role1"))
+			Expect(cfg.IronCoreRegion).To(Equal("region1"))
+			Expect(cfg.ServerController).To(Equal("controller1"))
+			Expect(cfg.NetboxUrl).To(Equal("http://netbox"))
+			Expect(cfg.NetboxToken).To(Equal("token"))
+			Expect(cfg.BMCUser).To(Equal("user"))
+			Expect(cfg.BMCPassword).To(Equal("password"))
+		})
+	})
+
+	Context("when the file cannot be read", func() {
+		It("should return an error", func() {
+			// given
+			fileReaderMock.returnError = true
+
+			// when
+			err := cfg.readJsonAndUnmarshal("/etc/config/config.json")
+
+			// then
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("when the JSON is invalid", func() {
+		It("should return an error", func() {
+			// given
+			invalidJsonContent := `invalid json`
+			fileReaderMock.fileContent["/etc/config/config.json"] = invalidJsonContent
+
+			// when
+			err := cfg.readJsonAndUnmarshal("/etc/config/config.json")
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("invalid character 'i' looking for beginning of value"))
+		})
+	})
+
+	Context("when base64 decoding fails", func() {
+		It("should return an error", func() {
+			// given
+			jsonContent := `{
+				"netboxUrl": "invalid base64",
+				"netboxToken": "dG9rZW4=",
+				"bmcUsername": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ="
+			}`
+			fileReaderMock.fileContent["/etc/config/config.json"] = jsonContent
+
+			// when
+			err := cfg.readJsonAndUnmarshal("/etc/config/config.json")
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("illegal base64 data at input byte 7"))
 		})
 	})
 })
