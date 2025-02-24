@@ -297,7 +297,7 @@ var _ = Describe("Reload", func() {
 		})
 	})
 
-	Context("when base64 decoding fails", func() {
+	Context("when NetboxUrl is not base64 encoded", func() {
 		It("should return an error", func() {
 			// given
 			configJson := `{
@@ -306,7 +306,7 @@ var _ = Describe("Reload", func() {
 				"serverController": "controller1"
 			}`
 			credentialsJson := `{
-				"netboxUrl": "invalid base64",
+				"netboxUrl": "not_base64",
 				"netboxToken": "dG9rZW4=",
 				"bmcUser": "dXNlcg==",
 				"bmcPassword": "cGFzc3dvcmQ="
@@ -319,10 +319,87 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("illegal base64 data at input byte 7"))
+			Expect(err).To(MatchError("illegal base64 data at input byte 3"))
 		})
 	})
 
+	Context("when NetboxToken is not base64 encoded", func() {
+		It("should return an error", func() {
+			// given
+			configJson := `{
+				"ironCoreRoles": "role1",
+				"ironCoreRegion": "region1",
+				"serverController": "controller1"
+			}`
+			credentialsJson := `{
+				"netboxUrl": "aHR0cDovL25ldGJveA==",
+				"netboxToken": "not_base64",
+				"bmcUser": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ="
+			}`
+			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
+			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
+
+			// when
+			err := cfg.Reload()
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("illegal base64 data at input byte 3"))
+		})
+	})
+
+	Context("when BMCUser is not base64 encoded", func() {
+		It("should return an error", func() {
+			// given
+			configJson := `{
+				"ironCoreRoles": "role1",
+				"ironCoreRegion": "region1",
+				"serverController": "controller1"
+			}`
+			credentialsJson := `{
+				"netboxUrl": "aHR0cDovL25ldGJveA==",
+				"netboxToken": "dG9rZW4=",
+				"bmcUser": "not_base64",
+				"bmcPassword": "cGFzc3dvcmQ="
+			}`
+			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
+			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
+
+			// when
+			err := cfg.Reload()
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("illegal base64 data at input byte 3"))
+		})
+	})
+
+	Context("when BMCPassword is not base64 encoded", func() {
+		It("should return an error", func() {
+			// given
+			configJson := `{
+				"ironCoreRoles": "role1",
+				"ironCoreRegion": "region1",
+				"serverController": "controller1"
+			}`
+			credentialsJson := `{
+				"netboxUrl": "aHR0cDovL25ldGJveA==",
+				"netboxToken": "dG9rZW4=",
+				"bmcUser": "dXNlcg==",
+				"bmcPassword": "not_base64"
+			}`
+			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
+			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
+
+			// when
+			err := cfg.Reload()
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("illegal base64 data at input byte 3"))
+		})
+	})
 })
 
 var _ = Describe("readJsonAndUnmarshal", func() {
