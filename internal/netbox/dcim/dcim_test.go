@@ -17,6 +17,7 @@ type MockDCIMClient struct {
 	GetSiteFunc         func(id int) (*models.Site, error)
 	ListInterfacesFunc  func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error)
 	ListPlatformsFunc   func(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
+	UpdateDeviceFunc    func(dev models.WritableDeviceWithConfigContext) (*models.Device, error)
 }
 
 func (d *MockDCIMClient) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
@@ -41,6 +42,10 @@ func (d *MockDCIMClient) ListInterfaces(opts models.ListInterfacesRequest) (*mod
 
 func (d *MockDCIMClient) ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error) {
 	return d.ListPlatformsFunc(opts)
+}
+
+func (d *MockDCIMClient) UpdateDevice(dev models.WritableDeviceWithConfigContext) (*models.Device, error) {
+	return d.UpdateDeviceFunc(dev)
 }
 
 var _ = Describe("DCIM", func() {
@@ -388,6 +393,29 @@ var _ = Describe("DCIM", func() {
 			_, err := dcimClient.GetPlatformByName("platform1")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of platforms found (0)"))
+		})
+	})
+
+	Describe("UpdateDevice", func() {
+		It("should update the device successfully", func() {
+			mockClient.UpdateDeviceFunc = func(dev models.WritableDeviceWithConfigContext) (*models.Device, error) {
+				return &models.Device{ID: dev.ID, Name: dev.Name}, nil
+			}
+
+			device, err := dcimClient.UpdateDevice(models.WritableDeviceWithConfigContext{ID: 1, Name: "updatedDevice"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(device.ID).To(Equal(1))
+			Expect(device.Name).To(Equal("updatedDevice"))
+		})
+
+		It("should return an error when update fails", func() {
+			mockClient.UpdateDeviceFunc = func(dev models.WritableDeviceWithConfigContext) (*models.Device, error) {
+				return nil, fmt.Errorf("update failed")
+			}
+
+			_, err := dcimClient.UpdateDevice(models.WritableDeviceWithConfigContext{ID: 1, Name: "updatedDevice"})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to update device: update failed"))
 		})
 	})
 })

@@ -14,6 +14,8 @@ type DCIMClient interface {
 	ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error)
 	ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error)
 	ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
+
+	UpdateDevice(dev models.WritableDeviceWithConfigContext) (*models.Device, error)
 }
 
 type DCIMCLientWrapper struct {
@@ -193,4 +195,12 @@ func (d *DCIM) GetPlatformByName(platformName string) (*models.Platform, error) 
 		return nil, fmt.Errorf("unexpected number of platforms found (%d)", res.Count)
 	}
 	return &res.Results[0], nil
+}
+
+func (d *DCIM) UpdateDevice(dev models.WritableDeviceWithConfigContext) (*models.Device, error) {
+	res, err := d.client.UpdateDevice(dev)
+	if err != nil {
+		return nil, fmt.Errorf("unable to update device: %w", err)
+	}
+	return res, nil
 }

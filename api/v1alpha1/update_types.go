@@ -20,22 +20,47 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+type State string
+type ConditionType string
+type ConditionReason string
+
+const (
+	Ready State = "Ready"
+	Error State = "Error"
+
+	ConditionTypeReady ConditionType = "Ready"
+
+	ConditionReasonUpdateSucceeded        ConditionReason = "UpdateSucceeded"
+	ConditionReasonUpdateSucceededMessage                 = "Update succeeded"
+	ConditionReasonUpdateFailed           ConditionReason = "UpdateFailed"
+	ConditionReasonUpdateFailedMessage                    = "Update failed"
+)
+
+type ReasonWithMessage struct {
+	Reason  ConditionReason
+	Message string
+}
 
 // UpdateSpec defines the desired state of Update.
 type UpdateSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	ClusterSelection []*ClusterSelection `json:"clusterSelection,omitempty"`
+}
 
-	// Foo is an example field of Update. Edit update_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+type ClusterSelection struct {
+	Name string `json:"name,omitempty"`
+	// +kubebuilder:validation:Required
+	Region string `json:"region"`
+	// +kubebuilder:validation:Required
+	Type string `json:"type"`
 }
 
 // UpdateStatus defines the observed state of Update.
 type UpdateStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Ready;Error
+	State       State               `json:"state"`
+	Conditions  *[]metav1.Condition `json:"conditions,omitempty"`
+	Description string              `json:"description,omitempty"`
 }
 
 // +kubebuilder:object:root=true

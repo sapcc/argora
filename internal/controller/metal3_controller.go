@@ -84,6 +84,23 @@ func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *conf
 	}
 }
 
+func (r *Metal3Reconciler) SetupWithManager(mgr manager.Manager, rateLimiter RateLimiter) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&clusterv1.Cluster{}).
+		WithEventFilter(predicate.Or[client.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
+		WithOptions(controller.Options{
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter[ctrl.Request](
+				workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](rateLimiter.BaseDelay,
+					rateLimiter.FailureMaxDelay),
+				&workqueue.TypedBucketRateLimiter[ctrl.Request]{
+					Limiter: rate.NewLimiter(rate.Limit(rateLimiter.Frequency), rateLimiter.Burst),
+				},
+			),
+		}).
+		Named("metal3").
+		Complete(r)
+}
+
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
@@ -133,9 +150,9 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	for _, device := range devices {
-		err = r.ReconcileDevice(ctx, netBox, capiCluster, &device)
+		err = r.reconcileDevice(ctx, netBox, capiCluster, &device)
 		if err != nil {
-			logger.Error(err, "unable to reconcile device", "device", device.Name, "deviceID", device.ID)
+			logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
 			return ctrl.Result{}, err
 		}
 	}
@@ -143,26 +160,9 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
-func (r *Metal3Reconciler) SetupWithManager(mgr manager.Manager, rateLimiter RateLimiter) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&clusterv1.Cluster{}).
-		WithEventFilter(predicate.Or[client.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
-		WithOptions(controller.Options{
-			RateLimiter: workqueue.NewTypedMaxOfRateLimiter[ctrl.Request](
-				workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](rateLimiter.BaseDelay,
-					rateLimiter.FailureMaxDelay),
-				&workqueue.TypedBucketRateLimiter[ctrl.Request]{
-					Limiter: rate.NewLimiter(rate.Limit(rateLimiter.Frequency), rateLimiter.Burst),
-				},
-			),
-		}).
-		Named("metal3").
-		Complete(r)
-}
-
-func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, netBox *netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
+func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox *netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling device", "device", device.Name, "deviceID", device.ID)
+	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
 	if device.Status.Value != "active" {
 		logger.Info("device is not active", "status", device.Status.Value)
@@ -202,8 +202,8 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, netBox *netbox.N
 		return fmt.Errorf("unable to get region for device: %w", err)
 	}
 
-	bmcSecret, err := r.createBmcSecret(cluster, device) // TODO: not setting owner reference, e.g. owned by BareMetalHost ?
-	if err != nil {                                      // TODO: what is secret already exist ?
+	bmcSecret, err := r.createBmcSecret(cluster, device)
+	if err != nil {
 		return fmt.Errorf("unable to create bmc secret: %w", err)
 	}
 
@@ -255,7 +255,7 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, netBox *netbox.N
 		return fmt.Errorf("unable to create baremetal host: %w", err)
 	}
 
-	if err = r.CreateNetworkDataForDevice(ctx, netBox, bareMetalHost, cluster, device, role, secretName); err != nil {
+	if err = r.createNetworkDataForDevice(ctx, netBox, bareMetalHost, cluster, device, role, secretName); err != nil {
 		return fmt.Errorf("unable to create network data: %w", err)
 	}
 
@@ -263,7 +263,7 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, netBox *netbox.N
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (r *Metal3Reconciler) CreateNetworkDataForDevice(ctx context.Context, netBox *netbox.Netbox, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role string, secretName string) error {
+func (r *Metal3Reconciler) createNetworkDataForDevice(ctx context.Context, netBox *netbox.Netbox, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role string, secretName string) error {
 	iface, err := dcim.NewDCIM(netBox.DCIM).GetInterfaceForDevice(device, "LAG1")
 	if err != nil {
 		return fmt.Errorf("unable to find interface LAG1 for device %s: %w", device.Name, err)
@@ -419,7 +419,7 @@ func getRoleFromTags(device *models.Device) string {
 		}
 	}
 
-	if tagsCount != 1 { // TODO: what about having multiple tags?
+	if tagsCount != 1 { // TODO: what about having multiple tags? - if more then Error
 		return device.DeviceRole.Slug
 	}
 	return deviceRole

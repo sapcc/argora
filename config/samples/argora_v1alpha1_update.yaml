@@ -5,4 +5,9 @@ metadata:
     app.kubernetes.io/name: argora
     app.kubernetes.io/managed-by: kustomize
   name: update-sample
+  namespace: argora-system
 spec:
+  clusterSelection:
+  - name:
+    region: qa-de-1
+    type: cc-kvm-compute

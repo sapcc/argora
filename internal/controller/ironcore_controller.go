@@ -16,6 +16,7 @@ import (
 	"github.com/sapcc/argora/internal/controller/periodic"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/netbox/dcim"
+	"github.com/sapcc/argora/internal/netbox/virtualization"
 	"github.com/sapcc/go-netbox-go/models"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -54,66 +55,6 @@ func NewIronCoreReconciler(client client.Client, scheme *runtime.Scheme, config 
 	}
 }
 
-// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
-
-func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("reconciling ironcore")
-
-	err := r.cfg.Reload()
-	if err != nil {
-		logger.Error(err, "unable to reload configuration")
-		return ctrl.Result{}, err
-	}
-
-	logger.Info("configuration reloaded", "config", r.cfg)
-
-	if r.cfg.ServerController != "ironcore" {
-		logger.Info("controller not enabled")
-		return ctrl.Result{}, nil
-	}
-
-	// netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
-	// if err != nil {
-	// 	logger.Error(err, "unable to create netbox client")
-	// 	return ctrl.Result{}, err
-	// }
-
-	// var roles []string
-	// if r.cfg.IronCoreRoles != "" {
-	// 	roles = strings.Split(r.cfg.IronCoreRoles, ",")
-	// }
-
-	// for _, role := range roles {
-	// 	logger.Info("reconciling IronCore cluster role " + role + " in " + r.cfg.IronCoreRegion)
-
-	// 	cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType("", r.cfg.IronCoreRegion, role)
-	// 	if err != nil {
-	// 		logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", role)
-	// 		return ctrl.Result{}, err
-	// 	}
-
-	// 	devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
-	// 	if err != nil {
-	// 		logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
-	// 		return ctrl.Result{}, err
-	// 	}
-
-	// 	for _, device := range devices {
-	// 		err = r.ReconcileDevice(ctx, netBox, cluster.Name, &device)
-	// 		if err != nil {
-	// 			logger.Error(err, "unable to reconcile device", "device", device.Name, "deviceID", device.ID)
-	// 			return ctrl.Result{}, err
-	// 		}
-	// 	}
-	// }
-
-	return ctrl.Result{}, nil
-}
-
 func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
 	src := source.Channel(r.eventChannel, &handler.EnqueueRequestForObject{})
 	runner, err := periodic.NewRunner(
@@ -136,9 +77,69 @@ func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
 		Complete(r)
 }
 
-func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, netBox *netbox.Netbox, cluster string, device *models.Device) error {
+// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+
+func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling device", "device", device.Name)
+	logger.Info("reconciling ironcore")
+
+	err := r.cfg.Reload()
+	if err != nil {
+		logger.Error(err, "unable to reload configuration")
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("configuration reloaded", "config", r.cfg)
+
+	if r.cfg.ServerController != "ironcore" {
+		logger.Info("controller not enabled")
+		return ctrl.Result{}, nil
+	}
+
+	netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	if err != nil {
+		logger.Error(err, "unable to create netbox client")
+		return ctrl.Result{}, err
+	}
+
+	var roles []string
+	if r.cfg.IronCoreRoles != "" {
+		roles = strings.Split(r.cfg.IronCoreRoles, ",")
+	}
+
+	for _, role := range roles {
+		logger.Info("reconciling IronCore cluster role " + role + " in " + r.cfg.IronCoreRegion)
+
+		cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType("", r.cfg.IronCoreRegion, role)
+		if err != nil {
+			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", role)
+			return ctrl.Result{}, err
+		}
+
+		devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
+		if err != nil {
+			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
+			return ctrl.Result{}, err
+		}
+
+		for _, device := range devices {
+			err = r.reconcileDevice(ctx, netBox, cluster.Name, &device)
+			if err != nil {
+				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox *netbox.Netbox, cluster string, device *models.Device) error {
+	logger := log.FromContext(ctx)
+	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
 	if device.Status.Value != "active" {
 		logger.Info("device is not active", "status", device.Status.Value)
