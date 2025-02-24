@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
@@ -64,7 +67,12 @@ func (r *Runner) Start(ctx context.Context) error {
 		select {
 		case <-ticker.C:
 			r.eventChannel <- event.GenericEvent{
-				Object: nil,
+				Object: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "argora-system",
+						Namespace: "tick",
+					},
+				},
 			}
 		case <-ctx.Done():
 			return nil

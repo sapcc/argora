@@ -18,19 +18,35 @@ package controller
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
+	"github.com/sapcc/argora/internal/config"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type FileReaderMock struct {
+	fileContent map[string]string
+	returnError bool
+}
+
+func (f *FileReaderMock) ReadFile(fileName string) ([]byte, error) {
+	if f.returnError {
+		return nil, errors.New("error")
+	}
+	return []byte(f.fileContent[fileName]), nil
+}
+
 var _ = Describe("Update Controller", func() {
+	var fileReaderMock *FileReaderMock
+
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -45,7 +61,7 @@ var _ = Describe("Update Controller", func() {
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind Update")
 			err := k8sClient.Get(ctx, typeNamespacedName, update)
-			if err != nil && errors.IsNotFound(err) {
+			if err != nil && apierrors.IsNotFound(err) {
 				resource := &argorav1alpha1.Update{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
@@ -55,6 +71,25 @@ var _ = Describe("Update Controller", func() {
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
+
+			fileReaderMock = &FileReaderMock{
+				fileContent: make(map[string]string),
+				returnError: false,
+			}
+			configJson := `{
+				"ironCoreRoles": "role1",
+				"ironCoreRegion": "region1",
+				"serverController": "ironcore"
+			}`
+			credentialsJson := `{
+				"netboxUrl": "aHR0cDovL25ldGJveA==",
+				"netboxToken": "dG9rZW4=",
+				"bmcUser": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ="
+			}`
+
+			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
+			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
 		})
 
 		AfterEach(func() {
@@ -68,15 +103,21 @@ var _ = Describe("Update Controller", func() {
 		})
 
 		It("should successfully reconcile the resource", func() {
+			// given
 			By("Reconciling the created resource")
 			controllerReconciler := &UpdateReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				k8sClient: k8sClient,
+				scheme:    k8sClient.Scheme(),
+				cfg:       config.NewDefaultConfiguration(k8sClient, fileReaderMock),
+				// TODO(user): Modify the reconcile interval as needed.
 			}
 
+			// when
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
+
+			// then
 			Expect(err).NotTo(HaveOccurred())
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			// Example: If you expect a certain status condition after reconciliation, verify it here.

@@ -69,7 +69,7 @@ var (
 )
 
 type Metal3Reconciler struct {
-	client.Client
+	k8sClient         client.Client
 	scheme            *runtime.Scheme
 	cfg               *config.Config
 	reconcileInterval time.Duration
@@ -77,7 +77,7 @@ type Metal3Reconciler struct {
 
 func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *config.Config, reconcileInterval time.Duration) *Metal3Reconciler {
 	return &Metal3Reconciler{
-		Client:            client,
+		k8sClient:         client,
 		scheme:            scheme,
 		cfg:               cfg,
 		reconcileInterval: reconcileInterval,
@@ -99,6 +99,13 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	logger.Info("configuration reloaded", "config", r.cfg)
+
+	if r.cfg.ServerController != "metal3" {
+		logger.Info("controller not enabled")
+		return ctrl.Result{}, nil
+	}
+
 	netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
@@ -106,7 +113,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	capiCluster := &clusterv1.Cluster{}
-	err = r.Client.Get(ctx, req.NamespacedName, capiCluster)
+	err = r.k8sClient.Get(ctx, req.NamespacedName, capiCluster)
 	if client.IgnoreNotFound(err) != nil { // TODO: why ignoring not found errors ?
 		logger.Error(err, "unable to get CAPI cluster")
 		return ctrl.Result{}, err
@@ -163,7 +170,7 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, netBox *netbox.N
 	}
 
 	bmh := &bmov1alpha1.BareMetalHost{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh); err == nil {
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh); err == nil {
 		logger.Info("host already exists", "host", bmh.Name)
 		return nil
 	}
@@ -200,7 +207,7 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, netBox *netbox.N
 		return fmt.Errorf("unable to create bmc secret: %w", err)
 	}
 
-	if err = r.Client.Create(ctx, bmcSecret); err != nil {
+	if err = r.k8sClient.Create(ctx, bmcSecret); err != nil {
 		return fmt.Errorf("unable to upload bmc secret: %w", err)
 	}
 
@@ -244,7 +251,7 @@ func (r *Metal3Reconciler) ReconcileDevice(ctx context.Context, netBox *netbox.N
 		},
 	}
 
-	if err = r.Client.Create(ctx, bareMetalHost); err != nil {
+	if err = r.k8sClient.Create(ctx, bareMetalHost); err != nil {
 		return fmt.Errorf("unable to create baremetal host: %w", err)
 	}
 
@@ -332,7 +339,7 @@ func (r *Metal3Reconciler) CreateNetworkDataForDevice(ctx context.Context, netBo
 		return fmt.Errorf("failed to set owner reference on networkdata secret: %w", err)
 	}
 
-	return r.Create(ctx, nwDataSecret)
+	return r.k8sClient.Create(ctx, nwDataSecret)
 }
 
 func (r *Metal3Reconciler) createBmcSecret(cluster *clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {

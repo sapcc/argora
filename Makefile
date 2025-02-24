@@ -17,13 +17,15 @@ endif
 
 default: build-all
 
-tilt: FORCE gen
-	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
+tilt: FORCE docker-build docker-push helm-build
+	tilt up --stream
 
 ##@ kubebuilder
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG_REPO ?= controller
+IMG_TAG ?= latest
+IMG = "${IMG_REPO}:${IMG_TAG}"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -59,8 +61,8 @@ all: build
 # More info on the awk command:
 # http://linuxcommand.org/lc3_adv_awk.php
 
-.PHONY: help2
-help2: ## Display this help.
+.PHONY: help-ext
+help-ext: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Development
@@ -155,22 +157,26 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 .PHONY: build-installer
 build-installer: manifests gen kustomize
 	mkdir -p templates
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default > templates/install.yaml
 
 ##@ Deployment
 
+.PHONY: helm-prepare
+helm-prepare:
+	yq e -i ".image.repository = \"${IMG_REPO}\"" helm-values.yaml
+	yq e -i ".image.tag = \"${IMG_TAG}\"" helm-values.yaml
+
 .PHONY: helm-lint
-helm-lint: helm build-installer
+helm-lint: helm helm-prepare build-installer
 	helm lint . -f helm-values.yaml
 
 .PHONY: helm-build
-helm-build: helm build-installer
+helm-build: helm helm-prepare build-installer
 	mkdir -p dist
 	helm template . -s templates/install.yaml -f helm-values.yaml > dist/install.yaml
 
 .PHONY: helm-deploy
-helm-deploy: helm build-installer
+helm-deploy: helm helm-prepare build-installer
 	helm template . -s templates/install.yaml -f helm-values.yaml | $(KUBECTL) apply -f -
 
 .PHONY: install-crd
@@ -183,7 +189,6 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
 .PHONY: undeploy

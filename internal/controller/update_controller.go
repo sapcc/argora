@@ -35,18 +35,18 @@ import (
 
 // UpdateReconciler reconciles a Update object
 type UpdateReconciler struct {
-	client.Client
-	Scheme            *runtime.Scheme
-	Config            *config.Config
-	ReconcileInterval time.Duration
+	k8sClient         client.Client
+	scheme            *runtime.Scheme
+	cfg               *config.Config
+	reconcileInterval time.Duration
 }
 
 func NewUpdateReconciler(mgr ctrl.Manager, cfg *config.Config, reconcileInterval time.Duration) *UpdateReconciler {
 	return &UpdateReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		Config:            cfg,
-		ReconcileInterval: reconcileInterval,
+		k8sClient:         mgr.GetClient(),
+		scheme:            mgr.GetScheme(),
+		cfg:               cfg,
+		reconcileInterval: reconcileInterval,
 	}
 }
 
@@ -56,11 +56,18 @@ func NewUpdateReconciler(mgr ctrl.Manager, cfg *config.Config, reconcileInterval
 
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.0/pkg/reconcile
 func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
+	logger.Info("reconciling metal3")
 
-	// TODO(user): your logic here
+	err := r.cfg.Reload()
+	if err != nil {
+		logger.Error(err, "unable to reload configuration")
+		return ctrl.Result{}, err
+	}
 
-	return ctrl.Result{}, nil
+	logger.Info("configuration reloaded", "config", r.cfg)
+
+	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

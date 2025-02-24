@@ -3,9 +3,9 @@ kind: ConfigMap
 metadata:
   name: config
 data:
-  config.json: |
+  config.json: |-
     {
-      ironCoreRoles: "{{ .Values.ironcore_roles }}",
-      ironCoreRegion: "{{ .Values.ironcore_region }}",
-      serverController: "{{ .Values.controller }}",
+      "ironCoreRoles": "{{ .Values.ironcore_roles }}",
+      "ironCoreRegion": "{{ .Values.ironcore_region }}",
+      "serverController": "{{ .Values.controller }}"
     }

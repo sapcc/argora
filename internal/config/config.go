@@ -47,12 +47,12 @@ type Config struct {
 	// /etc/credentials/credentials.json
 	NetboxUrl   string `json:"netboxUrl"`
 	NetboxToken string `json:"netboxToken"`
-	BMCUser     string `json:"bmcUsername"`
+	BMCUser     string `json:"bmcUser"`
 	BMCPassword string `json:"bmcPassword"`
 }
 
-func NewDefaultConfiguration(client client.Client) *Config {
-	return &Config{client, &ConfigReader{}, "", "", "", "", "", "", ""}
+func NewDefaultConfiguration(client client.Client, configReader FileReader) *Config {
+	return &Config{client, configReader, "", "", "", "", "", "", ""}
 }
 
 func (c *Config) Validate() error {
@@ -86,6 +86,22 @@ func (c *Config) Reload() error {
 	}
 	if err := c.readJsonAndUnmarshal("/etc/credentials/credentials.json"); err != nil {
 		return fmt.Errorf("unable to read credentials.json: %w", err)
+	} else {
+		if c.NetboxUrl, err = decodeBase64(c.NetboxUrl); err != nil {
+			return err
+		}
+
+		if c.NetboxToken, err = decodeBase64(c.NetboxToken); err != nil {
+			return err
+		}
+
+		if c.BMCUser, err = decodeBase64(c.BMCUser); err != nil {
+			return err
+		}
+
+		if c.BMCPassword, err = decodeBase64(c.BMCPassword); err != nil {
+			return err
+		}
 	}
 	return c.Validate()
 }
@@ -97,22 +113,6 @@ func (c *Config) readJsonAndUnmarshal(fileName string) error {
 	}
 
 	if err = json.Unmarshal(byteValue, &c); err != nil {
-		return err
-	}
-
-	if c.NetboxUrl, err = decodeBase64(c.NetboxUrl); err != nil {
-		return err
-	}
-
-	if c.NetboxToken, err = decodeBase64(c.NetboxToken); err != nil {
-		return err
-	}
-
-	if c.BMCUser, err = decodeBase64(c.BMCUser); err != nil {
-		return err
-	}
-
-	if c.BMCPassword, err = decodeBase64(c.BMCPassword); err != nil {
 		return err
 	}
 

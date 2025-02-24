@@ -16,7 +16,6 @@ import (
 	"github.com/sapcc/argora/internal/controller/periodic"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/netbox/dcim"
-	"github.com/sapcc/argora/internal/netbox/virtualization"
 	"github.com/sapcc/go-netbox-go/models"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,7 +37,7 @@ const (
 )
 
 type IronCoreReconciler struct {
-	client.Client
+	k8sClient         client.Client
 	scheme            *runtime.Scheme
 	cfg               *config.Config
 	reconcileInterval time.Duration
@@ -46,13 +45,12 @@ type IronCoreReconciler struct {
 }
 
 func NewIronCoreReconciler(client client.Client, scheme *runtime.Scheme, config *config.Config, reconcileInterval time.Duration) *IronCoreReconciler {
-	eventChannel := make(chan event.GenericEvent)
 	return &IronCoreReconciler{
-		Client:            client,
+		k8sClient:         client,
 		scheme:            scheme,
 		cfg:               config,
 		reconcileInterval: reconcileInterval,
-		eventChannel:      eventChannel,
+		eventChannel:      make(chan event.GenericEvent),
 	}
 }
 
@@ -71,46 +69,53 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
-	if err != nil {
-		logger.Error(err, "unable to create netbox client")
-		return ctrl.Result{}, err
+	logger.Info("configuration reloaded", "config", r.cfg)
+
+	if r.cfg.ServerController != "ironcore" {
+		logger.Info("controller not enabled")
+		return ctrl.Result{}, nil
 	}
 
-	var roles []string
-	if r.cfg.IronCoreRoles != "" {
-		roles = strings.Split(r.cfg.IronCoreRoles, ",")
-	}
+	// netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	// if err != nil {
+	// 	logger.Error(err, "unable to create netbox client")
+	// 	return ctrl.Result{}, err
+	// }
 
-	for _, role := range roles {
-		logger.Info("reconciling IronCore cluster role " + role + " in " + r.cfg.IronCoreRegion)
+	// var roles []string
+	// if r.cfg.IronCoreRoles != "" {
+	// 	roles = strings.Split(r.cfg.IronCoreRoles, ",")
+	// }
 
-		cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType("", r.cfg.IronCoreRegion, role)
-		if err != nil {
-			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", role)
-			return ctrl.Result{}, err
-		}
+	// for _, role := range roles {
+	// 	logger.Info("reconciling IronCore cluster role " + role + " in " + r.cfg.IronCoreRegion)
 
-		devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
-		if err != nil {
-			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
-			return ctrl.Result{}, err
-		}
+	// 	cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType("", r.cfg.IronCoreRegion, role)
+	// 	if err != nil {
+	// 		logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", role)
+	// 		return ctrl.Result{}, err
+	// 	}
 
-		for _, device := range devices {
-			err = r.ReconcileDevice(ctx, netBox, cluster.Name, &device)
-			if err != nil {
-				logger.Error(err, "unable to reconcile device", "device", device.Name, "deviceID", device.ID)
-				return ctrl.Result{}, err
-			}
-		}
-	}
+	// 	devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
+	// 	if err != nil {
+	// 		logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
+	// 		return ctrl.Result{}, err
+	// 	}
+
+	// 	for _, device := range devices {
+	// 		err = r.ReconcileDevice(ctx, netBox, cluster.Name, &device)
+	// 		if err != nil {
+	// 			logger.Error(err, "unable to reconcile device", "device", device.Name, "deviceID", device.ID)
+	// 			return ctrl.Result{}, err
+	// 		}
+	// 	}
+	// }
 
 	return ctrl.Result{}, nil
 }
 
 func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
-	src := source.Channel(r.eventChannel, handler.Funcs{})
+	src := source.Channel(r.eventChannel, &handler.EnqueueRequestForObject{})
 	runner, err := periodic.NewRunner(
 		periodic.WithClient(mgr.GetClient()),
 		periodic.WithInterval(r.reconcileInterval),
@@ -141,7 +146,7 @@ func (r *IronCoreReconciler) ReconcileDevice(ctx context.Context, netBox *netbox
 	}
 
 	bmcObj := &metalv1alpha1.BMC{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: defaultNamespace}, bmcObj); err == nil {
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: defaultNamespace}, bmcObj); err == nil {
 		logger.Info("bmc already exists", "bmc", device.Name)
 		return nil
 	}
@@ -208,7 +213,7 @@ func (r *IronCoreReconciler) createBmcSecret(ctx context.Context, device *models
 		},
 	}
 
-	if err := r.Client.Create(ctx, bmcSecret); err != nil {
+	if err := r.k8sClient.Create(ctx, bmcSecret); err != nil {
 		if apierrors.IsAlreadyExists(err) { // TODO: if its already exists, can we assume that the secret is correct?
 			logger.Info("bmc secret already exists", "bmcSecret", bmcSecret.Name)
 			return bmcSecret, nil
@@ -246,7 +251,7 @@ func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Devic
 		},
 	}
 
-	if err := r.Client.Create(ctx, bmc); err != nil {
+	if err := r.k8sClient.Create(ctx, bmc); err != nil {
 		if apierrors.IsAlreadyExists(err) { // TODO: if its already exists, can we assume that the BMC is correct?
 			logger.Info("BMC already exists", "BMC", bmc.Name)
 			return bmc, nil
@@ -263,7 +268,7 @@ func (r *IronCoreReconciler) setOwnerReferenceAndPatch(ctx context.Context, bmc 
 		return fmt.Errorf("unable to set owner reference: %w", err)
 	}
 
-	if err := r.Client.Patch(ctx, bmcSecret, client.MergeFrom(bmcSecretBase)); err != nil {
+	if err := r.k8sClient.Patch(ctx, bmcSecret, client.MergeFrom(bmcSecretBase)); err != nil {
 		return fmt.Errorf("unable to patch object: %w", err)
 	}
 

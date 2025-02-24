@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
@@ -88,6 +89,29 @@ var _ = Describe("Runner", func() {
 			cancel()
 
 			Consistently(eventChannel).ShouldNot(Receive())
+		})
+
+		It("should send a pod event with correct metadata", func() {
+			interval := 100 * time.Millisecond
+
+			runner, err := NewRunner(
+				WithInterval(interval),
+				WithEventChannel(eventChannel),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			go func() {
+				err := runner.Start(ctx)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			var receivedEvent event.GenericEvent
+			Eventually(eventChannel).Should(Receive(&receivedEvent))
+
+			pod, ok := receivedEvent.Object.(*corev1.Pod)
+			Expect(ok).To(BeTrue())
+			Expect(pod.Name).To(Equal("argora-system"))
+			Expect(pod.Namespace).To(Equal("tick"))
 		})
 	})
 })

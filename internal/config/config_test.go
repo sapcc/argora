@@ -20,7 +20,7 @@ var _ = Describe("Config", func() {
 
 	BeforeEach(func() {
 		client := fake.NewClientBuilder().Build()
-		cfg = NewDefaultConfiguration(client)
+		cfg = NewDefaultConfiguration(client, &ConfigReader{})
 
 		cfg.IronCoreRoles = "role1"
 		cfg.IronCoreRegion = "region1"
@@ -178,7 +178,7 @@ var _ = Describe("Reload", func() {
 			credentialsJson := `{
 				"netboxUrl": "aHR0cDovL25ldGJveA==",
 				"netboxToken": "dG9rZW4=",
-				"bmcUsername": "dXNlcg==",
+				"bmcUser": "dXNlcg==",
 				"bmcPassword": "cGFzc3dvcmQ="
 			}`
 
@@ -190,6 +190,13 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.IronCoreRoles).To(Equal("role1"))
+			Expect(cfg.IronCoreRegion).To(Equal("region1"))
+			Expect(cfg.ServerController).To(Equal("controller1"))
+			Expect(cfg.NetboxUrl).To(Equal("http://netbox"))
+			Expect(cfg.NetboxToken).To(Equal("token"))
+			Expect(cfg.BMCUser).To(Equal("user"))
+			Expect(cfg.BMCPassword).To(Equal("password"))
 		})
 	})
 
@@ -199,9 +206,8 @@ var _ = Describe("Reload", func() {
 			credentialsJson := `{
 				"netboxUrl": "aHR0cDovL25ldGJveA==",
 				"netboxToken": "dG9rZW4=",
-				"bmcUsername": "dXNlcg==",
-				"bmcPassword": "cGFzc3dvcmQ="
-			}`
+				"bmcUser": "user",
+				"bmcPassword": "cGFzsword	}`
 
 			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
 
@@ -241,7 +247,7 @@ var _ = Describe("Reload", func() {
 			credentialsJson := `{
 				"netboxUrl": "aHR0cDovL25ldGJveA==",
 				"netboxToken": "InRva2VuIg==",
-				"bmcUsername": "dXNlcg==",
+				"bmcUser": "dXNlcg==",
 				"bmcPassword": "cGFzc3dvcmQ="
 			}`
 
@@ -290,6 +296,33 @@ var _ = Describe("Reload", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
+
+	Context("when base64 decoding fails", func() {
+		It("should return an error", func() {
+			// given
+			configJson := `{
+				"ironCoreRoles": "role1",
+				"ironCoreRegion": "region1",
+				"serverController": "controller1"
+			}`
+			credentialsJson := `{
+				"netboxUrl": "invalid base64",
+				"netboxToken": "dG9rZW4=",
+				"bmcUser": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ="
+			}`
+			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
+			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
+
+			// when
+			err := cfg.Reload()
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("illegal base64 data at input byte 7"))
+		})
+	})
+
 })
 
 var _ = Describe("readJsonAndUnmarshal", func() {
@@ -308,16 +341,19 @@ var _ = Describe("readJsonAndUnmarshal", func() {
 	Context("when the file is read successfully", func() {
 		It("should unmarshal the JSON and decode base64 fields", func() {
 			// given
-			jsonContent := `{
+			configJsonContent := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1",
+				"serverController": "controller1"
+			}`
+			credentialsJsonContent := `{
 				"netboxUrl": "aHR0cDovL25ldGJveA==",
 				"netboxToken": "dG9rZW4=",
-				"bmcUsername": "dXNlcg==",
+				"bmcUser": "dXNlcg==",
 				"bmcPassword": "cGFzc3dvcmQ="
 			}`
-			fileReaderMock.fileContent["/etc/config/config.json"] = jsonContent
+			fileReaderMock.fileContent["/etc/config/config.json"] = configJsonContent
+			fileReaderMock.fileContent["/etc/config/credentials.json"] = credentialsJsonContent
 
 			// when
 			err := cfg.readJsonAndUnmarshal("/etc/config/config.json")
@@ -327,10 +363,16 @@ var _ = Describe("readJsonAndUnmarshal", func() {
 			Expect(cfg.IronCoreRoles).To(Equal("role1"))
 			Expect(cfg.IronCoreRegion).To(Equal("region1"))
 			Expect(cfg.ServerController).To(Equal("controller1"))
-			Expect(cfg.NetboxUrl).To(Equal("http://netbox"))
-			Expect(cfg.NetboxToken).To(Equal("token"))
-			Expect(cfg.BMCUser).To(Equal("user"))
-			Expect(cfg.BMCPassword).To(Equal("password"))
+
+			// when
+			err = cfg.readJsonAndUnmarshal("/etc/config/credentials.json")
+
+			// then
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.NetboxUrl).To(Equal("aHR0cDovL25ldGJveA=="))
+			Expect(cfg.NetboxToken).To(Equal("dG9rZW4="))
+			Expect(cfg.BMCUser).To(Equal("dXNlcg=="))
+			Expect(cfg.BMCPassword).To(Equal("cGFzc3dvcmQ="))
 		})
 	})
 
@@ -347,7 +389,7 @@ var _ = Describe("readJsonAndUnmarshal", func() {
 		})
 	})
 
-	Context("when the JSON is invalid", func() {
+	Context("when the config.json is invalid", func() {
 		It("should return an error", func() {
 			// given
 			invalidJsonContent := `invalid json`
@@ -362,23 +404,18 @@ var _ = Describe("readJsonAndUnmarshal", func() {
 		})
 	})
 
-	Context("when base64 decoding fails", func() {
+	Context("when the credentials.json is invalid", func() {
 		It("should return an error", func() {
 			// given
-			jsonContent := `{
-				"netboxUrl": "invalid base64",
-				"netboxToken": "dG9rZW4=",
-				"bmcUsername": "dXNlcg==",
-				"bmcPassword": "cGFzc3dvcmQ="
-			}`
-			fileReaderMock.fileContent["/etc/config/config.json"] = jsonContent
+			invalidJsonContent := `invalid json`
+			fileReaderMock.fileContent["/etc/config/credentials.json"] = invalidJsonContent
 
 			// when
-			err := cfg.readJsonAndUnmarshal("/etc/config/config.json")
+			err := cfg.readJsonAndUnmarshal("/etc/config/credentials.json")
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("illegal base64 data at input byte 7"))
+			Expect(err).To(MatchError("invalid character 'i' looking for beginning of value"))
 		})
 	})
 })
