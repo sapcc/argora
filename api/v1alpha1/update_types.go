@@ -65,6 +65,7 @@ type UpdateStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:JSONPath=".status.state",name="State",type="string"
 
 // Update is the Schema for the updates API.
 type Update struct {
