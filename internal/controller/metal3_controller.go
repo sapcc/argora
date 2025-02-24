@@ -131,7 +131,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	capiCluster := &clusterv1.Cluster{}
 	err = r.k8sClient.Get(ctx, req.NamespacedName, capiCluster)
-	if client.IgnoreNotFound(err) != nil { // TODO: why ignoring not found errors ?
+	if err != nil {
 		logger.Error(err, "unable to get CAPI cluster")
 		return ctrl.Result{}, err
 	}

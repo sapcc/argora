@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
@@ -39,6 +40,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
+
+var interfacesToRename = []string{
+	"iLO",      // HPE
+	"iDRAC",    // Dell
+	"imm",      // Lenovo
+	"XClarity", // Lenovo
+	"cimc",     // Cisco
+}
 
 // UpdateReconciler reconciles a Update object
 type UpdateReconciler struct {
@@ -112,7 +121,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if err != nil {
 			logger.Error(err, "unable to find clusters for selection", "name", clusterSelection.Name, "region", clusterSelection.Region, "type", clusterSelection.Type)
 
-			statusHandler.UpdateToError(ctx, updateCR, err)
+			statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile devices: %w", err))
 			statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
 
 			return ctrl.Result{}, err
@@ -122,7 +131,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 
-			statusHandler.UpdateToError(ctx, updateCR, err)
+			statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile devices on cluster %s (%d): %w", cluster.Name, cluster.ID, err))
 			statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
 
 			return ctrl.Result{}, err
@@ -133,7 +142,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			if err != nil {
 				logger.Error(err, "unable to reconcile device", "device", device.Name, "deviceID", device.ID)
 
-				statusHandler.UpdateToError(ctx, updateCR, err)
+				statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile device %s on cluster %s (%d): %w", device.Name, cluster.Name, cluster.ID, err))
 				statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
 
 				return ctrl.Result{}, err
@@ -156,6 +165,10 @@ func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox *netbox.N
 		return nil
 	}
 
+	if err := r.renameInterfaces(ctx, netBox, device); err != nil {
+		return fmt.Errorf("unable to rename interfaces for device %s: %w", device.Name, err)
+	}
+
 	if err := r.updateDeviceData(ctx, netBox, device); err != nil {
 		return fmt.Errorf("unable to update device %s data: %w", device.Name, err)
 	}
@@ -164,6 +177,34 @@ func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox *netbox.N
 	// 	return err
 	// }
 
+	return nil
+}
+
+func (r *UpdateReconciler) renameInterfaces(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
+	logger := log.FromContext(ctx)
+
+	dcimClient := dcim.NewDCIM(netBox.DCIM)
+	ifaces, err := dcimClient.GetInterfacesForDevice(device)
+	if err != nil {
+		return err
+	}
+
+	for _, iface := range ifaces {
+		if slices.Contains(interfacesToRename, iface.Name) {
+			wIface := models.WritableInterface{
+				Name:   "remoteboard",
+				Device: device.ID,
+				Type:   iface.Type.Value,
+			}
+
+			_, err := dcimClient.UpdateInterface(wIface, iface.ID)
+			if err != nil {
+				return fmt.Errorf("unable to rename %s interface: %w", iface.Name, err)
+			}
+
+			logger.Info("interface %s was renamed to remoteboard", "name", iface.Name, "ID", iface.ID)
+		}
+	}
 	return nil
 }
 

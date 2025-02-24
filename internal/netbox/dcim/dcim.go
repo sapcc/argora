@@ -15,7 +15,8 @@ type DCIMClient interface {
 	ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error)
 	ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
 
-	UpdateDevice(dev models.WritableDeviceWithConfigContext) (*models.Device, error)
+	UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error)
+	UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error)
 }
 
 type DCIMCLientWrapper struct {
@@ -26,14 +27,6 @@ func NewDCIMCLientWrapper(client DCIMClient) *DCIMCLientWrapper {
 	return &DCIMCLientWrapper{client: client}
 }
 
-func (d *DCIMCLientWrapper) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
-	return d.client.ListDevices(opts)
-}
-
-func (d *DCIMCLientWrapper) ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
-	return d.client.ListDeviceRoles(opts)
-}
-
 func (d *DCIMCLientWrapper) GetRegion(id int) (*models.Region, error) {
 	return d.client.GetRegion(id)
 }
@@ -42,12 +35,28 @@ func (d *DCIMCLientWrapper) GetSite(id int) (*models.Site, error) {
 	return d.client.GetSite(id)
 }
 
+func (d *DCIMCLientWrapper) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+	return d.client.ListDevices(opts)
+}
+
+func (d *DCIMCLientWrapper) ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
+	return d.client.ListDeviceRoles(opts)
+}
+
 func (d *DCIMCLientWrapper) ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
 	return d.client.ListInterfaces(opts)
 }
 
 func (d *DCIMCLientWrapper) ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error) {
 	return d.client.ListPlatforms(opts)
+}
+
+func (d *DCIMCLientWrapper) UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error) {
+	return d.client.UpdateDevice(device)
+}
+
+func (d *DCIMCLientWrapper) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
+	return d.client.UpdateInterface(iface, id)
 }
 
 type DCIM struct {
@@ -197,10 +206,18 @@ func (d *DCIM) GetPlatformByName(platformName string) (*models.Platform, error) 
 	return &res.Results[0], nil
 }
 
-func (d *DCIM) UpdateDevice(dev models.WritableDeviceWithConfigContext) (*models.Device, error) {
-	res, err := d.client.UpdateDevice(dev)
+func (d *DCIM) UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error) {
+	res, err := d.client.UpdateDevice(device)
 	if err != nil {
 		return nil, fmt.Errorf("unable to update device: %w", err)
+	}
+	return res, nil
+}
+
+func (d *DCIM) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
+	res, err := d.client.UpdateInterface(iface, id)
+	if err != nil {
+		return nil, fmt.Errorf("unable to update interface: %w", err)
 	}
 	return res, nil
 }

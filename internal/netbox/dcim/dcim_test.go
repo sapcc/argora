@@ -18,6 +18,7 @@ type MockDCIMClient struct {
 	ListInterfacesFunc  func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error)
 	ListPlatformsFunc   func(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
 	UpdateDeviceFunc    func(dev models.WritableDeviceWithConfigContext) (*models.Device, error)
+	UpdateInterfaceFunc func(iface models.WritableInterface, id int) (*models.Interface, error)
 }
 
 func (d *MockDCIMClient) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
@@ -44,8 +45,12 @@ func (d *MockDCIMClient) ListPlatforms(opts models.ListPlatformsRequest) (*model
 	return d.ListPlatformsFunc(opts)
 }
 
-func (d *MockDCIMClient) UpdateDevice(dev models.WritableDeviceWithConfigContext) (*models.Device, error) {
-	return d.UpdateDeviceFunc(dev)
+func (d *MockDCIMClient) UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error) {
+	return d.UpdateDeviceFunc(device)
+}
+
+func (d *MockDCIMClient) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
+	return d.UpdateInterfaceFunc(iface, id)
 }
 
 var _ = Describe("DCIM", func() {
@@ -416,6 +421,33 @@ var _ = Describe("DCIM", func() {
 			_, err := dcimClient.UpdateDevice(models.WritableDeviceWithConfigContext{ID: 1, Name: "updatedDevice"})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to update device: update failed"))
+		})
+	})
+
+	Describe("UpdateInterface", func() {
+		It("should update the interface successfully", func() {
+			mockClient.UpdateInterfaceFunc = func(iface models.WritableInterface, id int) (*models.Interface, error) {
+				return &models.Interface{
+					NestedInterface: models.NestedInterface{
+						ID: id,
+					},
+					Name: iface.Name}, nil
+			}
+
+			iface, err := dcimClient.UpdateInterface(models.WritableInterface{Name: "updatedInterface"}, 1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(iface.ID).To(Equal(1))
+			Expect(iface.Name).To(Equal("updatedInterface"))
+		})
+
+		It("should return an error when update fails", func() {
+			mockClient.UpdateInterfaceFunc = func(iface models.WritableInterface, id int) (*models.Interface, error) {
+				return nil, fmt.Errorf("update failed")
+			}
+
+			_, err := dcimClient.UpdateInterface(models.WritableInterface{Name: "updatedInterface"}, 1)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to update interface: update failed"))
 		})
 	})
 })
