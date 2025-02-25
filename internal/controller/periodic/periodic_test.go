@@ -110,8 +110,8 @@ var _ = Describe("Runner", func() {
 
 			pod, ok := receivedEvent.Object.(*corev1.Pod)
 			Expect(ok).To(BeTrue())
-			Expect(pod.Name).To(Equal("argora-system"))
-			Expect(pod.Namespace).To(Equal("tick"))
+			Expect(pod.Name).To(Equal("periodic"))
+			Expect(pod.Namespace).To(Equal("argora-system"))
 		})
 	})
 })

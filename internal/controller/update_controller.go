@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
@@ -115,14 +116,14 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	statusHandler := status.NewStatusHandler(r.k8sClient)
 
-	logger.Info("cluster selections", "count", len(updateCR.Spec.ClusterSelection))
-	for _, clusterSelection := range updateCR.Spec.ClusterSelection {
-		cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType(clusterSelection.Name, clusterSelection.Region, clusterSelection.Type)
+	logger.Info("clusters", "count", len(updateCR.Spec.Clusters))
+	for _, clusterSelector := range updateCR.Spec.Clusters {
+		cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType(clusterSelector.Name, clusterSelector.Region, clusterSelector.Type)
 		if err != nil {
-			logger.Error(err, "unable to find clusters for selection", "name", clusterSelection.Name, "region", clusterSelection.Region, "type", clusterSelection.Type)
+			logger.Error(err, "unable to find clusters", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 
-			statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile devices: %w", err))
 			statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
+			statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile cluster: %w", err))
 
 			return ctrl.Result{}, err
 		}
@@ -131,8 +132,8 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 
-			statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile devices on cluster %s (%d): %w", cluster.Name, cluster.ID, err))
 			statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
+			statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile devices on cluster %s (%d): %w", cluster.Name, cluster.ID, err))
 
 			return ctrl.Result{}, err
 		}
@@ -140,47 +141,47 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		for _, device := range devices {
 			err = r.reconcileDevice(ctx, netBox, &device)
 			if err != nil {
-				logger.Error(err, "unable to reconcile device", "device", device.Name, "deviceID", device.ID)
+				logger.Error(err, "unable to reconcile device", "cluster", cluster.Name, "clusterID", cluster.ID, "device", device.Name, "deviceID", device.ID)
 
-				statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile device %s on cluster %s (%d): %w", device.Name, cluster.Name, cluster.ID, err))
 				statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
+				statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err))
 
 				return ctrl.Result{}, err
 			}
 		}
 	}
 
-	statusHandler.UpdateToReady(ctx, updateCR)
 	statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateSucceeded))
+	statusHandler.UpdateToReady(ctx, updateCR)
 
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
 func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling device", "device", device.Name, "deviceID", device.ID)
+	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
 	if device.Status.Value != "active" {
-		logger.Info("device is not active", "status", device.Status.Value)
+		logger.Info("device is not active, will skip it", "status", device.Status.Value)
 		return nil
 	}
 
-	if err := r.renameInterfaces(ctx, netBox, device); err != nil {
-		return fmt.Errorf("unable to rename interfaces for device %s: %w", device.Name, err)
+	if err := r.renameRemoteboardInterface(ctx, netBox, device); err != nil {
+		return fmt.Errorf("unable to rename remoteboard interface for device %s: %w", device.Name, err)
 	}
 
 	if err := r.updateDeviceData(ctx, netBox, device); err != nil {
 		return fmt.Errorf("unable to update device %s data: %w", device.Name, err)
 	}
 
-	// if err := r.removeVMKInterfacesAndIPs(ctx, netBox, device); err != nil {
-	// 	return err
-	// }
+	if err := r.removeVMKInterfacesAndIPs(ctx, netBox, device); err != nil {
+		return fmt.Errorf("unable to remove vmk interfaces and IPs for device %s: %w", device.Name, err)
+	}
 
 	return nil
 }
 
-func (r *UpdateReconciler) renameInterfaces(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
+func (r *UpdateReconciler) renameRemoteboardInterface(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
 	logger := log.FromContext(ctx)
 
 	dcimClient := dcim.NewDCIM(netBox.DCIM)
@@ -202,15 +203,15 @@ func (r *UpdateReconciler) renameInterfaces(ctx context.Context, netBox *netbox.
 				return fmt.Errorf("unable to rename %s interface: %w", iface.Name, err)
 			}
 
-			logger.Info("interface %s was renamed to remoteboard", "name", iface.Name, "ID", iface.ID)
+			logger.Info("interface was renamed to remoteboard", "name", iface.Name, "ID", iface.ID)
 		}
 	}
+
 	return nil
 }
 
 func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
 	logger := log.FromContext(ctx)
-	logger.Info("updating device data", "name", device.Name, "ID", device.ID)
 
 	dcimClient := dcim.NewDCIM(netBox.DCIM)
 	ipamClient := ipam.NewIPAM(netBox.IPAM)
@@ -251,42 +252,52 @@ func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox *netbox.
 	return nil
 }
 
-// func (r *UpdateReconciler) removeVMKInterfacesAndIPs(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
-// 	logger := log.FromContext(ctx)
-// 	logger.Info("checking for vmk interfaces")
+func (r *UpdateReconciler) removeVMKInterfacesAndIPs(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
+	logger := log.FromContext(ctx)
 
-// 	ifaces, err := r.netBox.GetInterfacesForDevice(device)
-// 	if err != nil {
-// 		return err
-// 	}
+	dcimClient := dcim.NewDCIM(netBox.DCIM)
+	ipamClient := ipam.NewIPAM(netBox.IPAM)
 
-// 	for _, iface := range ifaces {
-// 		if strings.HasPrefix(iface.Name, "vmk") {
-// 			logger.Info("found %s interface to delete", iface.Name)
+	ifaces, err := dcimClient.GetInterfacesForDevice(device)
+	if err != nil {
+		return err
+	}
 
-// 			ipAddresses, err := r.netBox.GetIPAddressesForInterface(iface.ID)
-// 			if err != nil {
-// 				return err
-// 			}
+	hasVmkInterfaces := false
+	for _, iface := range ifaces {
+		if strings.HasPrefix(iface.Name, "vmk") {
+			logger.Info("found interface to delete", "name", iface.Name)
 
-// 			for _, ip := range ipAddresses {
-// 				logger.Info("Deleting IP %s for interface %s", ip.Address, iface.Name)
-// 				err := r.netBox.Ipam.DeleteIPAddress(ip.ID)
-// 				if err != nil {
-// 					logger.Info("unable to delete %s IP", ip.Address)
-// 					return err
-// 				}
-// 			}
+			if !hasVmkInterfaces {
+				hasVmkInterfaces = true
+			}
 
-// 			logger.Info("Deleting interface %s", iface.Name)
-// 			err = r.netBox.Dcim.DeleteInterface(iface.ID)
-// 			if err != nil {
-// 				logger.Info("unable to delete %s interface", iface.Name)
-// 				return err
-// 			}
-// 		}
-// 	}
+			ipAddresses, err := ipamClient.GetIPAddressesForInterface(iface.ID)
+			if err != nil {
+				return err
+			}
 
-// 	logger.Info("all vmk interfaces were deleted")
-// 	return nil
-// }
+			for _, ip := range ipAddresses {
+				err := ipamClient.DeleteIPAddress(ip.ID)
+				if err != nil {
+					return fmt.Errorf("unable to delete %s IP: %w", ip.Address, err)
+				}
+				logger.Info("deleted IP for interface", "IP", ip.Address, "interface", iface.Name)
+			}
+
+			err = dcimClient.DeleteInterface(iface.ID)
+			if err != nil {
+				return fmt.Errorf("unable to delete %s interface: %w", iface.Name, err)
+			}
+			logger.Info("deleted interface", "name", iface.Name)
+		}
+	}
+
+	if hasVmkInterfaces {
+		logger.Info("device vmk interfaces were deleted", "device", device.Name, "ID", device.ID)
+	} else {
+		logger.Info("no vmk interfaces found for device to delete", "device", device.Name, "ID", device.ID)
+	}
+
+	return nil
+}

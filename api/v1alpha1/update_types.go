@@ -43,10 +43,10 @@ type ReasonWithMessage struct {
 
 // UpdateSpec defines the desired state of Update.
 type UpdateSpec struct {
-	ClusterSelection []*ClusterSelection `json:"clusterSelection,omitempty"`
+	Clusters []*Clusters `json:"clusters,omitempty"`
 }
 
-type ClusterSelection struct {
+type Clusters struct {
 	Name string `json:"name,omitempty"`
 	// +kubebuilder:validation:Required
 	Region string `json:"region"`

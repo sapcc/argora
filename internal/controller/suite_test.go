@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -47,9 +48,12 @@ var (
 	k8sClient client.Client
 )
 
+const (
+	reconcileInterval = 50 * time.Millisecond
+)
+
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
-
 	RunSpecs(t, "Controller Suite")
 }
 

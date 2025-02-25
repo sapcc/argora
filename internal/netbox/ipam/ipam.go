@@ -10,6 +10,8 @@ type IPAMClient interface {
 	ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error)
 	ListIPAddresses(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error)
 	ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error)
+
+	DeleteIPAddress(id int) error
 }
 
 func (w *IPAMCLientWrapper) ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error) {
@@ -22,6 +24,10 @@ func (w *IPAMCLientWrapper) ListIPAddresses(opts models.ListIPAddressesRequest) 
 
 func (w *IPAMCLientWrapper) ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
 	return w.client.ListPrefixes(opts)
+}
+
+func (w *IPAMCLientWrapper) DeleteIPAddress(id int) error {
+	return w.client.DeleteIPAddress(id)
 }
 
 type IPAMCLientWrapper struct {
@@ -106,4 +112,12 @@ func (i *IPAM) GetPrefixesContaining(contains string) ([]models.Prefix, error) {
 		return nil, fmt.Errorf("prefixes containing %s not found", contains)
 	}
 	return res.Results, nil
+}
+
+func (i *IPAM) DeleteIPAddress(id int) error {
+	err := i.client.DeleteIPAddress(id)
+	if err != nil {
+		return fmt.Errorf("unable to delete IP address (%d): %w", id, err)
+	}
+	return nil
 }

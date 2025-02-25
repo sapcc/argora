@@ -14,7 +14,11 @@ spec:
     singular: update
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.state
+      name: State
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Update is the Schema for the updates API.
@@ -39,7 +43,7 @@ spec:
           spec:
             description: UpdateSpec defines the desired state of Update.
             properties:
-              clusterSelection:
+              clusters:
                 items:
                   properties:
                     name:

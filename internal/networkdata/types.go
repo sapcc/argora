@@ -5,16 +5,6 @@ package networkdata
 
 import "encoding/json"
 
-func UnmarshalNetworkData(data []byte) (NetworkData, error) {
-	var r NetworkData
-	err := json.Unmarshal(data, &r)
-	return r, err
-}
-
-func (r *NetworkData) Marshal() ([]byte, error) {
-	return json.Marshal(r)
-}
-
 type NetworkData struct {
 	Links    []L2             `json:"links"  yaml:"links"`
 	Networks []L3             `json:"networks"  yaml:"networks"`
@@ -104,3 +94,13 @@ const (
 	Ipv6DHCP  L3IPVNetworkType = "ipv6_dhcp"
 	Ipv6Slaac L3IPVNetworkType = "ipv6_slaac"
 )
+
+func UnmarshalNetworkData(data []byte) (NetworkData, error) {
+	var r NetworkData
+	err := json.Unmarshal(data, &r)
+	return r, err
+}
+
+func (r *NetworkData) Marshal() ([]byte, error) {
+	return json.Marshal(r)
+}

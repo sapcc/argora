@@ -49,12 +49,13 @@ var _ = Describe("Update Controller", func() {
 
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const resourceNamespace = "default"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: resourceNamespace,
 		}
 		update := &argorav1alpha1.Update{}
 
@@ -65,9 +66,17 @@ var _ = Describe("Update Controller", func() {
 				resource := &argorav1alpha1.Update{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: resourceNamespace,
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: argorav1alpha1.UpdateSpec{
+						// Clusters: []*argorav1alpha1.Clusters{
+						// 	{
+						// 		Name:   "cluster1",
+						// 		Region: "region1",
+						// 		Type:   "type1",
+						// 	},
+						// },
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -93,23 +102,21 @@ var _ = Describe("Update Controller", func() {
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &argorav1alpha1.Update{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			err := k8sClient.Get(ctx, typeNamespacedName, update)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleanup the specific resource instance Update")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, update)).To(Succeed())
 		})
 
 		It("should successfully reconcile the resource", func() {
 			// given
 			By("Reconciling the created resource")
 			controllerReconciler := &UpdateReconciler{
-				k8sClient: k8sClient,
-				scheme:    k8sClient.Scheme(),
-				cfg:       config.NewDefaultConfiguration(k8sClient, fileReaderMock),
-				// TODO(user): Modify the reconcile interval as needed.
+				k8sClient:         k8sClient,
+				scheme:            k8sClient.Scheme(),
+				cfg:               config.NewDefaultConfiguration(k8sClient, fileReaderMock),
+				reconcileInterval: reconcileInterval,
 			}
 
 			// when
@@ -119,6 +126,16 @@ var _ = Describe("Update Controller", func() {
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
+
+			err = k8sClient.Get(ctx, typeNamespacedName, update)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(update.Status.State).To(Equal(argorav1alpha1.Ready))
+			Expect(update.Status.Description).To(BeEmpty())
+			Expect(update.Status.Conditions).ToNot(BeNil())
+			Expect((*update.Status.Conditions)).To(HaveLen(1))
+			Expect((*update.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
+			Expect((*update.Status.Conditions)[0].Status).To(Equal(metav1.ConditionTrue))
+			Expect((*update.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonUpdateSucceeded)))
 		})
 	})
 })

@@ -17,7 +17,7 @@ endif
 
 default: build-all
 
-tilt: FORCE docker-build docker-push helm-build
+tilt: FORCE helm-build
 	tilt up --stream
 
 ##@ kubebuilder
@@ -163,8 +163,8 @@ build-installer: manifests gen kustomize
 
 .PHONY: helm-prepare
 helm-prepare:
-	yq e -i ".image.repository = \"${IMG_REPO}\"" helm-values.yaml
-	yq e -i ".image.tag = \"${IMG_TAG}\"" helm-values.yaml
+	yq -i '.image.repository = "$(IMG_REPO)"' helm-values.yaml
+	yq -i '.image.tag = "$(IMG_TAG)"' helm-values.yaml
 
 .PHONY: helm-lint
 helm-lint: helm helm-prepare build-installer

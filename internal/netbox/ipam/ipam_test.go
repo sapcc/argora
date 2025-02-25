@@ -14,6 +14,8 @@ type MockIPAMClient struct {
 	ListVlansFunc       func(opts models.ListVlanRequest) (*models.ListVlanResponse, error)
 	ListIPAddressesFunc func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error)
 	ListPrefixesFunc    func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error)
+
+	DeleteIPAddressFunc func(id int) error
 }
 
 func (m *MockIPAMClient) ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error) {
@@ -26,6 +28,10 @@ func (m *MockIPAMClient) ListIPAddresses(opts models.ListIPAddressesRequest) (*m
 
 func (m *MockIPAMClient) ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
 	return m.ListPrefixesFunc(opts)
+}
+
+func (m *MockIPAMClient) DeleteIPAddress(id int) error {
+	return m.DeleteIPAddressFunc(id)
 }
 
 var _ = Describe("IPAM", func() {
@@ -203,6 +209,27 @@ var _ = Describe("IPAM", func() {
 			_, err := ipamClient.GetPrefixesContaining("192.168.1.1")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("prefixes containing 192.168.1.1 not found"))
+		})
+	})
+
+	Describe("DeleteIPAddress", func() {
+		It("should delete the IP address successfully", func() {
+			mockClient.DeleteIPAddressFunc = func(id int) error {
+				return nil
+			}
+
+			err := ipamClient.DeleteIPAddress(1)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return an error when unable to delete the IP address", func() {
+			mockClient.DeleteIPAddressFunc = func(id int) error {
+				return errors.New("error deleting IP address")
+			}
+
+			err := ipamClient.DeleteIPAddress(1)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to delete IP address (1): error deleting IP address"))
 		})
 	})
 })

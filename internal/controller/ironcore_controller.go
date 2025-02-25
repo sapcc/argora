@@ -82,7 +82,7 @@ func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
-func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling ironcore")
 
@@ -95,7 +95,7 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info("configuration reloaded", "config", r.cfg)
 
 	if r.cfg.ServerController != "ironcore" {
-		logger.Info("controller not enabled")
+		logger.Info("ironcore controller not enabled")
 		return ctrl.Result{}, nil
 	}
 

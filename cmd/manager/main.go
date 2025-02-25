@@ -53,7 +53,7 @@ const (
 	rateLimiterFrequencyDefault = 30
 	failureBaseDelayDefault     = 1 * time.Second
 	failureMaxDelayDefault      = 1000 * time.Second
-	reconcileIntervalDefault    = 10 * time.Second //5 * time.Minute
+	reconcileIntervalDefault    = 5 * time.Minute
 )
 
 var (
@@ -163,10 +163,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// if err = controller.NewIronCoreReconciler(mgr.GetClient(), mgr.GetScheme(), cfg, flagVar.reconcileInterval).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "ironCore")
-	// 	os.Exit(1)
-	// }
+	if err = controller.NewIronCoreReconciler(mgr.GetClient(), mgr.GetScheme(), cfg, flagVar.reconcileInterval).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ironCore")
+		os.Exit(1)
+	}
 
 	if err = controller.NewUpdateReconciler(mgr, cfg, flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "update")

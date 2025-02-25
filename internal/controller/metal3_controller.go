@@ -119,7 +119,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	logger.Info("configuration reloaded", "config", r.cfg)
 
 	if r.cfg.ServerController != "metal3" {
-		logger.Info("controller not enabled")
+		logger.Info("metal3 controller not enabled")
 		return ctrl.Result{}, nil
 	}
 

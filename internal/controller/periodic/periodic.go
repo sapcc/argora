@@ -69,8 +69,8 @@ func (r *Runner) Start(ctx context.Context) error {
 			r.eventChannel <- event.GenericEvent{
 				Object: &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "argora-system",
-						Namespace: "tick",
+						Name:      "periodic",
+						Namespace: "argora-system",
 					},
 				},
 			}

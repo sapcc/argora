@@ -11,22 +11,18 @@ import (
 )
 
 type MockDCIMClient struct {
+	GetRegionFunc func(id int) (*models.Region, error)
+	GetSiteFunc   func(id int) (*models.Site, error)
+
 	ListDevicesFunc     func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error)
 	ListDeviceRolesFunc func(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error)
-	GetRegionFunc       func(id int) (*models.Region, error)
-	GetSiteFunc         func(id int) (*models.Site, error)
 	ListInterfacesFunc  func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error)
 	ListPlatformsFunc   func(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
+
 	UpdateDeviceFunc    func(dev models.WritableDeviceWithConfigContext) (*models.Device, error)
 	UpdateInterfaceFunc func(iface models.WritableInterface, id int) (*models.Interface, error)
-}
 
-func (d *MockDCIMClient) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
-	return d.ListDevicesFunc(opts)
-}
-
-func (d *MockDCIMClient) ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
-	return d.ListDeviceRolesFunc(opts)
+	DeleteInterfaceFunc func(id int) error
 }
 
 func (d *MockDCIMClient) GetRegion(id int) (*models.Region, error) {
@@ -35,6 +31,14 @@ func (d *MockDCIMClient) GetRegion(id int) (*models.Region, error) {
 
 func (d *MockDCIMClient) GetSite(id int) (*models.Site, error) {
 	return d.GetSiteFunc(id)
+}
+
+func (d *MockDCIMClient) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+	return d.ListDevicesFunc(opts)
+}
+
+func (d *MockDCIMClient) ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
+	return d.ListDeviceRolesFunc(opts)
 }
 
 func (d *MockDCIMClient) ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
@@ -51,6 +55,10 @@ func (d *MockDCIMClient) UpdateDevice(device models.WritableDeviceWithConfigCont
 
 func (d *MockDCIMClient) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
 	return d.UpdateInterfaceFunc(iface, id)
+}
+
+func (d *MockDCIMClient) DeleteInterface(id int) error {
+	return d.DeleteInterfaceFunc(id)
 }
 
 var _ = Describe("DCIM", func() {
@@ -448,6 +456,27 @@ var _ = Describe("DCIM", func() {
 			_, err := dcimClient.UpdateInterface(models.WritableInterface{Name: "updatedInterface"}, 1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to update interface: update failed"))
+		})
+	})
+
+	Describe("DeleteInterface", func() {
+		It("should delete the interface successfully", func() {
+			mockClient.DeleteInterfaceFunc = func(id int) error {
+				return nil
+			}
+
+			err := dcimClient.DeleteInterface(1)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return an error when delete fails", func() {
+			mockClient.DeleteInterfaceFunc = func(id int) error {
+				return fmt.Errorf("delete failed")
+			}
+
+			err := dcimClient.DeleteInterface(1)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to delete interface (1): delete failed"))
 		})
 	})
 })

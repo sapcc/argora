@@ -17,6 +17,8 @@ type DCIMClient interface {
 
 	UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error)
 	UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error)
+
+	DeleteInterface(id int) error
 }
 
 type DCIMCLientWrapper struct {
@@ -57,6 +59,10 @@ func (d *DCIMCLientWrapper) UpdateDevice(device models.WritableDeviceWithConfigC
 
 func (d *DCIMCLientWrapper) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
 	return d.client.UpdateInterface(iface, id)
+}
+
+func (d *DCIMCLientWrapper) DeleteInterface(id int) error {
+	return d.client.DeleteInterface(id)
 }
 
 type DCIM struct {
@@ -220,4 +226,12 @@ func (d *DCIM) UpdateInterface(iface models.WritableInterface, id int) (*models.
 		return nil, fmt.Errorf("unable to update interface: %w", err)
 	}
 	return res, nil
+}
+
+func (d *DCIM) DeleteInterface(id int) error {
+	err := d.client.DeleteInterface(id)
+	if err != nil {
+		return fmt.Errorf("unable to delete interface (%d): %w", id, err)
+	}
+	return nil
 }
