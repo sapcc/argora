@@ -52,14 +52,16 @@ type UpdateReconciler struct {
 	k8sClient         client.Client
 	scheme            *runtime.Scheme
 	cfg               *config.Config
+	netBox            netbox.Netbox
 	reconcileInterval time.Duration
 }
 
-func NewUpdateReconciler(mgr ctrl.Manager, cfg *config.Config, reconcileInterval time.Duration) *UpdateReconciler {
+func NewUpdateReconciler(mgr ctrl.Manager, cfg *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *UpdateReconciler {
 	return &UpdateReconciler{
 		k8sClient:         mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
 		cfg:               cfg,
+		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
 	}
 }
@@ -68,9 +70,9 @@ func NewUpdateReconciler(mgr ctrl.Manager, cfg *config.Config, reconcileInterval
 func (r *UpdateReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter RateLimiter) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&argorav1alpha1.Update{}).
-		WithEventFilter(predicate.Or[client.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		WithOptions(controller.Options{
-			RateLimiter: workqueue.NewTypedMaxOfRateLimiter[ctrl.Request](
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
 				workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](rateLimiter.BaseDelay,
 					rateLimiter.FailureMaxDelay),
 				&workqueue.TypedBucketRateLimiter[ctrl.Request]{
@@ -98,9 +100,9 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	logger.Info("configuration reloaded", "config", r.cfg)
 
-	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	err = r.netBox.Reload(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
-		logger.Error(err, "unable to create netbox client")
+		logger.Error(err, "unable to reload netbox")
 		return ctrl.Result{}, err
 	}
 
@@ -115,7 +117,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	logger.Info("clusters", "count", len(updateCR.Spec.Clusters))
 	for _, clusterSelector := range updateCR.Spec.Clusters {
-		cluster, err := netBox.Virtualization().GetClusterByNameRegionType(clusterSelector.Name, clusterSelector.Region, clusterSelector.Type)
+		cluster, err := r.netBox.Virtualization().GetClusterByNameRegionType(clusterSelector.Name, clusterSelector.Region, clusterSelector.Type)
 		if err != nil {
 			logger.Error(err, "unable to find clusters", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 
@@ -125,7 +127,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			return ctrl.Result{}, err
 		}
 
-		devices, err := netBox.DCIM().GetDevicesByClusterID(cluster.ID)
+		devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 
@@ -136,7 +138,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 
 		for _, device := range devices {
-			err = r.reconcileDevice(ctx, netBox, &device)
+			err = r.reconcileDevice(ctx, r.netBox, &device)
 			if err != nil {
 				logger.Error(err, "unable to reconcile device", "cluster", cluster.Name, "clusterID", cluster.ID, "device", device.Name, "deviceID", device.ID)
 

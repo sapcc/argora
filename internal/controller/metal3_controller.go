@@ -84,9 +84,9 @@ func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *conf
 func (r *Metal3Reconciler) SetupWithManager(mgr manager.Manager, rateLimiter RateLimiter) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&clusterv1.Cluster{}).
-		WithEventFilter(predicate.Or[client.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		WithOptions(controller.Options{
-			RateLimiter: workqueue.NewTypedMaxOfRateLimiter[ctrl.Request](
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
 				workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](rateLimiter.BaseDelay,
 					rateLimiter.FailureMaxDelay),
 				&workqueue.TypedBucketRateLimiter[ctrl.Request]{
@@ -154,7 +154,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
-	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
+	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil // TODO: should we reconcile in a fixed interval?
 }
 
 func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
@@ -207,7 +207,11 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 		return fmt.Errorf("unable to upload bmc secret: %w", err)
 	}
 
-	role := getRoleFromTags(device)
+	role, err := getRoleFromTags(device)
+	if err != nil {
+		return fmt.Errorf("unable to get role from tags: %w", err)
+	}
+
 	if role == device.DeviceRole.Slug {
 		logger.Info("no role found in tags, using device role")
 	} else {
@@ -393,9 +397,9 @@ func createLinkHint(device *models.Device, role string) (string, error) {
 	return "", fmt.Errorf("unknown device model for link hint: %s", device.DeviceType.Model)
 }
 
-func getRoleFromTags(device *models.Device) string {
+func getRoleFromTags(device *models.Device) (string, error) {
 	tagsCount := 0
-	deviceRole := ""
+	deviceRole := device.DeviceRole.Slug
 
 	for _, tag := range device.Tags {
 		switch tag.Name {
@@ -414,10 +418,11 @@ func getRoleFromTags(device *models.Device) string {
 		}
 	}
 
-	if tagsCount != 1 { // TODO: what about having multiple tags? - if more then Error
-		return device.DeviceRole.Slug
+	if tagsCount > 1 {
+		return "", errors.New("device has multiple tags")
 	}
-	return deviceRole
+
+	return deviceRole, nil
 }
 
 func getMacForIP(netBox netbox.Netbox, ipAddress string) (string, error) {

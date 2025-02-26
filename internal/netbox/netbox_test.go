@@ -121,7 +121,12 @@ var _ = Describe("NetboxService", func() {
 		mockDCIM = &MockDCIM{}
 		mockIPAM = &MockIPAM{}
 		mockExtras = &MockExtras{}
-		netboxService = netbox.NewNetbox(mockVirtualization, mockDCIM, mockIPAM, mockExtras)
+
+		netboxService = netbox.NewNetbox()
+		netboxService.SetVirtualization(mockVirtualization)
+		netboxService.SetDCIM(mockDCIM)
+		netboxService.SetIPAM(mockIPAM)
+		netboxService.SetExtras(mockExtras)
 	})
 
 	Describe("Virtualization", func() {
@@ -180,6 +185,20 @@ var _ = Describe("NetboxService", func() {
 			netboxService, err := netbox.NewDefaultNetbox(url, token)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(netboxService).NotTo(BeNil())
+			Expect(netboxService.Virtualization()).NotTo(BeNil())
+			Expect(netboxService.DCIM()).NotTo(BeNil())
+			Expect(netboxService.IPAM()).NotTo(BeNil())
+			Expect(netboxService.Extras()).NotTo(BeNil())
+		})
+	})
+
+	Describe("Reload", func() {
+		It("should reload the services with new configurations", func() {
+			url := "http://example.com"
+			token := "test-token"
+
+			err := netboxService.Reload(url, token)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(netboxService.Virtualization()).NotTo(BeNil())
 			Expect(netboxService.DCIM()).NotTo(BeNil())
 			Expect(netboxService.IPAM()).NotTo(BeNil())

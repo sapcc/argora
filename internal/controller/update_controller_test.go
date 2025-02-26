@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,32 +27,22 @@ import (
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/config"
+	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/go-netbox-go/models"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type FileReaderMock struct {
-	fileContent map[string]string
-	returnError bool
-}
-
-func (f *FileReaderMock) ReadFile(fileName string) ([]byte, error) {
-	if f.returnError {
-		return nil, errors.New("error")
-	}
-	return []byte(f.fileContent[fileName]), nil
-}
-
 var _ = Describe("Update Controller", func() {
-	var fileReaderMock *FileReaderMock
+	var fileReaderMock *mock.FileReaderMock
 
 	Context("When reconciling a Update custom resource", func() {
 		const resourceName = "test-resource"
 		const resourceNamespace = "default"
 
-		fileReaderMock = &FileReaderMock{
-			fileContent: make(map[string]string),
-			returnError: false,
+		fileReaderMock = &mock.FileReaderMock{
+			FileContent: make(map[string]string),
+			ReturnError: false,
 		}
 		configJson := `{
 			"ironCoreRoles": "role1",
@@ -67,8 +56,8 @@ var _ = Describe("Update Controller", func() {
 			"bmcPassword": "cGFzc3dvcmQ="
 		}`
 
-		fileReaderMock.fileContent["/etc/config/config.json"] = configJson
-		fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
+		fileReaderMock.FileContent["/etc/config/config.json"] = configJson
+		fileReaderMock.FileContent["/etc/credentials/credentials.json"] = credentialsJson
 
 		ctx := context.Background()
 
@@ -88,13 +77,13 @@ var _ = Describe("Update Controller", func() {
 						Namespace: resourceNamespace,
 					},
 					Spec: argorav1alpha1.UpdateSpec{
-						// Clusters: []*argorav1alpha1.Clusters{
-						// 	{
-						// 		Name:   "cluster1",
-						// 		Region: "region1",
-						// 		Type:   "type1",
-						// 	},
-						// },
+						Clusters: []*argorav1alpha1.Clusters{
+							{
+								Name:   "",
+								Region: "region1",
+								Type:   "type1",
+							},
+						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -110,11 +99,77 @@ var _ = Describe("Update Controller", func() {
 		})
 
 		It("should successfully reconcile the CR", func() {
+			netBoxMock := &mock.NetBoxMock{
+				ReturnError:        false,
+				VirtualizationMock: &mock.VirtualizationMock{},
+				DCIMMock:           &mock.DCIMMock{},
+				IPAMMock:           &mock.IPAMMock{},
+				ExtrasMock:         &mock.ExtrasMock{},
+			}
+
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
+				Expect(name).To(BeEmpty())
+				Expect(region).To(Equal("region1"))
+				Expect(clusterType).To(Equal("type1"))
+
+				return &models.Cluster{
+					ID:   1,
+					Name: "cluster1",
+				}, nil
+			}
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
+				Expect(clusterID).To(Equal(1))
+				return []models.Device{
+					{
+						ID:     1,
+						Name:   "device1",
+						Status: models.DeviceStatus{Value: "active"},
+						Platform: models.NestedPlatform{
+							ID: 1,
+						},
+						OOBIp: models.NestedIPAddress{
+							ID: 1,
+						},
+					},
+				}, nil
+			}
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+				Expect(device.Name).To(Equal("device1"))
+				return []models.Interface{
+					{
+						NestedInterface: models.NestedInterface{ID: 1},
+						Name:            "remoteboard",
+					},
+				}, nil
+			}
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceFunc = func(device *models.Device, ifaceName string) (*models.Interface, error) {
+				Expect(device.Name).To(Equal("device1"))
+				Expect(ifaceName).To(Equal("remoteboard"))
+				return &models.Interface{
+					NestedInterface: models.NestedInterface{ID: 1},
+					Name:            "remoteboard",
+				}, nil
+			}
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
+				Expect(ifaceID).To(Equal(1))
+				return &models.IPAddress{
+					NestedIPAddress: models.NestedIPAddress{
+						ID: 1,
+					},
+				}, nil
+			}
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
+				Expect(platformName).To(Equal("Linux KVM"))
+				return &models.Platform{
+					NestedPlatform: models.NestedPlatform{ID: 1},
+				}, nil
+			}
 			// given
 			By("Reconciling the created resource")
 			controllerReconciler := &UpdateReconciler{
 				k8sClient:         k8sClient,
 				scheme:            k8sClient.Scheme(),
+				netBox:            netBoxMock,
 				cfg:               config.NewDefaultConfiguration(k8sClient, fileReaderMock),
 				reconcileInterval: reconcileInterval,
 			}
