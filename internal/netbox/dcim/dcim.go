@@ -65,15 +65,33 @@ func (d *DCIMCLientWrapper) DeleteInterface(id int) error {
 	return d.client.DeleteInterface(id)
 }
 
-type DCIM struct {
+type DCIM interface {
+	GetDeviceByName(deviceName string) (*models.Device, error)
+	GetDeviceByID(id int) (*models.Device, error)
+	GetDevicesByClusterID(clusterID int) ([]models.Device, error)
+	GetRoleByName(roleName string) (*models.DeviceRole, error)
+	GetRegionForDevice(device *models.Device) (string, error)
+	GetInterfaceByID(id int) (*models.Interface, error)
+	GetInterfacesForDevice(device *models.Device) ([]models.Interface, error)
+	GetInterfaceForDevice(device *models.Device, ifaceName string) (*models.Interface, error)
+	GetInterfacesByLagID(lagID int) ([]models.Interface, error)
+	GetPlatformByName(platformName string) (*models.Platform, error)
+
+	UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error)
+	UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error)
+
+	DeleteInterface(id int) error
+}
+
+type DCIMService struct {
 	client DCIMClient
 }
 
-func NewDCIM(client DCIMClient) *DCIM {
-	return &DCIM{client: client}
+func NewDCIM(client DCIMClient) DCIM {
+	return &DCIMService{client: client}
 }
 
-func (d *DCIM) GetDeviceByName(deviceName string) (*models.Device, error) {
+func (d *DCIMService) GetDeviceByName(deviceName string) (*models.Device, error) {
 	listDevicesRequest := NewListDevicesRequest(
 		DeviceWithName(deviceName),
 	).BuildRequest()
@@ -88,7 +106,7 @@ func (d *DCIM) GetDeviceByName(deviceName string) (*models.Device, error) {
 	return &res.Results[0], nil
 }
 
-func (d *DCIM) GetDeviceByID(id int) (*models.Device, error) {
+func (d *DCIMService) GetDeviceByID(id int) (*models.Device, error) {
 	listDevicesRequest := NewListDevicesRequest(
 		DeviceWithID(id),
 	).BuildRequest()
@@ -103,7 +121,7 @@ func (d *DCIM) GetDeviceByID(id int) (*models.Device, error) {
 	return &res.Results[0], nil
 }
 
-func (d *DCIM) GetDevicesByClusterID(clusterID int) ([]models.Device, error) {
+func (d *DCIMService) GetDevicesByClusterID(clusterID int) ([]models.Device, error) {
 	listDevicesRequest := NewListDevicesRequest(
 		DeviceWithClusterID(clusterID),
 	).BuildRequest()
@@ -115,7 +133,7 @@ func (d *DCIM) GetDevicesByClusterID(clusterID int) ([]models.Device, error) {
 	return res.Results, nil
 }
 
-func (d *DCIM) GetRoleByName(roleName string) (*models.DeviceRole, error) {
+func (d *DCIMService) GetRoleByName(roleName string) (*models.DeviceRole, error) {
 	listDeviceRolesRequest := NewListDeviceRolesRequest(
 		RoleWithName(roleName),
 	).BuildRequest()
@@ -130,7 +148,7 @@ func (d *DCIM) GetRoleByName(roleName string) (*models.DeviceRole, error) {
 	return &res.Results[0], nil
 }
 
-func (d *DCIM) GetRegionForDevice(device *models.Device) (string, error) {
+func (d *DCIMService) GetRegionForDevice(device *models.Device) (string, error) {
 	site, err := d.client.GetSite(device.Site.ID)
 	if err != nil {
 		return "", fmt.Errorf("unable to get site for ID %d: %w", device.Site.ID, err)
@@ -142,7 +160,7 @@ func (d *DCIM) GetRegionForDevice(device *models.Device) (string, error) {
 	return region.Slug, nil
 }
 
-func (d *DCIM) GetInterfaceByID(id int) (*models.Interface, error) {
+func (d *DCIMService) GetInterfaceByID(id int) (*models.Interface, error) {
 	listInterfacesRequest := NewListInterfacesRequest(
 		InterfaceWithID(id),
 	).BuildRequest()
@@ -157,7 +175,7 @@ func (d *DCIM) GetInterfaceByID(id int) (*models.Interface, error) {
 	return &rir.Results[0], nil
 }
 
-func (d *DCIM) GetInterfacesForDevice(device *models.Device) ([]models.Interface, error) {
+func (d *DCIMService) GetInterfacesForDevice(device *models.Device) ([]models.Interface, error) {
 	listInterfacesRequest := NewListInterfacesRequest(
 		InterfaceWithDeviceID(device.ID),
 	).BuildRequest()
@@ -169,7 +187,7 @@ func (d *DCIM) GetInterfacesForDevice(device *models.Device) ([]models.Interface
 	return rir.Results, nil
 }
 
-func (d *DCIM) GetInterfaceForDevice(device *models.Device, ifaceName string) (*models.Interface, error) {
+func (d *DCIMService) GetInterfaceForDevice(device *models.Device, ifaceName string) (*models.Interface, error) {
 	listInterfacesRequest := NewListInterfacesRequest(
 		InterfaceWithName(ifaceName),
 		InterfaceWithDeviceID(device.ID),
@@ -185,7 +203,7 @@ func (d *DCIM) GetInterfaceForDevice(device *models.Device, ifaceName string) (*
 	return &rir.Results[0], nil
 }
 
-func (d *DCIM) GetInterfacesByLagID(lagID int) ([]models.Interface, error) {
+func (d *DCIMService) GetInterfacesByLagID(lagID int) ([]models.Interface, error) {
 	listInterfacesRequest := NewListInterfacesRequest(
 		InterfaceWithLagID(lagID),
 	).BuildRequest()
@@ -197,7 +215,7 @@ func (d *DCIM) GetInterfacesByLagID(lagID int) ([]models.Interface, error) {
 	return rir.Results, nil
 }
 
-func (d *DCIM) GetPlatformByName(platformName string) (*models.Platform, error) {
+func (d *DCIMService) GetPlatformByName(platformName string) (*models.Platform, error) {
 	listPlatformsRequest := NewListPlatformsRequest(
 		PlatformWithName(platformName),
 	).BuildRequest()
@@ -212,7 +230,7 @@ func (d *DCIM) GetPlatformByName(platformName string) (*models.Platform, error) 
 	return &res.Results[0], nil
 }
 
-func (d *DCIM) UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error) {
+func (d *DCIMService) UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error) {
 	res, err := d.client.UpdateDevice(device)
 	if err != nil {
 		return nil, fmt.Errorf("unable to update device: %w", err)
@@ -220,7 +238,7 @@ func (d *DCIM) UpdateDevice(device models.WritableDeviceWithConfigContext) (*mod
 	return res, nil
 }
 
-func (d *DCIM) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
+func (d *DCIMService) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
 	res, err := d.client.UpdateInterface(iface, id)
 	if err != nil {
 		return nil, fmt.Errorf("unable to update interface: %w", err)
@@ -228,7 +246,7 @@ func (d *DCIM) UpdateInterface(iface models.WritableInterface, id int) (*models.
 	return res, nil
 }
 
-func (d *DCIM) DeleteInterface(id int) error {
+func (d *DCIMService) DeleteInterface(id int) error {
 	err := d.client.DeleteInterface(id)
 	if err != nil {
 		return fmt.Errorf("unable to delete interface (%d): %w", id, err)

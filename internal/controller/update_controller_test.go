@@ -47,9 +47,28 @@ func (f *FileReaderMock) ReadFile(fileName string) ([]byte, error) {
 var _ = Describe("Update Controller", func() {
 	var fileReaderMock *FileReaderMock
 
-	Context("When reconciling a resource", func() {
+	Context("When reconciling a Update custom resource", func() {
 		const resourceName = "test-resource"
 		const resourceNamespace = "default"
+
+		fileReaderMock = &FileReaderMock{
+			fileContent: make(map[string]string),
+			returnError: false,
+		}
+		configJson := `{
+			"ironCoreRoles": "role1",
+			"ironCoreRegion": "region1",
+			"serverController": "ironcore"
+		}`
+		credentialsJson := `{
+			"netboxUrl": "aHR0cDovL25ldGJveA==",
+			"netboxToken": "dG9rZW4=",
+			"bmcUser": "dXNlcg==",
+			"bmcPassword": "cGFzc3dvcmQ="
+		}`
+
+		fileReaderMock.fileContent["/etc/config/config.json"] = configJson
+		fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
 
 		ctx := context.Background()
 
@@ -80,25 +99,6 @@ var _ = Describe("Update Controller", func() {
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
-
-			fileReaderMock = &FileReaderMock{
-				fileContent: make(map[string]string),
-				returnError: false,
-			}
-			configJson := `{
-				"ironCoreRoles": "role1",
-				"ironCoreRegion": "region1",
-				"serverController": "ironcore"
-			}`
-			credentialsJson := `{
-				"netboxUrl": "aHR0cDovL25ldGJveA==",
-				"netboxToken": "dG9rZW4=",
-				"bmcUser": "dXNlcg==",
-				"bmcPassword": "cGFzc3dvcmQ="
-			}`
-
-			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
-			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
 		})
 
 		AfterEach(func() {
@@ -109,7 +109,7 @@ var _ = Describe("Update Controller", func() {
 			Expect(k8sClient.Delete(ctx, update)).To(Succeed())
 		})
 
-		It("should successfully reconcile the resource", func() {
+		It("should successfully reconcile the CR", func() {
 			// given
 			By("Reconciling the created resource")
 			controllerReconciler := &UpdateReconciler{

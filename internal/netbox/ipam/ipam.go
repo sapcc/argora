@@ -38,15 +38,24 @@ func NewIPAMCLientWrapper(client IPAMClient) *IPAMCLientWrapper {
 	return &IPAMCLientWrapper{client: client}
 }
 
-type IPAM struct {
+type IPAM interface {
+	GetVlanByName(vlanName string) (*models.Vlan, error)
+	GetIPAddressByAddress(address string) (*models.IPAddress, error)
+	GetIPAddressesForInterface(interfaceID int) ([]models.IPAddress, error)
+	GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error)
+	GetPrefixesContaining(contains string) ([]models.Prefix, error)
+	DeleteIPAddress(id int) error
+}
+
+type IPAMService struct {
 	client IPAMClient
 }
 
-func NewIPAM(client IPAMClient) *IPAM {
-	return &IPAM{client: client}
+func NewIPAM(client IPAMClient) IPAM {
+	return &IPAMService{client: client}
 }
 
-func (i *IPAM) GetVlanByName(vlanName string) (*models.Vlan, error) {
+func (i *IPAMService) GetVlanByName(vlanName string) (*models.Vlan, error) {
 	ListVlanRequest := NewListVlanRequest(
 		VlanWithName(vlanName),
 	).BuildRequest()
@@ -61,7 +70,7 @@ func (i *IPAM) GetVlanByName(vlanName string) (*models.Vlan, error) {
 	return &res.Results[0], nil
 }
 
-func (i *IPAM) GetIPAddressByAddress(address string) (*models.IPAddress, error) {
+func (i *IPAMService) GetIPAddressByAddress(address string) (*models.IPAddress, error) {
 	ListIPAddressesRequest := NewListIPAddressesRequest(
 		IPAddressesWithAddress(address),
 	).BuildRequest()
@@ -76,7 +85,7 @@ func (i *IPAM) GetIPAddressByAddress(address string) (*models.IPAddress, error) 
 	return &res.Results[0], nil
 }
 
-func (i *IPAM) GetIPAddressesForInterface(interfaceID int) ([]models.IPAddress, error) {
+func (i *IPAMService) GetIPAddressesForInterface(interfaceID int) ([]models.IPAddress, error) {
 	ListIPAddressesRequest := NewListIPAddressesRequest(
 		IPAddressesWithInterfaceID(interfaceID),
 	).BuildRequest()
@@ -88,7 +97,7 @@ func (i *IPAM) GetIPAddressesForInterface(interfaceID int) ([]models.IPAddress, 
 	return res.Results, nil
 }
 
-func (i *IPAM) GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error) {
+func (i *IPAMService) GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error) {
 	ifaces, err := i.GetIPAddressesForInterface(interfaceID)
 	if err != nil {
 		return nil, err
@@ -99,7 +108,7 @@ func (i *IPAM) GetIPAddressForInterface(interfaceID int) (*models.IPAddress, err
 	return &ifaces[0], nil
 }
 
-func (i *IPAM) GetPrefixesContaining(contains string) ([]models.Prefix, error) {
+func (i *IPAMService) GetPrefixesContaining(contains string) ([]models.Prefix, error) {
 	ListPrefixesRequest := NewListPrefixesRequest(
 		PrefixWithContains(contains),
 	).BuildRequest()
@@ -114,7 +123,7 @@ func (i *IPAM) GetPrefixesContaining(contains string) ([]models.Prefix, error) {
 	return res.Results, nil
 }
 
-func (i *IPAM) DeleteIPAddress(id int) error {
+func (i *IPAMService) DeleteIPAddress(id int) error {
 	err := i.client.DeleteIPAddress(id)
 	if err != nil {
 		return fmt.Errorf("unable to delete IP address (%d): %w", id, err)

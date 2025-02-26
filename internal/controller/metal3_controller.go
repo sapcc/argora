@@ -32,9 +32,6 @@ import (
 
 	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/netbox"
-	"github.com/sapcc/argora/internal/netbox/dcim"
-	"github.com/sapcc/argora/internal/netbox/ipam"
-	"github.com/sapcc/argora/internal/netbox/virtualization"
 	"github.com/sapcc/argora/internal/networkdata"
 )
 
@@ -123,7 +120,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err
@@ -137,13 +134,13 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	clusterType := capiCluster.Labels[ClusterRoleLabel]
-	cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType(capiCluster.Name, "", clusterType)
+	cluster, err := netBox.Virtualization().GetClusterByNameRegionType(capiCluster.Name, "", clusterType)
 	if err != nil {
 		logger.Error(err, "unable to find cluster in netbox", "name", capiCluster.Name, "type", clusterType)
 		return ctrl.Result{}, err
 	}
 
-	devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
+	devices, err := netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 	if err != nil {
 		logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 		return ctrl.Result{}, err
@@ -160,7 +157,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
-func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox *netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
+func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
@@ -196,8 +193,7 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox *netbox.N
 		mac = ""
 	}
 
-	dcim := dcim.NewDCIM(netBox.DCIM)
-	region, err := dcim.GetRegionForDevice(device)
+	region, err := netBox.DCIM().GetRegionForDevice(device)
 	if err != nil {
 		return fmt.Errorf("unable to get region for device: %w", err)
 	}
@@ -263,19 +259,18 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox *netbox.N
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (r *Metal3Reconciler) createNetworkDataForDevice(ctx context.Context, netBox *netbox.Netbox, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role string, secretName string) error {
-	iface, err := dcim.NewDCIM(netBox.DCIM).GetInterfaceForDevice(device, "LAG1")
+func (r *Metal3Reconciler) createNetworkDataForDevice(ctx context.Context, netBox netbox.Netbox, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role string, secretName string) error {
+	iface, err := netBox.DCIM().GetInterfaceForDevice(device, "LAG1")
 	if err != nil {
 		return fmt.Errorf("unable to find interface LAG1 for device %s: %w", device.Name, err)
 	}
 
-	ipam := ipam.NewIPAM(netBox.IPAM)
-	ip, err := ipam.GetIPAddressForInterface(iface.ID)
+	ip, err := netBox.IPAM().GetIPAddressForInterface(iface.ID)
 	if err != nil {
 		return fmt.Errorf("unable to get IP for interface ID %d: %w", iface.ID, err)
 	}
 
-	prefixes, err := ipam.GetPrefixesContaining(ip.Address)
+	prefixes, err := netBox.IPAM().GetPrefixesContaining(ip.Address)
 	if err != nil {
 		return fmt.Errorf("unable to get prefixes containing IP %s: %w", ip.Address, err)
 	}
@@ -425,20 +420,18 @@ func getRoleFromTags(device *models.Device) string {
 	return deviceRole
 }
 
-func getMacForIP(netBox *netbox.Netbox, ipAddress string) (string, error) {
-	ipam := ipam.NewIPAM(netBox.IPAM)
-	ip, err := ipam.GetIPAddressByAddress(ipAddress)
+func getMacForIP(netBox netbox.Netbox, ipAddress string) (string, error) {
+	ip, err := netBox.IPAM().GetIPAddressByAddress(ipAddress)
 	if err != nil {
 		return "", err
 	}
 
-	dcim := dcim.NewDCIM(netBox.DCIM)
-	assignedIface, err := dcim.GetInterfaceByID(ip.AssignedInterface.ID)
+	assignedIface, err := netBox.DCIM().GetInterfaceByID(ip.AssignedInterface.ID)
 	if err != nil {
 		return "", err
 	}
 
-	lagIfaces, err := dcim.GetInterfacesByLagID(assignedIface.ID)
+	lagIfaces, err := netBox.DCIM().GetInterfacesByLagID(assignedIface.ID)
 	if err != nil {
 		return "", err
 	}

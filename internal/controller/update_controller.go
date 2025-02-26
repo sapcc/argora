@@ -26,9 +26,6 @@ import (
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/netbox"
-	"github.com/sapcc/argora/internal/netbox/dcim"
-	"github.com/sapcc/argora/internal/netbox/ipam"
-	"github.com/sapcc/argora/internal/netbox/virtualization"
 	"github.com/sapcc/argora/internal/status"
 	"github.com/sapcc/go-netbox-go/models"
 	"golang.org/x/time/rate"
@@ -101,7 +98,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	logger.Info("configuration reloaded", "config", r.cfg)
 
-	netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err
@@ -118,7 +115,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	logger.Info("clusters", "count", len(updateCR.Spec.Clusters))
 	for _, clusterSelector := range updateCR.Spec.Clusters {
-		cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType(clusterSelector.Name, clusterSelector.Region, clusterSelector.Type)
+		cluster, err := netBox.Virtualization().GetClusterByNameRegionType(clusterSelector.Name, clusterSelector.Region, clusterSelector.Type)
 		if err != nil {
 			logger.Error(err, "unable to find clusters", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 
@@ -128,7 +125,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			return ctrl.Result{}, err
 		}
 
-		devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
+		devices, err := netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 
@@ -157,7 +154,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
-func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
+func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
@@ -181,11 +178,10 @@ func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox *netbox.N
 	return nil
 }
 
-func (r *UpdateReconciler) renameRemoteboardInterface(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
+func (r *UpdateReconciler) renameRemoteboardInterface(ctx context.Context, netBox netbox.Netbox, device *models.Device) error {
 	logger := log.FromContext(ctx)
 
-	dcimClient := dcim.NewDCIM(netBox.DCIM)
-	ifaces, err := dcimClient.GetInterfacesForDevice(device)
+	ifaces, err := netBox.DCIM().GetInterfacesForDevice(device)
 	if err != nil {
 		return err
 	}
@@ -198,7 +194,7 @@ func (r *UpdateReconciler) renameRemoteboardInterface(ctx context.Context, netBo
 				Type:   iface.Type.Value,
 			}
 
-			_, err := dcimClient.UpdateInterface(wIface, iface.ID)
+			_, err := netBox.DCIM().UpdateInterface(wIface, iface.ID)
 			if err != nil {
 				return fmt.Errorf("unable to rename %s interface: %w", iface.Name, err)
 			}
@@ -210,25 +206,22 @@ func (r *UpdateReconciler) renameRemoteboardInterface(ctx context.Context, netBo
 	return nil
 }
 
-func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
+func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox netbox.Netbox, device *models.Device) error {
 	logger := log.FromContext(ctx)
 
-	dcimClient := dcim.NewDCIM(netBox.DCIM)
-	ipamClient := ipam.NewIPAM(netBox.IPAM)
-
-	iface, err := dcimClient.GetInterfaceForDevice(device, "remoteboard")
+	iface, err := netBox.DCIM().GetInterfaceForDevice(device, "remoteboard")
 	if err != nil {
 		return err
 	}
 	logger.Info("found remoteboard interface", "ID", iface.ID)
 
-	ipAddress, err := ipamClient.GetIPAddressForInterface(iface.ID)
+	ipAddress, err := netBox.IPAM().GetIPAddressForInterface(iface.ID)
 	if err != nil {
 		return err
 	}
 	logger.Info("found IP address for remoteboard interface", "IP", ipAddress.Address)
 
-	platform, err := dcimClient.GetPlatformByName("Linux KVM")
+	platform, err := netBox.DCIM().GetPlatformByName("Linux KVM")
 	if err != nil {
 		return err
 	}
@@ -239,7 +232,7 @@ func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox *netbox.
 		wDevice.Platform = platform.ID
 		wDevice.OOBIp = ipAddress.ID
 
-		_, err = dcimClient.UpdateDevice(wDevice)
+		_, err = netBox.DCIM().UpdateDevice(wDevice)
 		if err != nil {
 			return err
 		}
@@ -252,13 +245,10 @@ func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox *netbox.
 	return nil
 }
 
-func (r *UpdateReconciler) removeVMKInterfacesAndIPs(ctx context.Context, netBox *netbox.Netbox, device *models.Device) error {
+func (r *UpdateReconciler) removeVMKInterfacesAndIPs(ctx context.Context, netBox netbox.Netbox, device *models.Device) error {
 	logger := log.FromContext(ctx)
 
-	dcimClient := dcim.NewDCIM(netBox.DCIM)
-	ipamClient := ipam.NewIPAM(netBox.IPAM)
-
-	ifaces, err := dcimClient.GetInterfacesForDevice(device)
+	ifaces, err := netBox.DCIM().GetInterfacesForDevice(device)
 	if err != nil {
 		return err
 	}
@@ -272,20 +262,20 @@ func (r *UpdateReconciler) removeVMKInterfacesAndIPs(ctx context.Context, netBox
 				hasVmkInterfaces = true
 			}
 
-			ipAddresses, err := ipamClient.GetIPAddressesForInterface(iface.ID)
+			ipAddresses, err := netBox.IPAM().GetIPAddressesForInterface(iface.ID)
 			if err != nil {
 				return err
 			}
 
 			for _, ip := range ipAddresses {
-				err := ipamClient.DeleteIPAddress(ip.ID)
+				err := netBox.IPAM().DeleteIPAddress(ip.ID)
 				if err != nil {
 					return fmt.Errorf("unable to delete %s IP: %w", ip.Address, err)
 				}
 				logger.Info("deleted IP for interface", "IP", ip.Address, "interface", iface.Name)
 			}
 
-			err = dcimClient.DeleteInterface(iface.ID)
+			err = netBox.DCIM().DeleteInterface(iface.ID)
 			if err != nil {
 				return fmt.Errorf("unable to delete %s interface: %w", iface.Name, err)
 			}

@@ -21,13 +21,13 @@ func (m *MockExtrasClient) ListTags(opts models.ListTagsRequest) (*models.ListTa
 
 var _ = Describe("Extras", func() {
 	var (
-		mockClient   *MockExtrasClient
-		extrasClient *extras.Extras
+		mockClient    *MockExtrasClient
+		extrasService extras.Extras
 	)
 
 	BeforeEach(func() {
 		mockClient = &MockExtrasClient{}
-		extrasClient = extras.NewExtras(mockClient)
+		extrasService = extras.NewExtras(mockClient)
 	})
 
 	Describe("GetTagByName", func() {
@@ -47,7 +47,7 @@ var _ = Describe("Extras", func() {
 					}, nil
 				}
 
-				tag, err := extrasClient.GetTagByName("test-tag")
+				tag, err := extrasService.GetTagByName("test-tag")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(tag).To(Equal(&expectedTag))
 			})
@@ -64,7 +64,7 @@ var _ = Describe("Extras", func() {
 					}, nil
 				}
 
-				tag, err := extrasClient.GetTagByName("nonexistent-tag")
+				tag, err := extrasService.GetTagByName("nonexistent-tag")
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError(fmt.Sprintf("unexpected number of tags found (%d)", 0)))
 				Expect(tag).To(BeNil())
@@ -77,7 +77,7 @@ var _ = Describe("Extras", func() {
 					return nil, errors.New("list tags error")
 				}
 
-				tag, err := extrasClient.GetTagByName("test-tag")
+				tag, err := extrasService.GetTagByName("test-tag")
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to list tags by name test-tag: list tags error"))
 				Expect(tag).To(BeNil())
@@ -106,7 +106,7 @@ var _ = Describe("Extras", func() {
 					}, nil
 				}
 
-				tag, err := extrasClient.GetTagByName("test-tag")
+				tag, err := extrasService.GetTagByName("test-tag")
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError(fmt.Sprintf("unexpected number of tags found (%d)", 2)))
 				Expect(tag).To(BeNil())

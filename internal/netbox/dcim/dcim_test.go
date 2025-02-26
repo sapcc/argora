@@ -63,13 +63,13 @@ func (d *MockDCIMClient) DeleteInterface(id int) error {
 
 var _ = Describe("DCIM", func() {
 	var (
-		mockClient *MockDCIMClient
-		dcimClient *dcim.DCIM
+		mockClient  *MockDCIMClient
+		dcimService dcim.DCIM
 	)
 
 	BeforeEach(func() {
 		mockClient = &MockDCIMClient{}
-		dcimClient = dcim.NewDCIM(mockClient)
+		dcimService = dcim.NewDCIM(mockClient)
 	})
 
 	Describe("GetDeviceByName", func() {
@@ -83,7 +83,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			device, err := dcimClient.GetDeviceByName("device1")
+			device, err := dcimService.GetDeviceByName("device1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(device.Name).To(Equal("device1"))
 		})
@@ -98,7 +98,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			_, err := dcimClient.GetDeviceByName("device1")
+			_, err := dcimService.GetDeviceByName("device1")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of devices found (0)"))
 		})
@@ -115,7 +115,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			device, err := dcimClient.GetDeviceByID(1)
+			device, err := dcimService.GetDeviceByID(1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(device.ID).To(Equal(1))
 		})
@@ -130,7 +130,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			_, err := dcimClient.GetDeviceByID(1)
+			_, err := dcimService.GetDeviceByID(1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of devices found (0)"))
 		})
@@ -147,7 +147,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			devices, err := dcimClient.GetDevicesByClusterID(1)
+			devices, err := dcimService.GetDevicesByClusterID(1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(devices).To(HaveLen(2))
 		})
@@ -162,7 +162,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			devices, err := dcimClient.GetDevicesByClusterID(1)
+			devices, err := dcimService.GetDevicesByClusterID(1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(devices).To(HaveLen(0))
 		})
@@ -185,7 +185,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			role, err := dcimClient.GetRoleByName("role1")
+			role, err := dcimService.GetRoleByName("role1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(role.Name).To(Equal("role1"))
 		})
@@ -200,7 +200,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			_, err := dcimClient.GetRoleByName("role1")
+			_, err := dcimService.GetRoleByName("role1")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of roles found (0)"))
 		})
@@ -217,7 +217,7 @@ var _ = Describe("DCIM", func() {
 				return &models.Region{Slug: "region1"}, nil
 			}
 
-			region, err := dcimClient.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
+			region, err := dcimService.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(region).To(Equal("region1"))
 		})
@@ -227,7 +227,7 @@ var _ = Describe("DCIM", func() {
 				return nil, fmt.Errorf("site not found")
 			}
 
-			_, err := dcimClient.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
+			_, err := dcimService.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to get site for ID 1: site not found"))
 		})
@@ -240,7 +240,7 @@ var _ = Describe("DCIM", func() {
 				return nil, fmt.Errorf("region not found")
 			}
 
-			_, err := dcimClient.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
+			_, err := dcimService.GetRegionForDevice(&models.Device{Site: models.NestedSite{ID: 1}})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to get region for ID 1: region not found"))
 		})
@@ -258,7 +258,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			iface, err := dcimClient.GetInterfaceByID(1)
+			iface, err := dcimService.GetInterfaceByID(1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(iface.ID).To(Equal(1))
 		})
@@ -270,7 +270,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			_, err := dcimClient.GetInterfaceByID(1)
+			_, err := dcimService.GetInterfaceByID(1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("interface with ID 1 not found"))
 		})
@@ -291,7 +291,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			ifaces, err := dcimClient.GetInterfacesForDevice(&models.Device{ID: 1})
+			ifaces, err := dcimService.GetInterfacesForDevice(&models.Device{ID: 1})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ifaces).To(HaveLen(2))
 		})
@@ -303,7 +303,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			ifaces, err := dcimClient.GetInterfacesForDevice(&models.Device{ID: 1})
+			ifaces, err := dcimService.GetInterfacesForDevice(&models.Device{ID: 1})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ifaces).To(HaveLen(0))
 		})
@@ -322,7 +322,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			iface, err := dcimClient.GetInterfaceForDevice(&models.Device{ID: 1}, "eth0")
+			iface, err := dcimService.GetInterfaceForDevice(&models.Device{ID: 1}, "eth0")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(iface.Name).To(Equal("eth0"))
 		})
@@ -334,7 +334,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			_, err := dcimClient.GetInterfaceForDevice(&models.Device{ID: 1}, "eth0")
+			_, err := dcimService.GetInterfaceForDevice(&models.Device{ID: 1}, "eth0")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("eth0 interface not found"))
 		})
@@ -355,7 +355,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			ifaces, err := dcimClient.GetInterfacesByLagID(1)
+			ifaces, err := dcimService.GetInterfacesByLagID(1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ifaces).To(HaveLen(2))
 		})
@@ -367,7 +367,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			ifaces, err := dcimClient.GetInterfacesByLagID(1)
+			ifaces, err := dcimService.GetInterfacesByLagID(1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ifaces).To(HaveLen(0))
 		})
@@ -388,7 +388,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			platform, err := dcimClient.GetPlatformByName("platform1")
+			platform, err := dcimService.GetPlatformByName("platform1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(platform.Name).To(Equal("platform1"))
 		})
@@ -403,7 +403,7 @@ var _ = Describe("DCIM", func() {
 				}, nil
 			}
 
-			_, err := dcimClient.GetPlatformByName("platform1")
+			_, err := dcimService.GetPlatformByName("platform1")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of platforms found (0)"))
 		})
@@ -415,7 +415,7 @@ var _ = Describe("DCIM", func() {
 				return &models.Device{ID: dev.ID, Name: dev.Name}, nil
 			}
 
-			device, err := dcimClient.UpdateDevice(models.WritableDeviceWithConfigContext{ID: 1, Name: "updatedDevice"})
+			device, err := dcimService.UpdateDevice(models.WritableDeviceWithConfigContext{ID: 1, Name: "updatedDevice"})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(device.ID).To(Equal(1))
 			Expect(device.Name).To(Equal("updatedDevice"))
@@ -426,7 +426,7 @@ var _ = Describe("DCIM", func() {
 				return nil, fmt.Errorf("update failed")
 			}
 
-			_, err := dcimClient.UpdateDevice(models.WritableDeviceWithConfigContext{ID: 1, Name: "updatedDevice"})
+			_, err := dcimService.UpdateDevice(models.WritableDeviceWithConfigContext{ID: 1, Name: "updatedDevice"})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to update device: update failed"))
 		})
@@ -442,7 +442,7 @@ var _ = Describe("DCIM", func() {
 					Name: iface.Name}, nil
 			}
 
-			iface, err := dcimClient.UpdateInterface(models.WritableInterface{Name: "updatedInterface"}, 1)
+			iface, err := dcimService.UpdateInterface(models.WritableInterface{Name: "updatedInterface"}, 1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(iface.ID).To(Equal(1))
 			Expect(iface.Name).To(Equal("updatedInterface"))
@@ -453,7 +453,7 @@ var _ = Describe("DCIM", func() {
 				return nil, fmt.Errorf("update failed")
 			}
 
-			_, err := dcimClient.UpdateInterface(models.WritableInterface{Name: "updatedInterface"}, 1)
+			_, err := dcimService.UpdateInterface(models.WritableInterface{Name: "updatedInterface"}, 1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to update interface: update failed"))
 		})
@@ -465,7 +465,7 @@ var _ = Describe("DCIM", func() {
 				return nil
 			}
 
-			err := dcimClient.DeleteInterface(1)
+			err := dcimService.DeleteInterface(1)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -474,7 +474,7 @@ var _ = Describe("DCIM", func() {
 				return fmt.Errorf("delete failed")
 			}
 
-			err := dcimClient.DeleteInterface(1)
+			err := dcimService.DeleteInterface(1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to delete interface (1): delete failed"))
 		})

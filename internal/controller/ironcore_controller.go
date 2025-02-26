@@ -15,8 +15,6 @@ import (
 	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller/periodic"
 	"github.com/sapcc/argora/internal/netbox"
-	"github.com/sapcc/argora/internal/netbox/dcim"
-	"github.com/sapcc/argora/internal/netbox/virtualization"
 	"github.com/sapcc/go-netbox-go/models"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -99,7 +97,7 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	netBox, err := netbox.NewNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err
@@ -113,13 +111,13 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 	for _, role := range roles {
 		logger.Info("reconciling IronCore cluster role " + role + " in " + r.cfg.IronCoreRegion)
 
-		cluster, err := virtualization.NewVirtualization(netBox.Virtualization).GetClusterByNameRegionType("", r.cfg.IronCoreRegion, role)
+		cluster, err := netBox.Virtualization().GetClusterByNameRegionType("", r.cfg.IronCoreRegion, role)
 		if err != nil {
 			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", role)
 			return ctrl.Result{}, err
 		}
 
-		devices, err := dcim.NewDCIM(netBox.DCIM).GetDevicesByClusterID(cluster.ID)
+		devices, err := netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
 			return ctrl.Result{}, err
@@ -137,7 +135,7 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox *netbox.Netbox, cluster string, device *models.Device) error {
+func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster string, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
@@ -157,7 +155,7 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox *netbox
 		return fmt.Errorf("unable to split in two device name: %s", device.Name)
 	}
 
-	region, err := dcim.NewDCIM(netBox.DCIM).GetRegionForDevice(device)
+	region, err := netBox.DCIM().GetRegionForDevice(device)
 	if err != nil {
 		return fmt.Errorf("unable to get region for device: %w", err)
 	}

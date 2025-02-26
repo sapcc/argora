@@ -36,13 +36,13 @@ func (m *MockIPAMClient) DeleteIPAddress(id int) error {
 
 var _ = Describe("IPAM", func() {
 	var (
-		mockClient *MockIPAMClient
-		ipamClient *ipam.IPAM
+		mockClient  *MockIPAMClient
+		ipamService ipam.IPAM
 	)
 
 	BeforeEach(func() {
 		mockClient = &MockIPAMClient{}
-		ipamClient = ipam.NewIPAM(mockClient)
+		ipamService = ipam.NewIPAM(mockClient)
 	})
 
 	Describe("GetVlanByName", func() {
@@ -60,7 +60,7 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			vlan, err := ipamClient.GetVlanByName("test-vlan")
+			vlan, err := ipamService.GetVlanByName("test-vlan")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(vlan.Name).To(Equal("test-vlan"))
 		})
@@ -74,7 +74,7 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			_, err := ipamClient.GetVlanByName("non-existent-vlan")
+			_, err := ipamService.GetVlanByName("non-existent-vlan")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of VLANs found (0)"))
 		})
@@ -94,7 +94,7 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			ip, err := ipamClient.GetIPAddressByAddress("192.168.1.1")
+			ip, err := ipamService.GetIPAddressByAddress("192.168.1.1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ip.Address).To(Equal("192.168.1.1"))
 		})
@@ -104,7 +104,7 @@ var _ = Describe("IPAM", func() {
 				return &models.ListIPAddressesResponse{Results: []models.IPAddress{}}, nil
 			}
 
-			_, err := ipamClient.GetIPAddressByAddress("192.168.1.2")
+			_, err := ipamService.GetIPAddressByAddress("192.168.1.2")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of IP addresses found (0)"))
 		})
@@ -129,7 +129,7 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			ips, err := ipamClient.GetIPAddressesForInterface(1)
+			ips, err := ipamService.GetIPAddressesForInterface(1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ips).To(HaveLen(2))
 		})
@@ -139,7 +139,7 @@ var _ = Describe("IPAM", func() {
 				return nil, errors.New("error listing IP addresses")
 			}
 
-			_, err := ipamClient.GetIPAddressesForInterface(1)
+			_, err := ipamService.GetIPAddressesForInterface(1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to list IP addresses for interface ID 1: error listing IP addresses"))
 		})
@@ -159,7 +159,7 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			ip, err := ipamClient.GetIPAddressForInterface(1)
+			ip, err := ipamService.GetIPAddressForInterface(1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ip.Address).To(Equal("192.168.1.1"))
 		})
@@ -182,7 +182,7 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			_, err := ipamClient.GetIPAddressForInterface(1)
+			_, err := ipamService.GetIPAddressForInterface(1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of IP addresses found (2)"))
 		})
@@ -196,7 +196,7 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			prefixes, err := ipamClient.GetPrefixesContaining("192.168.1.1")
+			prefixes, err := ipamService.GetPrefixesContaining("192.168.1.1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(prefixes).To(HaveLen(1))
 		})
@@ -206,7 +206,7 @@ var _ = Describe("IPAM", func() {
 				return &models.ListPrefixesReponse{Results: []models.Prefix{}}, nil
 			}
 
-			_, err := ipamClient.GetPrefixesContaining("192.168.1.1")
+			_, err := ipamService.GetPrefixesContaining("192.168.1.1")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("prefixes containing 192.168.1.1 not found"))
 		})
@@ -218,7 +218,7 @@ var _ = Describe("IPAM", func() {
 				return nil
 			}
 
-			err := ipamClient.DeleteIPAddress(1)
+			err := ipamService.DeleteIPAddress(1)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -227,7 +227,7 @@ var _ = Describe("IPAM", func() {
 				return errors.New("error deleting IP address")
 			}
 
-			err := ipamClient.DeleteIPAddress(1)
+			err := ipamService.DeleteIPAddress(1)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to delete IP address (1): error deleting IP address"))
 		})

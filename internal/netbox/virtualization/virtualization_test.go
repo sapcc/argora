@@ -20,13 +20,13 @@ func (m *MockVirtualizationClient) ListClusters(opts models.ListClusterRequest) 
 
 var _ = Describe("Virtualization", func() {
 	var (
-		mockClient           *MockVirtualizationClient
-		virtualizationClient *virtualization.Virtualization
+		mockClient            *MockVirtualizationClient
+		virtualizationService virtualization.Virtualization
 	)
 
 	BeforeEach(func() {
 		mockClient = &MockVirtualizationClient{}
-		virtualizationClient = virtualization.NewVirtualization(mockClient)
+		virtualizationService = virtualization.NewVirtualization(mockClient)
 	})
 
 	Describe("GetClusterByName", func() {
@@ -41,7 +41,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByName("test-cluster")
+			cluster, err := virtualizationService.GetClusterByName("test-cluster")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cluster).To(Equal(&expectedCluster))
 		})
@@ -56,7 +56,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByName("test-cluster")
+			cluster, err := virtualizationService.GetClusterByName("test-cluster")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of clusters found (0)"))
 			Expect(cluster).To(BeNil())
@@ -72,7 +72,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByName("test-cluster")
+			cluster, err := virtualizationService.GetClusterByName("test-cluster")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of clusters found (2)"))
 			Expect(cluster).To(BeNil())
@@ -83,7 +83,7 @@ var _ = Describe("Virtualization", func() {
 				return nil, errors.New("client error")
 			}
 
-			cluster, err := virtualizationClient.GetClusterByName("test-cluster")
+			cluster, err := virtualizationService.GetClusterByName("test-cluster")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to list clusters by name test-cluster: client error"))
 			Expect(cluster).To(BeNil())
@@ -102,7 +102,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
+			cluster, err := virtualizationService.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cluster).To(Equal(&expectedCluster))
 		})
@@ -117,7 +117,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
+			cluster, err := virtualizationService.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of clusters found (0)"))
 			Expect(cluster).To(BeNil())
@@ -133,7 +133,7 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationClient.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
+			cluster, err := virtualizationService.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unexpected number of clusters found (2)"))
 			Expect(cluster).To(BeNil())
@@ -144,7 +144,7 @@ var _ = Describe("Virtualization", func() {
 				return nil, errors.New("client error")
 			}
 
-			cluster, err := virtualizationClient.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
+			cluster, err := virtualizationService.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("client error"))
 			Expect(cluster).To(BeNil())

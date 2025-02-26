@@ -10,27 +10,32 @@ type VirtualizationClient interface {
 	ListClusters(opts models.ListClusterRequest) (*models.ListClusterResponse, error)
 }
 
-func (vcw *VirtualizationCLientWrapper) ListClusters(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
+func (vcw *VirtualizationClientWrapper) ListClusters(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
 	return vcw.client.ListClusters(opts)
 }
 
-type VirtualizationCLientWrapper struct {
+type VirtualizationClientWrapper struct {
 	client VirtualizationClient
 }
 
-func NewVirtualizationCLientWrapper(client VirtualizationClient) *VirtualizationCLientWrapper {
-	return &VirtualizationCLientWrapper{client: client}
+func NewVirtualizationClientWrapper(client VirtualizationClient) *VirtualizationClientWrapper {
+	return &VirtualizationClientWrapper{client: client}
 }
 
-type Virtualization struct {
+type Virtualization interface {
+	GetClusterByName(clusterName string) (*models.Cluster, error)
+	GetClusterByNameRegionType(name, region, clusterType string) (*models.Cluster, error)
+}
+
+type VirtualizationService struct {
 	client VirtualizationClient
 }
 
-func NewVirtualization(client VirtualizationClient) *Virtualization {
-	return &Virtualization{client: client}
+func NewVirtualization(client VirtualizationClient) Virtualization {
+	return &VirtualizationService{client: client}
 }
 
-func (v *Virtualization) GetClusterByName(clusterName string) (*models.Cluster, error) {
+func (v *VirtualizationService) GetClusterByName(clusterName string) (*models.Cluster, error) {
 	listClusterRequest := NewListClusterRequest(
 		WithName(clusterName),
 	).BuildRequest()
@@ -46,7 +51,7 @@ func (v *Virtualization) GetClusterByName(clusterName string) (*models.Cluster, 
 	return &res.Results[0], nil
 }
 
-func (v *Virtualization) GetClusterByNameRegionType(name, region, clusterType string) (*models.Cluster, error) {
+func (v *VirtualizationService) GetClusterByNameRegionType(name, region, clusterType string) (*models.Cluster, error) {
 	listClusterRequest := NewListClusterRequest(
 		WithName(name),
 		WithRegion(region),

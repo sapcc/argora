@@ -22,15 +22,19 @@ func (d *ExtrasCLientWrapper) ListDevices(opts models.ListTagsRequest) (*models.
 	return d.client.ListTags(opts)
 }
 
-type Extras struct {
+type Extras interface {
+	GetTagByName(tagName string) (*models.Tag, error)
+}
+
+type ExtrasService struct {
 	client ExtrasClient
 }
 
-func NewExtras(client ExtrasClient) *Extras {
-	return &Extras{client: client}
+func NewExtras(client ExtrasClient) Extras {
+	return &ExtrasService{client: client}
 }
 
-func (e *Extras) GetTagByName(tagName string) (*models.Tag, error) {
+func (e *ExtrasService) GetTagByName(tagName string) (*models.Tag, error) {
 	listTagsRequest := NewListTagsRequest(
 		WithName(tagName),
 	).BuildRequest()
