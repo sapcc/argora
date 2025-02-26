@@ -1,17 +1,10 @@
 package virtualization_test
 
 import (
-	"testing"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/argora/internal/netbox/virtualization"
 )
-
-func TestConfig(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Virtualization Suite")
-}
 
 var _ = Describe("ListClusterRequest", func() {
 	Context("When creating a new ListClusterRequest", func() {

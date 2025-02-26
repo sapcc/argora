@@ -3,6 +3,7 @@ package extras_test
 import (
 	"errors"
 	"fmt"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -10,6 +11,11 @@ import (
 	"github.com/sapcc/go-netbox-go/common"
 	"github.com/sapcc/go-netbox-go/models"
 )
+
+func TestConfig(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Extras Suite")
+}
 
 type MockExtrasClient struct {
 	ListTagsFunc func(opts models.ListTagsRequest) (*models.ListTagsResponse, error)

@@ -1,17 +1,10 @@
 package ipam_test
 
 import (
-	"testing"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/argora/internal/netbox/ipam"
 )
-
-func TestConfig(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "IPAM Suite")
-}
 
 var _ = Describe("BuildRequest", func() {
 	Context("ListVlanRequest", func() {

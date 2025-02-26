@@ -44,6 +44,7 @@ type IPAM interface {
 	GetIPAddressesForInterface(interfaceID int) ([]models.IPAddress, error)
 	GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error)
 	GetPrefixesContaining(contains string) ([]models.Prefix, error)
+
 	DeleteIPAddress(id int) error
 }
 

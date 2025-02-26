@@ -2,6 +2,7 @@ package ipam_test
 
 import (
 	"errors"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -9,6 +10,11 @@ import (
 	"github.com/sapcc/go-netbox-go/common"
 	"github.com/sapcc/go-netbox-go/models"
 )
+
+func TestConfig(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "IPAM Suite")
+}
 
 type MockIPAMClient struct {
 	ListVlansFunc       func(opts models.ListVlanRequest) (*models.ListVlanResponse, error)

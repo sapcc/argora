@@ -63,6 +63,16 @@ func (r *Runner) Start(ctx context.Context) error {
 	defer ticker.Stop()
 	defer close(r.eventChannel)
 
+	// send initial event to trigger the first reconciliation
+	r.eventChannel <- event.GenericEvent{
+		Object: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "periodic",
+				Namespace: "argora-system",
+			},
+		},
+	}
+
 	for {
 		select {
 		case <-ticker.C:

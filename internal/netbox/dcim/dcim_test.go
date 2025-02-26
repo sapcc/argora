@@ -2,6 +2,7 @@ package dcim_test
 
 import (
 	"fmt"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -9,6 +10,11 @@ import (
 	"github.com/sapcc/go-netbox-go/common"
 	"github.com/sapcc/go-netbox-go/models"
 )
+
+func TestConfig(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "DCIM Suite")
+}
 
 type MockDCIMClient struct {
 	GetRegionFunc func(id int) (*models.Region, error)
