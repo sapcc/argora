@@ -272,7 +272,7 @@ func (r *UpdateReconciler) removeVMKInterfacesAndIPs(ctx context.Context, netBox
 			for _, ip := range ipAddresses {
 				err := netBox.IPAM().DeleteIPAddress(ip.ID)
 				if err != nil {
-					return fmt.Errorf("unable to delete %s IP: %w", ip.Address, err)
+					return fmt.Errorf("unable to delete IP address (%s): %w", ip.Address, err)
 				}
 				logger.Info("deleted IP for interface", "IP", ip.Address, "interface", iface.Name)
 			}

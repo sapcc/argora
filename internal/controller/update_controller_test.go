@@ -89,39 +89,7 @@ var _ = Describe("Update Controller", func() {
 			}
 		}
 
-		BeforeEach(func() {
-			By("creating Update CR")
-			err := k8sClient.Get(ctx, typeNamespacedName, update)
-			if err != nil && apierrors.IsNotFound(err) {
-				resource := &argorav1alpha1.Update{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: resourceNamespace,
-					},
-					Spec: argorav1alpha1.UpdateSpec{
-						Clusters: []*argorav1alpha1.Clusters{
-							{
-								Name:   "",
-								Region: "region1",
-								Type:   "type1",
-							},
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
-		})
-
-		AfterEach(func() {
-			err := k8sClient.Get(ctx, typeNamespacedName, update)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("cleanup Update CR")
-			Expect(k8sClient.Delete(ctx, update)).To(Succeed())
-		})
-
-		It("should successfully reconcile the CR", func() {
-			// given
+		prepareMockSuccessNoUpdate := func() *mock.NetBoxMock {
 			netBoxMock := &mock.NetBoxMock{
 				ReturnError:        false,
 				VirtualizationMock: &mock.VirtualizationMock{},
@@ -188,6 +156,43 @@ var _ = Describe("Update Controller", func() {
 				}, nil
 			}
 
+			return netBoxMock
+		}
+
+		BeforeEach(func() {
+			By("creating Update CR")
+			err := k8sClient.Get(ctx, typeNamespacedName, update)
+			if err != nil && apierrors.IsNotFound(err) {
+				resource := &argorav1alpha1.Update{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      resourceName,
+						Namespace: resourceNamespace,
+					},
+					Spec: argorav1alpha1.UpdateSpec{
+						Clusters: []*argorav1alpha1.Clusters{
+							{
+								Name:   "",
+								Region: "region1",
+								Type:   "type1",
+							},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			}
+		})
+
+		AfterEach(func() {
+			err := k8sClient.Get(ctx, typeNamespacedName, update)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("cleanup Update CR")
+			Expect(k8sClient.Delete(ctx, update)).To(Succeed())
+		})
+
+		It("should successfully reconcile the CR", func() {
+			// given
+			netBoxMock := prepareMockSuccessNoUpdate()
 			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
 
 			// when
@@ -210,11 +215,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should return an error if netbox reload fails", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError: true,
-			}
-
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createReconciler(&mock.NetBoxMock{ReturnError: true}, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
@@ -229,14 +230,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should return an error if GetClusterByNameRegionType fails", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
 				Expect(name).To(BeEmpty())
 				Expect(region).To(Equal("region1"))
@@ -262,14 +256,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should return an error if GetDevicesByClusterID fails", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
 				Expect(name).To(BeEmpty())
 				Expect(region).To(Equal("region1"))
@@ -302,14 +289,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should skip the device when the device is not active", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
 				return &models.Cluster{
 					ID:   1,
@@ -342,40 +322,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should rename iDRAC interface to remoteboard", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-				Expect(name).To(BeEmpty())
-				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(Equal("type1"))
-
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-				Expect(clusterID).To(Equal(1))
-				return []models.Device{
-					{
-						ID:     1,
-						Name:   "device1",
-						Status: models.DeviceStatus{Value: "active"},
-						Platform: models.NestedPlatform{
-							ID: 1,
-						},
-						OOBIp: models.NestedIPAddress{
-							ID: 1,
-						},
-					},
-				}, nil
-			}
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
 				Expect(device.Name).To(Equal("device1"))
 				return []models.Interface{
@@ -383,28 +330,6 @@ var _ = Describe("Update Controller", func() {
 						NestedInterface: models.NestedInterface{ID: 1},
 						Name:            "iDRAC",
 					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceFunc = func(device *models.Device, ifaceName string) (*models.Interface, error) {
-				Expect(device.Name).To(Equal("device1"))
-				Expect(ifaceName).To(Equal("remoteboard"))
-				return &models.Interface{
-					NestedInterface: models.NestedInterface{ID: 1},
-					Name:            "remoteboard",
-				}, nil
-			}
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
-				Expect(ifaceID).To(Equal(1))
-				return &models.IPAddress{
-					NestedIPAddress: models.NestedIPAddress{
-						ID: 1,
-					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
-				Expect(platformName).To(Equal("Linux KVM"))
-				return &models.Platform{
-					NestedPlatform: models.NestedPlatform{ID: 1},
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateInterfaceFunc = func(wIface models.WritableInterface, ifaceID int) (*models.Interface, error) {
@@ -435,40 +360,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should return error when iDRAC interface renaming to remoteboard fails", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-				Expect(name).To(BeEmpty())
-				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(Equal("type1"))
-
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-				Expect(clusterID).To(Equal(1))
-				return []models.Device{
-					{
-						ID:     1,
-						Name:   "device1",
-						Status: models.DeviceStatus{Value: "active"},
-						Platform: models.NestedPlatform{
-							ID: 1,
-						},
-						OOBIp: models.NestedIPAddress{
-							ID: 1,
-						},
-					},
-				}, nil
-			}
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
 				Expect(device.Name).To(Equal("device1"))
 				return []models.Interface{
@@ -503,29 +395,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should return error when the device has no remoteboard interface", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-				return []models.Device{
-					{
-						ID:     1,
-						Name:   "device1",
-						Status: models.DeviceStatus{Value: "active"},
-					},
-				}, nil
-			}
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
 				return []models.Interface{}, nil
 			}
@@ -546,70 +416,14 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("unable to update device device1 data: remoteboard interface not found"))
 
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(0))
+
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to update device device1 data: remoteboard interface not found")
 		})
 
 		It("should update device data when plaform does not match", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-				Expect(name).To(BeEmpty())
-				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(Equal("type1"))
-
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-				Expect(clusterID).To(Equal(1))
-				return []models.Device{
-					{
-						ID:     1,
-						Name:   "device1",
-						Status: models.DeviceStatus{Value: "active"},
-						Platform: models.NestedPlatform{
-							ID: 1,
-						},
-						OOBIp: models.NestedIPAddress{
-							ID: 1,
-						},
-					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
-				Expect(device.Name).To(Equal("device1"))
-				return []models.Interface{
-					{
-						NestedInterface: models.NestedInterface{ID: 1},
-						Name:            "remoteboard",
-					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceFunc = func(device *models.Device, ifaceName string) (*models.Interface, error) {
-				Expect(device.Name).To(Equal("device1"))
-				Expect(ifaceName).To(Equal("remoteboard"))
-				return &models.Interface{
-					NestedInterface: models.NestedInterface{ID: 1},
-					Name:            "remoteboard",
-				}, nil
-			}
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
-				Expect(ifaceID).To(Equal(1))
-				return &models.IPAddress{
-					NestedIPAddress: models.NestedIPAddress{
-						ID: 1,
-					},
-				}, nil
-			}
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
 				Expect(platformName).To(Equal("Linux KVM"))
 				return &models.Platform{
@@ -642,69 +456,13 @@ var _ = Describe("Update Controller", func() {
 
 		It("should update device data when OOB IP does not match", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-				Expect(name).To(BeEmpty())
-				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(Equal("type1"))
-
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-				Expect(clusterID).To(Equal(1))
-				return []models.Device{
-					{
-						ID:     1,
-						Name:   "device1",
-						Status: models.DeviceStatus{Value: "active"},
-						Platform: models.NestedPlatform{
-							ID: 1,
-						},
-						OOBIp: models.NestedIPAddress{
-							ID: 1,
-						},
-					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
-				Expect(device.Name).To(Equal("device1"))
-				return []models.Interface{
-					{
-						NestedInterface: models.NestedInterface{ID: 1},
-						Name:            "remoteboard",
-					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceFunc = func(device *models.Device, ifaceName string) (*models.Interface, error) {
-				Expect(device.Name).To(Equal("device1"))
-				Expect(ifaceName).To(Equal("remoteboard"))
-				return &models.Interface{
-					NestedInterface: models.NestedInterface{ID: 1},
-					Name:            "remoteboard",
-				}, nil
-			}
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
 				Expect(ifaceID).To(Equal(1))
 				return &models.IPAddress{
 					NestedIPAddress: models.NestedIPAddress{
 						ID: 2,
 					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
-				Expect(platformName).To(Equal("Linux KVM"))
-				return &models.Platform{
-					NestedPlatform: models.NestedPlatform{ID: 1},
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceFunc = func(device models.WritableDeviceWithConfigContext) (*models.Device, error) {
@@ -733,65 +491,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should return error when update device data fails", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-				Expect(name).To(BeEmpty())
-				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(Equal("type1"))
-
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-				Expect(clusterID).To(Equal(1))
-				return []models.Device{
-					{
-						ID:     1,
-						Name:   "device1",
-						Status: models.DeviceStatus{Value: "active"},
-						Platform: models.NestedPlatform{
-							ID: 1,
-						},
-						OOBIp: models.NestedIPAddress{
-							ID: 1,
-						},
-					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
-				Expect(device.Name).To(Equal("device1"))
-				return []models.Interface{
-					{
-						NestedInterface: models.NestedInterface{ID: 1},
-						Name:            "remoteboard",
-					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceFunc = func(device *models.Device, ifaceName string) (*models.Interface, error) {
-				Expect(device.Name).To(Equal("device1"))
-				Expect(ifaceName).To(Equal("remoteboard"))
-				return &models.Interface{
-					NestedInterface: models.NestedInterface{ID: 1},
-					Name:            "remoteboard",
-				}, nil
-			}
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
-				Expect(ifaceID).To(Equal(1))
-				return &models.IPAddress{
-					NestedIPAddress: models.NestedIPAddress{
-						ID: 1,
-					},
-				}, nil
-			}
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
 				Expect(platformName).To(Equal("Linux KVM"))
 				return &models.Platform{
@@ -821,39 +521,7 @@ var _ = Describe("Update Controller", func() {
 
 		It("should remove VMK interfaces and IPs", func() {
 			// given
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock:           &mock.DCIMMock{},
-				IPAMMock:           &mock.IPAMMock{},
-				ExtrasMock:         &mock.ExtrasMock{},
-			}
-
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-				Expect(name).To(BeEmpty())
-				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(Equal("type1"))
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-				Expect(clusterID).To(Equal(1))
-				return []models.Device{
-					{
-						ID:     1,
-						Name:   "device1",
-						Status: models.DeviceStatus{Value: "active"},
-						Platform: models.NestedPlatform{
-							ID: 1,
-						},
-						OOBIp: models.NestedIPAddress{
-							ID: 1,
-						},
-					},
-				}, nil
-			}
+			netBoxMock := prepareMockSuccessNoUpdate()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
 				Expect(device.Name).To(Equal("device1"))
 				return []models.Interface{
@@ -865,28 +533,6 @@ var _ = Describe("Update Controller", func() {
 						NestedInterface: models.NestedInterface{ID: 2},
 						Name:            "vmk0",
 					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceFunc = func(device *models.Device, ifaceName string) (*models.Interface, error) {
-				Expect(device.Name).To(Equal("device1"))
-				Expect(ifaceName).To(Equal("remoteboard"))
-				return &models.Interface{
-					NestedInterface: models.NestedInterface{ID: 1},
-					Name:            "remoteboard",
-				}, nil
-			}
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
-				Expect(ifaceID).To(Equal(1))
-				return &models.IPAddress{
-					NestedIPAddress: models.NestedIPAddress{
-						ID: 1,
-					},
-				}, nil
-			}
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
-				Expect(platformName).To(Equal("Linux KVM"))
-				return &models.Platform{
-					NestedPlatform: models.NestedPlatform{ID: 1},
 				}, nil
 			}
 			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceFunc = func(ifaceID int) ([]models.IPAddress, error) {
@@ -920,6 +566,103 @@ var _ = Describe("Update Controller", func() {
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(1))
 
 			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should return error when unable to remove VMK interface IPs", func() {
+			// given
+			netBoxMock := prepareMockSuccessNoUpdate()
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+				Expect(device.Name).To(Equal("device1"))
+				return []models.Interface{
+					{
+						NestedInterface: models.NestedInterface{ID: 1},
+						Name:            "remoteboard",
+					},
+					{
+						NestedInterface: models.NestedInterface{ID: 2},
+						Name:            "vmk0",
+					},
+				}, nil
+			}
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceFunc = func(ifaceID int) ([]models.IPAddress, error) {
+				Expect(ifaceID).To(Equal(2))
+				return []models.IPAddress{
+					{
+						NestedIPAddress: models.NestedIPAddress{
+							ID:      2,
+							Address: "192.168.0.1",
+						},
+					},
+				}, nil
+			}
+			netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressFunc = func(ipID int) error {
+				Expect(ipID).To(Equal(2))
+				return errors.New("failed to delete IP (2)")
+			}
+
+			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling Update CR")
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(0))
+
+			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to remove vmk interfaces and IPs for device device1: unable to delete IP address (192.168.0.1): failed to delete IP (2)")
+		})
+
+		It("should return error when unable to remove VMK interface", func() {
+			// given
+			netBoxMock := prepareMockSuccessNoUpdate()
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+				Expect(device.Name).To(Equal("device1"))
+				return []models.Interface{
+					{
+						NestedInterface: models.NestedInterface{ID: 1},
+						Name:            "remoteboard",
+					},
+					{
+						NestedInterface: models.NestedInterface{ID: 2},
+						Name:            "vmk0",
+					},
+				}, nil
+			}
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceFunc = func(ifaceID int) ([]models.IPAddress, error) {
+				Expect(ifaceID).To(Equal(2))
+				return []models.IPAddress{
+					{
+						NestedIPAddress: models.NestedIPAddress{ID: 2},
+					},
+				}, nil
+			}
+			netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressFunc = func(ipID int) error {
+				Expect(ipID).To(Equal(2))
+				return nil
+			}
+			netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceFunc = func(ifaceID int) error {
+				Expect(ifaceID).To(Equal(2))
+				return errors.New("failed to delete interface (2)")
+			}
+
+			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling Update CR")
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(1))
+
+			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to remove vmk interfaces and IPs for device device1: unable to delete vmk0 interface: failed to delete interface (2)")
 		})
 	})
 
