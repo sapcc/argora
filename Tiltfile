@@ -1,3 +1,7 @@
+config.define_string("BININFO_BUILD_DATE")
+config.define_string("BININFO_VERSION")
+config.define_string("BININFO_COMMIT_HASH")
+
 def deploy_cert_manager():
     version = "v1.14.4"
     cert_manager_uri = "https://github.com/cert-manager/cert-manager/releases/download/{}/cert-manager.crds.yaml".format(version)
@@ -28,6 +32,8 @@ def deploy_metal_crd():
     local(cmd_bmc, quiet=False)
     local(cmd, quiet=False)
 
+docker_build('argora-dev', '.', build_args={"BININFO_BUILD_DATE": config.parse()['BININFO_BUILD_DATE'], "BININFO_VERSION": config.parse()['BININFO_VERSION'], "BININFO_COMMIT_HASH": config.parse()['BININFO_COMMIT_HASH']})
+
 deploy_cert_manager()
 # deploy_capi_crd()
 deploy_bmo_crd()
@@ -35,5 +41,5 @@ deploy_metal_crd()
 
 k8s_yaml('hack/cluster-api-components.yaml')
 k8s_yaml('hack/cluster.yaml')
-k8s_yaml('dist/install.yaml')
+k8s_yaml('dist/manifest.yaml')
 k8s_yaml('config/samples/argora_v1alpha1_update.yaml')

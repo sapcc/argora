@@ -17,8 +17,8 @@ endif
 
 default: build-all
 
-tilt: FORCE helm-build
-	tilt up --stream
+tilt: FORCE helm-build-local-image
+	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
 ##@ kubebuilder
 
@@ -157,7 +157,7 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 .PHONY: build-installer
 build-installer: manifests gen kustomize
 	mkdir -p templates
-	$(KUSTOMIZE) build config/default > templates/install.yaml
+	$(KUSTOMIZE) build config/default > templates/manifest.yaml
 
 ##@ Deployment
 
@@ -170,14 +170,19 @@ helm-prepare:
 helm-lint: helm helm-prepare build-installer
 	helm lint . -f helm-values.yaml
 
+.PHONY: helm-build-local-image
+helm-build-local-image: helm build-installer
+	mkdir -p dist
+	helm template . -s templates/manifest.yaml -f helm-values.yaml > dist/manifest.yaml
+
 .PHONY: helm-build
 helm-build: helm helm-prepare build-installer
 	mkdir -p dist
-	helm template . -s templates/install.yaml -f helm-values.yaml > dist/install.yaml
+	helm template . -s templates/manifest.yaml -f helm-values.yaml > dist/manifest.yaml
 
 .PHONY: helm-deploy
 helm-deploy: helm helm-prepare build-installer
-	helm template . -s templates/install.yaml -f helm-values.yaml | $(KUBECTL) apply -f -
+	helm template . -s templates/manifest.yaml -f helm-values.yaml | $(KUBECTL) apply -f -
 
 .PHONY: install-crd
 install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.

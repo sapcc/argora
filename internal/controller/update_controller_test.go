@@ -54,7 +54,7 @@ var _ = Describe("Update Controller", func() {
 		"bmcPassword": "cGFzc3dvcmQ="
 	}`
 
-	Context("when reconciling a Update CR", func() {
+	Context("when reconciling an Update CR", func() {
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
@@ -666,7 +666,7 @@ var _ = Describe("Update Controller", func() {
 		})
 	})
 
-	It("should return an error when the Update CR is not found", func() {
+	It("should return an error when an Update CR is not found", func() {
 		// given
 		netBoxMock := &mock.NetBoxMock{
 			ReturnError:        false,

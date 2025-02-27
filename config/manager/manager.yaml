@@ -43,7 +43,7 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: argora-dev #"{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         name: manager
         ports: []
         securityContext:
