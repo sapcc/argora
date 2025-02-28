@@ -1,5 +1,5 @@
-# argora
-netbox discovery for metal3 bare metal hosts
+# Argora
+Provides controllers for 
 
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use

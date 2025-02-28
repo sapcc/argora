@@ -33,6 +33,7 @@ import (
 	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller"
 	"github.com/sapcc/argora/internal/netbox"
+	"github.com/sapcc/argora/internal/status"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -156,7 +157,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = controller.NewUpdateReconciler(mgr, cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+	if err = controller.NewUpdateReconciler(mgr, cfg, status.NewStatusHandler(mgr.GetClient()), netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "update")
 		os.Exit(1)
 	}

@@ -38,6 +38,7 @@ renovate:
     - SchwarzM
     - xsen84
     - goerangudat
+    - videlov
 
 dockerfile:
   enabled: false

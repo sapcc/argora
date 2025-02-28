@@ -19,11 +19,11 @@ import (
 
 type Status interface {
 	UpdateToReady(ctx context.Context, updateCR *argorav1alpha1.Update) error
-	UpdateToError(ctx context.Context, updateCR *argorav1alpha1.Update) error
+	UpdateToError(ctx context.Context, updateCR *argorav1alpha1.Update, err error) error
 	SetCondition(updateCR *argorav1alpha1.Update, reason argorav1alpha1.ReasonWithMessage)
 }
 
-func NewStatusHandler(client client.Client) StatusHandler {
+func NewStatusHandler(client client.Client) Status {
 	return StatusHandler{
 		client: client,
 	}

@@ -18,6 +18,7 @@ import (
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/status"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -686,6 +687,7 @@ func createReconciler(netBoxMock *mock.NetBoxMock, fileReaderMock config.FileRea
 	return &UpdateReconciler{
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
+		statusHandler:     status.NewStatusHandler(k8sClient),
 		netBox:            netBoxMock,
 		cfg:               config.NewDefaultConfiguration(k8sClient, fileReaderMock),
 		reconcileInterval: reconcileInterval,
