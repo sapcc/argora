@@ -172,7 +172,10 @@ export CHART
 
 .PHONY: helm-prepare
 helm-prepare:
-	echo "$$CHART" > helm/Chart.yaml
+	@echo "$$CHART" > helm/Chart.yaml
+
+.PHONY: helm-set-image
+helm-set-image:
 	yq -i '.image.repository = "$(IMG_REPO)"' helm/values.yaml
 	yq -i '.image.tag = "$(IMG_TAG)"' helm/values.yaml
 
@@ -181,17 +184,17 @@ helm-lint: helm helm-prepare build-installer
 	helm lint helm
 
 .PHONY: helm-build-local-image
-helm-build-local-image: helm build-installer
+helm-build-local-image: helm helm-prepare build-installer
 	mkdir -p dist
 	helm template helm -s templates/manifest.yaml > dist/manifest.yaml
 
 .PHONY: helm-build
-helm-build: helm helm-prepare build-installer
+helm-build: helm helm-prepare helm-set-image build-installer
 	mkdir -p dist
 	helm template helm -s templates/manifest.yaml > dist/manifest.yaml
 
 .PHONY: helm-deploy
-helm-deploy: helm helm-prepare build-installer
+helm-deploy: helm helm-prepare helm-set-image build-installer
 	helm template helm -s templates/manifest.yaml | $(KUBECTL) apply -f -
 
 .PHONY: install-crd
