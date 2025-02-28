@@ -128,7 +128,7 @@ Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
 the project, i.e.:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/argora/<tag or branch>/dist/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/sapcc/argora/<tag or branch>/dist/manifest.yaml
 ```
 
 ### By providing a Helm Chart
@@ -151,7 +151,7 @@ is manually re-applied afterwards.
 
 ## Contributing
 
-**NOTE:** Run `make help` for more information on all potential `make` targets
+**NOTE:** Run `make help` and `make help-ext` for more information on all potential `make` targets
 
 ## License
 
