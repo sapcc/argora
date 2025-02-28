@@ -120,7 +120,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxURL, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err
@@ -263,7 +263,7 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (r *Metal3Reconciler) createNetworkDataForDevice(ctx context.Context, netBox netbox.Netbox, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role string, secretName string) error {
+func (r *Metal3Reconciler) createNetworkDataForDevice(ctx context.Context, netBox netbox.Netbox, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role, secretName string) error {
 	iface, err := netBox.DCIM().GetInterfaceForDevice(device, "LAG1")
 	if err != nil {
 		return fmt.Errorf("unable to find interface LAG1 for device %s: %w", device.Name, err)

@@ -2,8 +2,6 @@ module github.com/sapcc/argora
 
 go 1.24
 
-toolchain go1.24.0
-
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.6.1

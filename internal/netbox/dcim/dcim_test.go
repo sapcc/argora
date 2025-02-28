@@ -6,9 +6,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sapcc/argora/internal/netbox/dcim"
 	"github.com/sapcc/go-netbox-go/common"
 	"github.com/sapcc/go-netbox-go/models"
+
+	"github.com/sapcc/argora/internal/netbox/dcim"
 )
 
 func TestConfig(t *testing.T) {
@@ -170,7 +171,7 @@ var _ = Describe("DCIM", func() {
 
 			devices, err := dcimService.GetDevicesByClusterID(1)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(devices).To(HaveLen(0))
+			Expect(devices).To(BeEmpty())
 		})
 	})
 
@@ -311,7 +312,7 @@ var _ = Describe("DCIM", func() {
 
 			ifaces, err := dcimService.GetInterfacesForDevice(&models.Device{ID: 1})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(ifaces).To(HaveLen(0))
+			Expect(ifaces).To(BeEmpty())
 		})
 	})
 
@@ -375,7 +376,7 @@ var _ = Describe("DCIM", func() {
 
 			ifaces, err := dcimService.GetInterfacesByLagID(1)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(ifaces).To(HaveLen(0))
+			Expect(ifaces).To(BeEmpty())
 		})
 	})
 

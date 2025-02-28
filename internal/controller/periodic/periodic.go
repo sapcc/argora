@@ -1,3 +1,4 @@
+// Package periodic provides a periodic runner that sends events at a given interval.
 package periodic
 
 import (

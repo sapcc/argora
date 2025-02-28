@@ -1,15 +1,17 @@
+// Package status provides helper functionality for updating status of a k8s CR
 package status
 
 import (
 	"context"
 	"errors"
 
-	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 )
 
 type Status interface {

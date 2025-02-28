@@ -1,6 +1,4 @@
-// Copyright 2024 SAP SE
-// SPDX-License-Identifier: Apache-2.0
-
+// Package netbox provides user friendly client API to Netbox
 package netbox
 
 import (

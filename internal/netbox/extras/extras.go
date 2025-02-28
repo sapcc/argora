@@ -1,3 +1,4 @@
+// Package extras provides the functionality to interact with the Extras API of Netbox.
 package extras
 
 import (

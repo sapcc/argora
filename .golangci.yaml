@@ -31,10 +31,25 @@ issues:
     - path: "api/*"
       linters:
         - lll
+    - path: "cmd/*"
+      linters:
+        - lll
+        - nolintlint
     - path: "internal/*"
       linters:
-        - dupl
         - lll
+        - dupl
+    - path: "test/*"
+      linters:
+        - errcheck
+        - stylecheck
+        - gocritic
+        - govet
+        - gosec
+        - dupword
+        - errorlint
+        - perfsprint
+        - nolintlint
   # '0' disables the following options.
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -64,7 +79,6 @@ linters-settings:
         msg: "gopk.in/square/go-jose is archived and has CVEs. Replace it with gopkg.in/go-jose/go-jose.v2"
       - pkg: ^github.com/coreos/go-oidc$
         msg: "github.com/coreos/go-oidc depends on gopkg.in/square/go-jose which has CVEs. Replace it with github.com/coreos/go-oidc/v3"
-
       - pkg: ^github.com/howeyc/gopass$
         msg: "github.com/howeyc/gopass is archived, use golang.org/x/term instead"
   goconst:
@@ -180,7 +194,6 @@ linters:
     - sqlclosecheck
     - staticcheck
     - stylecheck
-    - tenv
     - typecheck
     - unconvert
     - unparam

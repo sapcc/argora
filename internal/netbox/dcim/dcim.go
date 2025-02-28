@@ -1,3 +1,4 @@
+// Package dcim provides the functionality to interact with the DCIM API of Netbox.
 package dcim
 
 import (

@@ -1,3 +1,4 @@
+// Package ipam provides the functionality to interact with the IPAM API of Netbox.
 package ipam
 
 import (

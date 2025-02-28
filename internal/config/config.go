@@ -1,6 +1,7 @@
 // Copyright 2024 SAP SE
 // SPDX-License-Identifier: Apache-2.0
 
+// Package config provides functionality to deal with operator configuration
 package config
 
 import (
@@ -21,18 +22,20 @@ type FileReader interface {
 type ConfigReader struct{}
 
 func (f *ConfigReader) ReadFile(fileName string) ([]byte, error) {
-	file, err := os.Open(fileName)
+	file, err := os.Open(fileName) // nolint:gosec
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		err = file.Close()
+	}()
 
 	byteValue, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
 
-	return byteValue, nil
+	return byteValue, err
 }
 
 type Config struct {
@@ -45,7 +48,7 @@ type Config struct {
 	ServerController string `json:"serverController"`
 
 	// /etc/credentials/credentials.json
-	NetboxUrl   string `json:"netboxUrl"`
+	NetboxURL   string `json:"netboxURL"`
 	NetboxToken string `json:"netboxToken"`
 	BMCUser     string `json:"bmcUser"`
 	BMCPassword string `json:"bmcPassword"`
@@ -65,7 +68,7 @@ func (c *Config) Validate() error {
 	if c.ServerController == "" {
 		return errors.New("server controller name is required")
 	}
-	if c.NetboxUrl == "" {
+	if c.NetboxURL == "" {
 		return errors.New("netbox URL is required")
 	}
 	if c.NetboxToken == "" {
@@ -81,13 +84,13 @@ func (c *Config) Validate() error {
 }
 
 func (c *Config) Reload() error {
-	if err := c.readJsonAndUnmarshal("/etc/config/config.json"); err != nil {
+	if err := c.readJSONAndUnmarshal("/etc/config/config.json"); err != nil {
 		return fmt.Errorf("unable to read config.json: %w", err)
 	}
-	if err := c.readJsonAndUnmarshal("/etc/credentials/credentials.json"); err != nil {
+	if err := c.readJSONAndUnmarshal("/etc/credentials/credentials.json"); err != nil {
 		return fmt.Errorf("unable to read credentials.json: %w", err)
 	} else {
-		if c.NetboxUrl, err = decodeBase64(c.NetboxUrl); err != nil {
+		if c.NetboxURL, err = decodeBase64(c.NetboxURL); err != nil {
 			return err
 		}
 
@@ -106,7 +109,7 @@ func (c *Config) Reload() error {
 	return c.Validate()
 }
 
-func (c *Config) readJsonAndUnmarshal(fileName string) error {
+func (c *Config) readJSONAndUnmarshal(fileName string) error {
 	byteValue, err := c.reader.ReadFile(fileName)
 	if err != nil {
 		return err

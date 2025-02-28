@@ -23,12 +23,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sapcc/go-netbox-go/models"
+	"golang.org/x/time/rate"
+
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/status"
-	"github.com/sapcc/go-netbox-go/models"
-	"golang.org/x/time/rate"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
@@ -100,7 +101,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	logger.Info("configuration reloaded", "config", r.cfg)
 
-	err = r.netBox.Reload(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	err = r.netBox.Reload(r.cfg.NetboxURL, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to reload netbox")
 		return ctrl.Result{}, err
@@ -122,7 +123,9 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			logger.Error(err, "unable to find clusters", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 
 			statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
-			statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile cluster: %w", err))
+			if err = statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile cluster: %w", err)); err != nil {
+				return ctrl.Result{}, err
+			}
 
 			return ctrl.Result{}, err
 		}
@@ -132,7 +135,9 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 
 			statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
-			statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile devices on cluster %s (%d): %w", cluster.Name, cluster.ID, err))
+			if err = statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile devices on cluster %s (%d): %w", cluster.Name, cluster.ID, err)); err != nil {
+				return ctrl.Result{}, err
+			}
 
 			return ctrl.Result{}, err
 		}
@@ -143,7 +148,9 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				logger.Error(err, "unable to reconcile device", "cluster", cluster.Name, "clusterID", cluster.ID, "device", device.Name, "deviceID", device.ID)
 
 				statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
-				statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err))
+				if err = statusHandler.UpdateToError(ctx, updateCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err)); err != nil {
+					return ctrl.Result{}, err
+				}
 
 				return ctrl.Result{}, err
 			}
@@ -151,7 +158,9 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateSucceeded))
-	statusHandler.UpdateToReady(ctx, updateCR)
+	if err = statusHandler.UpdateToReady(ctx, updateCR); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }

@@ -1,3 +1,4 @@
+// Package virtualization provides the functionality to interact with the Virtualization API of Netbox.
 package virtualization
 
 import (

@@ -7,9 +7,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sapcc/argora/internal/netbox/extras"
 	"github.com/sapcc/go-netbox-go/common"
 	"github.com/sapcc/go-netbox-go/models"
+
+	"github.com/sapcc/argora/internal/netbox/extras"
 )
 
 func TestConfig(t *testing.T) {

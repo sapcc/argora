@@ -1,6 +1,7 @@
 // Copyright 2024 SAP SE
 // SPDX-License-Identifier: Apache-2.0
 
+// Package networkdata provides constants and variables for metal3 controller
 package networkdata
 
 import "encoding/json"

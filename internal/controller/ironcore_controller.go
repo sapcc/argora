@@ -1,6 +1,7 @@
 // Copyright 2024 SAP SE
 // SPDX-License-Identifier: Apache-2.0
 
+// Package controller contains Argora operator controllers
 package controller
 
 import (
@@ -12,9 +13,6 @@ import (
 	"time"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
-	"github.com/sapcc/argora/internal/config"
-	"github.com/sapcc/argora/internal/controller/periodic"
-	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-netbox-go/models"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,6 +25,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/sapcc/argora/internal/config"
+	"github.com/sapcc/argora/internal/controller/periodic"
+	"github.com/sapcc/argora/internal/netbox"
 )
 
 const (
@@ -97,7 +99,7 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxUrl, r.cfg.NetboxToken)
+	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxURL, r.cfg.NetboxToken)
 	if err != nil {
 		logger.Error(err, "unable to create netbox client")
 		return ctrl.Result{}, err

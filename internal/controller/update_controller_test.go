@@ -26,10 +26,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/sapcc/go-netbox-go/models"
+
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller/mock"
-	"github.com/sapcc/go-netbox-go/models"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

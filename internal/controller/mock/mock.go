@@ -1,13 +1,15 @@
+// Package mock provides mock implementations for the netbox client and its services.
 package mock
 
 import (
 	"errors"
 
+	"github.com/sapcc/go-netbox-go/models"
+
 	"github.com/sapcc/argora/internal/netbox/dcim"
 	"github.com/sapcc/argora/internal/netbox/extras"
 	"github.com/sapcc/argora/internal/netbox/ipam"
 	"github.com/sapcc/argora/internal/netbox/virtualization"
-	"github.com/sapcc/go-netbox-go/models"
 )
 
 type FileReaderMock struct {
