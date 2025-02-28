@@ -182,33 +182,43 @@ verbatim: |
 
   .PHONY: build-installer
   build-installer: manifests gen kustomize
-    mkdir -p templates
-    $(KUSTOMIZE) build config/default > templates/manifest.yaml
+    mkdir -p helm/templates
+    $(KUSTOMIZE) build config/default > helm/templates/manifest.yaml
 
   ##@ Deployment
 
+  define CHART
+  apiVersion: v2
+  name: argora
+  type: application
+  version: 0.0.1
+  appVersion: 0.0.1
+  endef
+  export CHART
+
   .PHONY: helm-prepare
   helm-prepare:
-    yq -i '.image.repository = "$(IMG_REPO)"' helm-values.yaml
-    yq -i '.image.tag = "$(IMG_TAG)"' helm-values.yaml
+    echo "$$CHART" > helm/Chart.yaml
+    yq -i '.image.repository = "$(IMG_REPO)"' helm/values.yaml
+    yq -i '.image.tag = "$(IMG_TAG)"' helm/values.yaml
 
   .PHONY: helm-lint
   helm-lint: helm helm-prepare build-installer
-    helm lint . -f helm-values.yaml
+    helm lint helm
 
   .PHONY: helm-build-local-image
   helm-build-local-image: helm build-installer
     mkdir -p dist
-    helm template . -s templates/manifest.yaml -f helm-values.yaml > dist/manifest.yaml
+    helm template helm -s templates/manifest.yaml > dist/manifest.yaml
 
   .PHONY: helm-build
   helm-build: helm helm-prepare build-installer
     mkdir -p dist
-    helm template . -s templates/manifest.yaml -f helm-values.yaml > dist/manifest.yaml
+    helm template helm -s templates/manifest.yaml > dist/manifest.yaml
 
   .PHONY: helm-deploy
   helm-deploy: helm helm-prepare build-installer
-    helm template . -s templates/manifest.yaml -f helm-values.yaml | $(KUBECTL) apply -f -
+    helm template helm -s templates/manifest.yaml | $(KUBECTL) apply -f -
 
   .PHONY: install-crd
   install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.

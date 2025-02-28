@@ -27,8 +27,7 @@ go.work
 *~
 
 # custom
-helm-values.yaml
-templates/
+hack/cluster.yaml
+helm/
 dist/
 build/
-hack/cluster.yaml
