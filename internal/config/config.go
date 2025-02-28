@@ -22,7 +22,7 @@ type FileReader interface {
 type ConfigReader struct{}
 
 func (f *ConfigReader) ReadFile(fileName string) ([]byte, error) {
-	file, err := os.Open(fileName) // nolint:gosec
+	file, err := os.Open(fileName) //nolint:gosec
 	if err != nil {
 		return nil, err
 	}
