@@ -1,3 +1,6 @@
+// Copyright 2025 SAP SE
+// SPDX-License-Identifier: Apache-2.0
+
 // Package extras provides the functionality to interact with the Extras API of Netbox.
 package extras
 

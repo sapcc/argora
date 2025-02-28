@@ -1,3 +1,6 @@
+// Copyright 2025 SAP SE
+// SPDX-License-Identifier: Apache-2.0
+
 // Package periodic provides a periodic runner that sends events at a given interval.
 package periodic
 
