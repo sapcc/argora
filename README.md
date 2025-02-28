@@ -1,8 +1,9 @@
 # Argora
-Provides controllers for 
+Contains controllers that provide custom Kubernetes resources for Metal3 and IronCore metal operator using Netbox as the source of truth.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+
+Argora is a Kubernetes operator designed to manage Metal3 and IronCore resources using Netbox as the authoritative source of truth. It simplifies the process of provisioning and managing bare metal servers by integrating with Netbox for inventory and configuration management. The operator ensures that the desired state of the infrastructure is maintained by continuously reconciling the actual state with the declared state in Kubernetes custom resources.
 
 ## Getting Started
 
@@ -13,10 +14,48 @@ Provides controllers for
 - Access to a Kubernetes v1.11.3+ cluster.
 
 ### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+
+#### Using Tilt
+
+Helm is used to Template manifest of the operators. You need to provide `helm` values under `helm/values.yaml` in the following format:
+
+```yaml
+image:
+  repository: "docker.io/xxx/argora"
+  tag: "0.0.1"
+ironcore_roles: "cc-kvm-compute"
+ironcore_region: "qa-de-1"
+controller: "ironcore"
+netbox:
+  url: "https://netbox-test.global.cloud.sap/"
+  token: "xxx"
+bmc:
+  username: "foo"
+  password: "bat"
+```
+
+**Run on dev cluster**
+
+Install `kind` if needed:
+
+```bash
+kind create cluster -n kind
+```
+
+Start `tilt`:
+
+```bash
+make tilt
+```
+
+#### Using various Kubernetes cluster
+
+**Build and push your image to the location specified by `IMG_REPO` and `IMG_TAG` environment variables:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/argora:tag
+export IMG_REPO=<some-registry>/argora
+export IMG_TAG=<tag>
+make docker-build docker-push
 ```
 
 **NOTE:** This image ought to be published in the personal registry you specified.
@@ -111,11 +150,8 @@ previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml
 is manually re-applied afterwards.
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
 
 ## License
 
