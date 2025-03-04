@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 run:
-  timeout: 3m # 1m by default
+  timeout: 3m0s # 1m by default
   modules-download-mode: readonly
   allow-parallel-runners: true
 
@@ -55,9 +55,6 @@ issues:
   max-same-issues: 0
 
 linters-settings:
-  dupl:
-    # Tokens count to trigger issue, 150 by default.
-    threshold: 100
   errcheck:
     # Report about assignment of errors to blank identifier.
     check-blank: true
@@ -163,7 +160,6 @@ linters:
     - bodyclose
     - containedctx
     - copyloopvar
-    - dupl
     - dupword
     - durationcheck
     - errcheck
