@@ -9,6 +9,7 @@
 run:
   timeout: 3m0s # 1m by default
   modules-download-mode: readonly
+  allow-parallel-runners: true
 
 output:
   # Do not print lines of code with issue.
@@ -19,10 +20,36 @@ issues:
     # It is idiomatic Go to reuse the name 'err' with ':=' for subsequent errors.
     # Ref: https://go.dev/doc/effective_go#redeclaration
     - 'declaration of "err" shadows declaration at'
+  # don't skip warning about doc comments
+  # don't exclude the default set of lint
+  exclude-use-default: false
   exclude-rules:
     - path: _test\.go
       linters:
         - bodyclose
+        - dupl
+    - path: "api/*"
+      linters:
+        - lll
+    - path: "cmd/*"
+      linters:
+        - lll
+        - nolintlint
+    - path: "internal/*"
+      linters:
+        - lll
+        - dupl
+    - path: "test/*"
+      linters:
+        - errcheck
+        - stylecheck
+        - gocritic
+        - govet
+        - gosec
+        - dupword
+        - errorlint
+        - perfsprint
+        - nolintlint
   # '0' disables the following options.
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -49,7 +76,6 @@ linters-settings:
         msg: "gopk.in/square/go-jose is archived and has CVEs. Replace it with gopkg.in/go-jose/go-jose.v2"
       - pkg: ^github.com/coreos/go-oidc$
         msg: "github.com/coreos/go-oidc depends on gopkg.in/square/go-jose which has CVEs. Replace it with github.com/coreos/go-oidc/v3"
-
       - pkg: ^github.com/howeyc/gopass$
         msg: "github.com/howeyc/gopass is archived, use golang.org/x/term instead"
   goconst:
@@ -103,7 +129,6 @@ linters-settings:
     require-specific: true
   stylecheck:
     dot-import-whitelist:
-      - github.com/majewsky/gg/option
       - github.com/onsi/ginkgo/v2
       - github.com/onsi/gomega
   usestdlibvars:
@@ -118,10 +143,14 @@ linters-settings:
     time-weekday: true
     tls-signature-scheme: true
   usetesting:
+    os-setenv: true
     os-temp-dir: true
   whitespace:
     # Enforce newlines (or comments) after multi-line function signatures.
     multi-func: true
+  revive:
+    rules:
+      - name: comment-spacings
 
 linters:
   # We use 'disable-all' and enable linters explicitly so that a newer version
@@ -168,3 +197,8 @@ linters:
     - usestdlibvars
     - usetesting
     - whitespace
+    - gocyclo
+    - lll
+    - nakedret
+    - prealloc
+    - revive

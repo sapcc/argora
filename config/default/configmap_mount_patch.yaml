@@ -1,0 +1,13 @@
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: config-volume
+    configMap:
+      name: config
+
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    name: config-volume
+    mountPath: /etc/config
+    readOnly: true

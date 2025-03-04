@@ -35,13 +35,11 @@ def deploy_metal_crd():
 docker_build('argora-dev', '.', build_args={"BININFO_BUILD_DATE": config.parse()['BININFO_BUILD_DATE'], "BININFO_VERSION": config.parse()['BININFO_VERSION'], "BININFO_COMMIT_HASH": config.parse()['BININFO_COMMIT_HASH']})
 
 deploy_cert_manager()
-#deploy_capi_crd()
+# deploy_capi_crd()
 deploy_bmo_crd()
 deploy_metal_crd()
 
-k8s_yaml('deployments/cluster-api-components.yaml')
-k8s_yaml('config/rbac/role.yaml')
-k8s_yaml('deployments/argora.yaml')
-k8s_yaml('deployments/cluster.yaml')
-k8s_yaml('deployments/secret.yaml')
-
+k8s_yaml('hack/cluster-api-components.yaml')
+k8s_yaml('hack/cluster.yaml')
+k8s_yaml('dist/manifest.yaml')
+k8s_yaml('config/samples/argora_v1alpha1_update.yaml')
