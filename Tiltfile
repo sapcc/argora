@@ -32,7 +32,7 @@ def deploy_metal_crd():
     local(cmd_bmc, quiet=False)
     local(cmd, quiet=False)
 
-docker_build('argora-dev', '.', build_args={"BININFO_BUILD_DATE": config.parse()['BININFO_BUILD_DATE'], "BININFO_VERSION": config.parse()['BININFO_VERSION'], "BININFO_COMMIT_HASH": config.parse()['BININFO_COMMIT_HASH']})
+docker_build('controller:latest', '.', build_args={"BININFO_BUILD_DATE": config.parse()['BININFO_BUILD_DATE'], "BININFO_VERSION": config.parse()['BININFO_VERSION'], "BININFO_COMMIT_HASH": config.parse()['BININFO_COMMIT_HASH']})
 
 deploy_cert_manager()
 # deploy_capi_crd()
