@@ -22,16 +22,20 @@ Helm is used to Template manifest of the operators. You need to provide `helm` v
 ```yaml
 image:
   repository: "docker.io/xxx/argora"
-  tag: "0.0.1"
-ironcore_roles: "cc-kvm-compute"
-ironcore_region: "qa-de-1"
-controller: "ironcore"
-netbox:
-  url: "https://netbox-test.global.cloud.sap/"
-  token: "xxx"
-bmc:
-  username: "foo"
-  password: "bat"
+  tag: "0.0.x"
+configJson: |-
+  {
+    "ironCoreRoles": "cc-kvm-compute",
+    "ironCoreRegion": "qa-de-1",
+    "serverController": "ironcore"
+  }
+credentialsJson: |-
+  {
+    "netboxURL": "<base64enc_value>",
+    "netboxToken": "<base64enc_value>",
+    "bmcUser": "<base64enc_value>",
+    "bmcPassword": "<base64enc_value>"
+  }
 ```
 
 **Run on dev cluster**
