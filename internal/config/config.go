@@ -46,12 +46,12 @@ type Config struct {
 	IronCoreRoles    string `json:"ironCoreRoles"`
 	IronCoreRegion   string `json:"ironCoreRegion"`
 	ServerController string `json:"serverController"`
+	NetboxURL        string `json:"netboxURL"`
 
 	// /etc/credentials/credentials.json
-	NetboxURL   string `json:"netboxURL"`
-	NetboxToken string `json:"netboxToken"`
-	BMCUser     string `json:"bmcUser"`
-	BMCPassword string `json:"bmcPassword"`
+	BMCUser     string `json:"bmcUser"`     // base64 encoded
+	BMCPassword string `json:"bmcPassword"` // base64 encoded
+	NetboxToken string `json:"netboxToken"` // base64 encoded
 }
 
 func NewDefaultConfiguration(client client.Client, configReader FileReader) *Config {
@@ -71,14 +71,14 @@ func (c *Config) Validate() error {
 	if c.NetboxURL == "" {
 		return errors.New("netbox URL is required")
 	}
-	if c.NetboxToken == "" {
-		return errors.New("netbox token is required")
-	}
 	if c.BMCUser == "" {
 		return errors.New("bmc user is required")
 	}
 	if c.BMCPassword == "" {
 		return errors.New("bmc password is required")
+	}
+	if c.NetboxToken == "" {
+		return errors.New("netbox token is required")
 	}
 	return nil
 }
@@ -90,19 +90,15 @@ func (c *Config) Reload() error {
 	if err := c.readJSONAndUnmarshal("/etc/credentials/credentials.json"); err != nil {
 		return fmt.Errorf("unable to read credentials.json: %w", err)
 	} else {
-		if c.NetboxURL, err = decodeBase64(c.NetboxURL); err != nil {
-			return err
-		}
-
-		if c.NetboxToken, err = decodeBase64(c.NetboxToken); err != nil {
-			return err
-		}
-
 		if c.BMCUser, err = decodeBase64(c.BMCUser); err != nil {
 			return err
 		}
 
 		if c.BMCPassword, err = decodeBase64(c.BMCPassword); err != nil {
+			return err
+		}
+
+		if c.NetboxToken, err = decodeBase64(c.NetboxToken); err != nil {
 			return err
 		}
 	}
