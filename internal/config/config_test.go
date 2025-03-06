@@ -28,10 +28,11 @@ var _ = Describe("Config", func() {
 		cfg.IronCoreRoles = "role1"
 		cfg.IronCoreRegion = "region1"
 		cfg.ServerController = "controller1"
-		cfg.NetboxURL = "aHR0cDovL25ldGJveA=="
-		cfg.NetboxToken = "InRva2VuIg=="
+		cfg.NetboxURL = "http://netbox"
+
 		cfg.BMCUser = "dXNlcg=="
 		cfg.BMCPassword = "cGFzc3dvcmQ="
+		cfg.NetboxToken = "InRva2VuIg=="
 	})
 
 	Describe("Validate", func() {
@@ -176,13 +177,13 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1"
+				"serverController": "controller1",
+				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
-				"netboxUrl": "aHR0cDovL25ldGJveA==",
-				"netboxToken": "dG9rZW4=",
 				"bmcUser": "dXNlcg==",
-				"bmcPassword": "cGFzc3dvcmQ="
+				"bmcPassword": "cGFzc3dvcmQ=",
+				"netboxToken": "dG9rZW4="
 			}`
 
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
@@ -197,9 +198,10 @@ var _ = Describe("Reload", func() {
 			Expect(cfg.IronCoreRegion).To(Equal("region1"))
 			Expect(cfg.ServerController).To(Equal("controller1"))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
-			Expect(cfg.NetboxToken).To(Equal("token"))
+
 			Expect(cfg.BMCUser).To(Equal("user"))
 			Expect(cfg.BMCPassword).To(Equal("password"))
+			Expect(cfg.NetboxToken).To(Equal("token"))
 		})
 	})
 
@@ -207,10 +209,10 @@ var _ = Describe("Reload", func() {
 		It("should return an error", func() {
 			// given
 			credentialsJson := `{
-				"netboxUrl": "aHR0cDovL25ldGJveA==",
-				"netboxToken": "dG9rZW4=",
-				"bmcUser": "user",
-				"bmcPassword": "cGFzsword	}`
+				"bmcUser": "dXNlcg==",
+				"bmcPassword": "cGFzc3dvcmQ=",
+				"netboxToken": "dG9rZW4="
+			}`
 
 			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
 
@@ -229,7 +231,8 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1"
+				"serverController": "controller1",
+				"netboxUrl": "http://netbox"
 			}`
 
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
@@ -248,10 +251,9 @@ var _ = Describe("Reload", func() {
 			// given
 			configJson := `a`
 			credentialsJson := `{
-				"netboxUrl": "aHR0cDovL25ldGJveA==",
-				"netboxToken": "InRva2VuIg==",
 				"bmcUser": "dXNlcg==",
-				"bmcPassword": "cGFzc3dvcmQ="
+				"bmcPassword": "cGFzc3dvcmQ=",
+				"netboxToken": "InRva2VuIg=="
 			}`
 
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
@@ -272,7 +274,8 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1"
+				"serverController": "controller1",
+				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `b`
 
@@ -306,13 +309,13 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1"
+				"serverController": "controller1",
+				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
-				"netboxUrl": "not_base64",
-				"netboxToken": "dG9rZW4=",
-				"bmcUser": "dXNlcg==",
-				"bmcPassword": "cGFzc3dvcmQ="
+				"bmcUser": "not_base64",
+				"bmcPassword": "cGFzc3dvcmQ=",
+				"netboxToken": "dG9rZW4="
 			}`
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
 			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
@@ -332,13 +335,13 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1"
+				"serverController": "controller1",
+				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
-				"netboxUrl": "aHR0cDovL25ldGJveA==",
-				"netboxToken": "not_base64",
 				"bmcUser": "dXNlcg==",
-				"bmcPassword": "cGFzc3dvcmQ="
+				"bmcPassword": "cGFzc3dvcmQ=",
+				"netboxToken": "not_base64"
 			}`
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
 			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
@@ -358,13 +361,13 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1"
+				"serverController": "controller1",
+				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
-				"netboxUrl": "aHR0cDovL25ldGJveA==",
-				"netboxToken": "dG9rZW4=",
 				"bmcUser": "not_base64",
-				"bmcPassword": "cGFzc3dvcmQ="
+				"bmcPassword": "cGFzc3dvcmQ=",
+				"netboxToken": "dG9rZW4="
 			}`
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
 			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
@@ -384,13 +387,13 @@ var _ = Describe("Reload", func() {
 			configJson := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1"
+				"serverController": "controller1",
+				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
-				"netboxUrl": "aHR0cDovL25ldGJveA==",
-				"netboxToken": "dG9rZW4=",
 				"bmcUser": "dXNlcg==",
-				"bmcPassword": "not_base64"
+				"bmcPassword": "not_base64",
+				"netboxToken": "dG9rZW4="
 			}`
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
 			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
@@ -424,13 +427,13 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 			configJsonContent := `{
 				"ironCoreRoles": "role1",
 				"ironCoreRegion": "region1",
-				"serverController": "controller1"
+				"serverController": "controller1",
+				"netboxUrl": "http://netbox"
 			}`
 			credentialsJsonContent := `{
-				"netboxUrl": "aHR0cDovL25ldGJveA==",
-				"netboxToken": "dG9rZW4=",
 				"bmcUser": "dXNlcg==",
-				"bmcPassword": "cGFzc3dvcmQ="
+				"bmcPassword": "cGFzc3dvcmQ=",
+				"netboxToken": "dG9rZW4="
 			}`
 			fileReaderMock.fileContent["/etc/config/config.json"] = configJsonContent
 			fileReaderMock.fileContent["/etc/config/credentials.json"] = credentialsJsonContent
@@ -443,16 +446,16 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 			Expect(cfg.IronCoreRoles).To(Equal("role1"))
 			Expect(cfg.IronCoreRegion).To(Equal("region1"))
 			Expect(cfg.ServerController).To(Equal("controller1"))
+			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 
 			// when
 			err = cfg.readJSONAndUnmarshal("/etc/config/credentials.json")
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.NetboxURL).To(Equal("aHR0cDovL25ldGJveA=="))
-			Expect(cfg.NetboxToken).To(Equal("dG9rZW4="))
 			Expect(cfg.BMCUser).To(Equal("dXNlcg=="))
 			Expect(cfg.BMCPassword).To(Equal("cGFzc3dvcmQ="))
+			Expect(cfg.NetboxToken).To(Equal("dG9rZW4="))
 		})
 	})
 
