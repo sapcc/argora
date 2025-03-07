@@ -5,8 +5,8 @@ go 1.24
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.6.1
-	github.com/sapcc/go-api-declarations v1.13.2
-	github.com/sapcc/go-netbox-go v0.0.0-20250129123048-0e8a4aac7696
+	github.com/sapcc/go-api-declarations v1.14.0
+	github.com/sapcc/go-netbox-go v0.0.0-20250219092905-3a11a9ca5f56
 	k8s.io/api v0.31.4
 	sigs.k8s.io/cluster-api v1.7.2
 	sigs.k8s.io/controller-runtime v0.19.4
