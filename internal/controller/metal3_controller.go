@@ -134,6 +134,8 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	clusterType := capiCluster.Labels[ClusterRoleLabel]
+	logger.Info("reconciling cluster", "name", capiCluster.Name, "type", clusterType)
+
 	cluster, err := netBox.Virtualization().GetClusterByNameRegionType(capiCluster.Name, "", clusterType)
 	if err != nil {
 		logger.Error(err, "unable to find cluster in netbox", "name", capiCluster.Name, "type", clusterType)
@@ -154,7 +156,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
-	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil // TODO: should we reconcile in a fixed interval?
+	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
 func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
@@ -168,7 +170,7 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 
 	bmh := &bmov1alpha1.BareMetalHost{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh); err == nil {
-		logger.Info("host already exists", "host", bmh.Name)
+		logger.Info("BareMetalHost custom resource already exists, will skip", "host", bmh.Name)
 		return nil
 	}
 
@@ -189,7 +191,7 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 
 	mac, err := getMacForIP(netBox, device.PrimaryIP4.Address)
 	if err != nil {
-		logger.Info("unable to lookup mac for ip", err)
+		logger.Info("unable to lookup mac for ip", "error", err)
 		mac = ""
 	}
 
@@ -206,6 +208,8 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 	if err = r.k8sClient.Create(ctx, bmcSecret); err != nil {
 		return fmt.Errorf("unable to upload bmc secret: %w", err)
 	}
+
+	logger.Info("created BMC Secret resource", "name", bmcSecret.Name)
 
 	role, err := getRoleFromTags(device)
 	if err != nil {
@@ -255,9 +259,13 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 		return fmt.Errorf("unable to create baremetal host: %w", err)
 	}
 
+	logger.Info("created BareMetalHost custom resource", "name", bareMetalHost.Name)
+
 	if err = r.createNetworkDataForDevice(ctx, netBox, bareMetalHost, cluster, device, role, secretName); err != nil {
 		return fmt.Errorf("unable to create network data: %w", err)
 	}
+
+	logger.Info("created NetworkData Secret resource", "name", secretName)
 
 	return nil
 }
@@ -439,6 +447,10 @@ func getMacForIP(netBox netbox.Netbox, ipAddress string) (string, error) {
 	lagIfaces, err := netBox.DCIM().GetInterfacesByLagID(assignedIface.ID)
 	if err != nil {
 		return "", err
+	}
+
+	if len(lagIfaces) == 0 {
+		return "", errors.New("no LAG interfaces found")
 	}
 
 	macs := make(map[string]string)

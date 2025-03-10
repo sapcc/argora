@@ -32,15 +32,15 @@ var _ = Describe("Update Controller", func() {
 		ReturnError: false,
 	}
 	fileReaderMock.FileContent["/etc/config/config.json"] = `{
-		"ironCoreRoles": "role1",
+		"serverController": "ironcore",
+		"ironCoreTypes": "role1",
 		"ironCoreRegion": "region1",
-		"serverController": "ironcore"
+		"netboxUrl": "http://netbox"
 	}`
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
-		"netboxUrl": "aHR0cDovL25ldGJveA==",
-		"netboxToken": "dG9rZW4=",
-		"bmcUser": "dXNlcg==",
-		"bmcPassword": "cGFzc3dvcmQ="
+		"bmcUser": "user",
+		"bmcPassword": "password",
+		"netboxToken": "token"
 	}`
 
 	Context("when reconciling an Update CR", func() {

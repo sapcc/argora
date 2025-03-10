@@ -105,19 +105,21 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	var roles []string
-	if r.cfg.IronCoreRoles != "" {
-		roles = strings.Split(r.cfg.IronCoreRoles, ",")
+	var clusterTypes []string
+	if r.cfg.IronCoreTypes != "" {
+		clusterTypes = strings.Split(r.cfg.IronCoreTypes, ",")
 	}
 
-	for _, role := range roles {
-		logger.Info("reconciling IronCore cluster role " + role + " in " + r.cfg.IronCoreRegion)
+	for _, clusterType := range clusterTypes {
+		logger.Info("reconciling IronCore clusters", "type", clusterType, "region", r.cfg.IronCoreRegion)
 
-		cluster, err := netBox.Virtualization().GetClusterByNameRegionType("", r.cfg.IronCoreRegion, role)
+		cluster, err := netBox.Virtualization().GetClusterByNameRegionType("", r.cfg.IronCoreRegion, clusterType)
 		if err != nil {
-			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", role)
+			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", clusterType)
 			return ctrl.Result{}, err
 		}
+
+		logger.Info("reconciling cluster", "cluster", cluster.Name, "ID", cluster.ID)
 
 		devices, err := netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 		if err != nil {
@@ -142,13 +144,13 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
 	if device.Status.Value != "active" {
-		logger.Info("device is not active", "status", device.Status.Value)
+		logger.Info("device is not active, will skip", "status", device.Status.Value)
 		return nil
 	}
 
 	bmcObj := &metalv1alpha1.BMC{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: defaultNamespace}, bmcObj); err == nil {
-		logger.Info("bmc already exists", "bmc", device.Name)
+		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
 		return nil
 	}
 
@@ -182,10 +184,14 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		return fmt.Errorf("unable to create bmc secret: %w", err)
 	}
 
+	logger.Info("created BMC Secret resource", "name", bmcSecret.Name)
+
 	bmc, err := r.createBmc(ctx, device, oobIP, bmcSecret, commonLabels)
 	if err != nil {
 		return fmt.Errorf("unable to create bmc: %w", err)
 	}
+
+	logger.Info("created BMC custom resource", "name", bmc.Name)
 
 	if err := r.setOwnerReferenceAndPatch(ctx, bmc, bmcSecret); err != nil {
 		return err
