@@ -5,7 +5,6 @@
 package config
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,9 +48,9 @@ type Config struct {
 	NetboxURL        string `json:"netboxURL"`
 
 	// /etc/credentials/credentials.json
-	BMCUser     string `json:"bmcUser"`     // base64 encoded
-	BMCPassword string `json:"bmcPassword"` // base64 encoded
-	NetboxToken string `json:"netboxToken"` // base64 encoded
+	BMCUser     string `json:"bmcUser"`
+	BMCPassword string `json:"bmcPassword"`
+	NetboxToken string `json:"netboxToken"`
 }
 
 func NewDefaultConfiguration(client client.Client, configReader FileReader) *Config {
@@ -89,18 +88,6 @@ func (c *Config) Reload() error {
 	}
 	if err := c.readJSONAndUnmarshal("/etc/credentials/credentials.json"); err != nil {
 		return fmt.Errorf("unable to read credentials.json: %w", err)
-	} else {
-		if c.BMCUser, err = decodeBase64(c.BMCUser); err != nil {
-			return err
-		}
-
-		if c.BMCPassword, err = decodeBase64(c.BMCPassword); err != nil {
-			return err
-		}
-
-		if c.NetboxToken, err = decodeBase64(c.NetboxToken); err != nil {
-			return err
-		}
 	}
 	return c.Validate()
 }
@@ -116,9 +103,4 @@ func (c *Config) readJSONAndUnmarshal(fileName string) error {
 	}
 
 	return nil
-}
-
-func decodeBase64(message string) (string, error) {
-	bytes, err := base64.StdEncoding.DecodeString(message)
-	return string(bytes), err
 }
