@@ -25,9 +25,9 @@ var _ = Describe("Config", func() {
 		client := fake.NewClientBuilder().Build()
 		cfg = NewDefaultConfiguration(client, &ConfigReader{})
 
-		cfg.IronCoreRoles = "role1"
-		cfg.IronCoreRegion = "region1"
 		cfg.ServerController = "controller1"
+		cfg.IronCoreTypes = "type1"
+		cfg.IronCoreRegion = "region1"
 		cfg.NetboxURL = "http://netbox"
 
 		cfg.BMCUser = "user"
@@ -46,17 +46,31 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("when IronCoreRoles is empty", func() {
+		Context("when ServerController is empty", func() {
 			It("should return an error", func() {
 				// given
-				cfg.IronCoreRoles = ""
+				cfg.ServerController = ""
 
 				// when
 				err := cfg.Validate()
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("ironcore roles are required"))
+				Expect(err).To(MatchError("server controller name is required"))
+			})
+		})
+
+		Context("when IronCoreTypes is empty", func() {
+			It("should return an error", func() {
+				// given
+				cfg.IronCoreTypes = ""
+
+				// when
+				err := cfg.Validate()
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("ironcore types are required"))
 			})
 		})
 
@@ -74,20 +88,6 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("when ServerController is empty", func() {
-			It("should return an error", func() {
-				// given
-				cfg.ServerController = ""
-
-				// when
-				err := cfg.Validate()
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("server controller name is required"))
-			})
-		})
-
 		Context("when NetboxURL is empty", func() {
 			It("should return an error", func() {
 				// given
@@ -99,20 +99,6 @@ var _ = Describe("Config", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("netbox URL is required"))
-			})
-		})
-
-		Context("when NetboxToken is empty", func() {
-			It("should return an error", func() {
-				// given
-				cfg.NetboxToken = ""
-
-				// when
-				err := cfg.Validate()
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("netbox token is required"))
 			})
 		})
 
@@ -141,6 +127,20 @@ var _ = Describe("Config", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("bmc password is required"))
+			})
+		})
+
+		Context("when NetboxToken is empty", func() {
+			It("should return an error", func() {
+				// given
+				cfg.NetboxToken = ""
+
+				// when
+				err := cfg.Validate()
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("netbox token is required"))
 			})
 		})
 	})
@@ -175,9 +175,9 @@ var _ = Describe("Reload", func() {
 		It("should not return an error", func() {
 			// given
 			configJson := `{
-				"ironCoreRoles": "role1",
-				"ironCoreRegion": "region1",
 				"serverController": "controller1",
+				"ironCoreTypes": "type1",
+				"ironCoreRegion": "region1",
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
@@ -194,9 +194,9 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.IronCoreRoles).To(Equal("role1"))
-			Expect(cfg.IronCoreRegion).To(Equal("region1"))
 			Expect(cfg.ServerController).To(Equal("controller1"))
+			Expect(cfg.IronCoreTypes).To(Equal("type1"))
+			Expect(cfg.IronCoreRegion).To(Equal("region1"))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 
 			Expect(cfg.BMCUser).To(Equal("user"))
@@ -229,9 +229,9 @@ var _ = Describe("Reload", func() {
 		It("should return an error", func() {
 			// given
 			configJson := `{
-				"ironCoreRoles": "role1",
-				"ironCoreRegion": "region1",
 				"serverController": "controller1",
+				"ironCoreTypes": "type1",
+				"ironCoreRegion": "region1",
 				"netboxUrl": "http://netbox"
 			}`
 
@@ -272,9 +272,9 @@ var _ = Describe("Reload", func() {
 		It("should return an error", func() {
 			// given
 			configJson := `{
-				"ironCoreRoles": "role1",
-				"ironCoreRegion": "region1",
 				"serverController": "controller1",
+				"ironCoreTypes": "type1",
+				"ironCoreRegion": "region1",
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `b`
@@ -321,9 +321,9 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 		It("should unmarshal the JSON and decode base64 fields", func() {
 			// given
 			configJsonContent := `{
-				"ironCoreRoles": "role1",
-				"ironCoreRegion": "region1",
 				"serverController": "controller1",
+				"ironCoreTypes": "type1",
+				"ironCoreRegion": "region1",
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJsonContent := `{
@@ -339,9 +339,9 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.IronCoreRoles).To(Equal("role1"))
-			Expect(cfg.IronCoreRegion).To(Equal("region1"))
 			Expect(cfg.ServerController).To(Equal("controller1"))
+			Expect(cfg.IronCoreTypes).To(Equal("type1"))
+			Expect(cfg.IronCoreRegion).To(Equal("region1"))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 
 			// when

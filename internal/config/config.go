@@ -42,9 +42,9 @@ type Config struct {
 	reader FileReader
 
 	// /etc/config/config.json
-	IronCoreRoles    string `json:"ironCoreRoles"`
-	IronCoreRegion   string `json:"ironCoreRegion"`
 	ServerController string `json:"serverController"`
+	IronCoreTypes    string `json:"ironCoreTypes"`
+	IronCoreRegion   string `json:"ironCoreRegion"`
 	NetboxURL        string `json:"netboxURL"`
 
 	// /etc/credentials/credentials.json
@@ -57,19 +57,26 @@ func NewDefaultConfiguration(client client.Client, configReader FileReader) *Con
 	return &Config{client, configReader, "", "", "", "", "", "", ""}
 }
 
+func (c *Config) String() string {
+	return fmt.Sprintf("ironCoreTypes:%s,ironCoreRegion:%s,serverController:%s,netboxURL:%s", c.IronCoreTypes, c.IronCoreRegion, c.ServerController, c.NetboxURL)
+}
+
 func (c *Config) Validate() error {
-	if c.IronCoreRoles == "" {
-		return errors.New("ironcore roles are required")
+	// /etc/config/config.json
+	if c.ServerController == "" {
+		return errors.New("server controller name is required")
+	}
+	if c.IronCoreTypes == "" {
+		return errors.New("ironcore types are required")
 	}
 	if c.IronCoreRegion == "" {
 		return errors.New("ironcore region is required")
 	}
-	if c.ServerController == "" {
-		return errors.New("server controller name is required")
-	}
 	if c.NetboxURL == "" {
 		return errors.New("netbox URL is required")
 	}
+
+	// /etc/credentials/credentials.json
 	if c.BMCUser == "" {
 		return errors.New("bmc user is required")
 	}
