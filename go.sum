@@ -120,6 +120,8 @@ github.com/sapcc/go-api-declarations v1.14.0 h1:L6PrfbAcbjg4fnlkuCzKrbCSAQMaMr2H
 github.com/sapcc/go-api-declarations v1.14.0/go.mod h1:KEYQoknn0gSjhmI19b85YUEZkav9SOu2bC21VeDNlnU=
 github.com/sapcc/go-netbox-go v0.0.0-20250219092905-3a11a9ca5f56 h1:zqn9SwASBHOX9EjxsOyS0keTdrM8Nokmyh1jU/J6Dys=
 github.com/sapcc/go-netbox-go v0.0.0-20250219092905-3a11a9ca5f56/go.mod h1:c0TuBjItxHDxpZi2SDhRO0eC/KmF8GFjQ0yJrwRCyRs=
+github.com/sapcc/go-netbox-go v0.0.0-20250313110240-d6262f77ac99 h1:ggGC9OF8kGoq3ANidgGArpq6T3puCBL5r4xgznjMdkY=
+github.com/sapcc/go-netbox-go v0.0.0-20250313110240-d6262f77ac99/go.mod h1:IoX6mSz2xpV2qfT4REaHD4tY8Y1HsV8SlcGPRCK7vZc=
 github.com/seborama/govcr v4.5.0+incompatible h1:XvdHtXi0d4cUAn+0aWolvwfS3nmhNC8Z+yMQwn/M64I=
 github.com/seborama/govcr v4.5.0+incompatible/go.mod h1:EgcISudCCYDLzbiAImJ8i7kk4+wTA44Kp+j4S0LhASI=
 github.com/spf13/pflag v1.0.5 h1:iy+VFUOCP1a+8yFto/drg2CJ5u0yRoB7fZw3DKv/JXA=

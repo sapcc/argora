@@ -49,19 +49,19 @@ func NewNetbox() Netbox {
 }
 
 func NewDefaultNetbox(url, token string) (Netbox, error) {
-	virtualization, err := virtualization.New(url, token, false)
+	virtualization, err := virtualization.NewClient(url, token, false)
 	if err != nil {
 		return nil, err
 	}
-	dcim, err := dcim.New(url, token, false)
+	dcim, err := dcim.NewClient(url, token, false)
 	if err != nil {
 		return nil, err
 	}
-	ipam, err := ipam.New(url, token, false)
+	ipam, err := ipam.NewClient(url, token, false)
 	if err != nil {
 		return nil, err
 	}
-	extras, err := extras.New(url, token, false)
+	extras, err := extras.NewClient(url, token, false)
 	if err != nil {
 		return nil, err
 	}
@@ -74,19 +74,19 @@ func NewDefaultNetbox(url, token string) (Netbox, error) {
 }
 
 func (n *NetboxService) Reload(url, token string) error {
-	virtualization, err := virtualization.New(url, token, false)
+	virtualization, err := virtualization.NewClient(url, token, false)
 	if err != nil {
 		return err
 	}
-	dcim, err := dcim.New(url, token, false)
+	dcim, err := dcim.NewClient(url, token, false)
 	if err != nil {
 		return err
 	}
-	ipam, err := ipam.New(url, token, false)
+	ipam, err := ipam.NewClient(url, token, false)
 	if err != nil {
 		return err
 	}
-	extras, err := extras.New(url, token, false)
+	extras, err := extras.NewClient(url, token, false)
 	if err != nil {
 		return err
 	}

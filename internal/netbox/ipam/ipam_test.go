@@ -5,6 +5,8 @@ package ipam_test
 
 import (
 	"errors"
+	"net/http"
+	"net/url"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -21,27 +23,122 @@ func TestConfig(t *testing.T) {
 }
 
 type MockIPAMClient struct {
-	ListVlansFunc       func(opts models.ListVlanRequest) (*models.ListVlanResponse, error)
-	ListIPAddressesFunc func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error)
-	ListPrefixesFunc    func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error)
+	// http connectable
+	HTTPClientFunc    func() *http.Client
+	SetHTTPClientFunc func(httpClient *http.Client)
+	BaseURLFunc       func() *url.URL
+	SetBaseURLFunc    func(url *url.URL)
+	AuthTokenFunc     func() string
+	SetAuthTokenFunc  func(authToken string)
 
+	// ip-addresses
+	ListIPAddressesFunc func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error)
+	GetIPAdressFunc     func(id int) (*models.IPAddress, error)
+	CreateIPAddressFunc func(ip models.WriteableIPAddress) (*models.IPAddress, error)
+	UpdateIPAddressFunc func(address models.WriteableIPAddress) (*models.IPAddress, error)
 	DeleteIPAddressFunc func(id int) error
+
+	// prefixes
+	ListPrefixesFunc          func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error)
+	CreatePrefixFunc          func(prefix models.WriteablePrefix) (*models.Prefix, error)
+	ListAvailableIpsFunc      func(id int) ([]models.AvailableIP, error)
+	CreateAvailablePrefixFunc func(id int, opts models.CreateAvailablePrefixRequest) (*models.Prefix, error)
+	UpdatePrefixFunc          func(prefix models.WriteablePrefix) (*models.Prefix, error)
+	DeletePrefixFunc          func(id int) error
+
+	// roles
+	ListRolesFunc func(opts models.ListRolesRequest) (*models.ListRolesResponse, error)
+
+	// vlan
+	ListVlansFunc func(opts models.ListVlanRequest) (*models.ListVlanResponse, error)
+	GetVlanFunc   func(id int) (*models.Vlan, error)
+
+	// vrfs
+	ListVRFsFunc func(opts models.ListVRFsRequest) (*models.ListVRFsResponse, error)
 }
 
-func (m *MockIPAMClient) ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error) {
-	return m.ListVlansFunc(opts)
+func (m *MockIPAMClient) HTTPClient() *http.Client {
+	return m.HTTPClientFunc()
+}
+
+func (m *MockIPAMClient) SetHTTPClient(httpClient *http.Client) {
+	m.SetHTTPClientFunc(httpClient)
+}
+
+func (m *MockIPAMClient) BaseURL() *url.URL {
+	return m.BaseURLFunc()
+}
+
+func (m *MockIPAMClient) SetBaseURL(url *url.URL) {
+	m.SetBaseURLFunc(url)
+}
+
+func (m *MockIPAMClient) AuthToken() string {
+	return m.AuthTokenFunc()
+}
+
+func (m *MockIPAMClient) SetAuthToken(authToken string) {
+	m.SetAuthTokenFunc(authToken)
 }
 
 func (m *MockIPAMClient) ListIPAddresses(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
 	return m.ListIPAddressesFunc(opts)
 }
 
-func (m *MockIPAMClient) ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
-	return m.ListPrefixesFunc(opts)
+func (m *MockIPAMClient) GetIPAdress(id int) (*models.IPAddress, error) {
+	return m.GetIPAdressFunc(id)
+}
+
+func (m *MockIPAMClient) CreateIPAddress(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+	return m.CreateIPAddressFunc(ip)
+}
+
+func (m *MockIPAMClient) UpdateIPAddress(address models.WriteableIPAddress) (*models.IPAddress, error) {
+	return m.UpdateIPAddressFunc(address)
 }
 
 func (m *MockIPAMClient) DeleteIPAddress(id int) error {
 	return m.DeleteIPAddressFunc(id)
+}
+
+func (m *MockIPAMClient) ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+	return m.ListPrefixesFunc(opts)
+}
+
+func (m *MockIPAMClient) CreatePrefix(prefix models.WriteablePrefix) (*models.Prefix, error) {
+	return m.CreatePrefixFunc(prefix)
+}
+
+func (m *MockIPAMClient) ListAvailableIps(id int) ([]models.AvailableIP, error) {
+	return m.ListAvailableIpsFunc(id)
+}
+
+func (m *MockIPAMClient) CreateAvailablePrefix(id int, opts models.CreateAvailablePrefixRequest) (*models.Prefix, error) {
+	return m.CreateAvailablePrefixFunc(id, opts)
+}
+
+func (m *MockIPAMClient) UpdatePrefix(prefix models.WriteablePrefix) (*models.Prefix, error) {
+	return m.UpdatePrefixFunc(prefix)
+}
+
+func (m *MockIPAMClient) DeletePrefix(id int) error {
+	return m.DeletePrefixFunc(id)
+}
+
+func (m *MockIPAMClient) ListRoles(opts models.ListRolesRequest) (*models.ListRolesResponse, error) {
+	return m.ListRolesFunc(opts)
+}
+
+func (m *MockIPAMClient) ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error) {
+	return m.ListVlansFunc(opts)
+}
+
+func (m *MockIPAMClient) GetVlan(id int) (*models.Vlan, error) {
+	return m.GetVlanFunc(id)
+}
+
+func (m *MockIPAMClient) ListVRFs(opts models.ListVRFsRequest) (*models.ListVRFsResponse, error) {
+	return m.ListVRFsFunc(opts)
 }
 
 var _ = Describe("IPAM", func() {

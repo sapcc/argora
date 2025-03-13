@@ -157,7 +157,7 @@ func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
 	if device.Status.Value != "active" {
-		logger.Info("device is not active, will skip it", "status", device.Status.Value)
+		logger.Info("device is not active, will skip", "status", device.Status.Value)
 		return nil
 	}
 
@@ -211,19 +211,16 @@ func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox netbox.N
 	if err != nil {
 		return err
 	}
-	logger.Info("found remoteboard interface", "ID", iface.ID)
 
 	ipAddress, err := netBox.IPAM().GetIPAddressForInterface(iface.ID)
 	if err != nil {
 		return err
 	}
-	logger.Info("found IP address for remoteboard interface", "IP", ipAddress.Address)
 
 	platform, err := netBox.DCIM().GetPlatformByName("Linux KVM")
 	if err != nil {
 		return err
 	}
-	logger.Info("found platform", "name", platform.Name, "ID", platform.ID)
 
 	if device.Platform.ID != platform.ID || device.OOBIp.ID != ipAddress.ID {
 		wDevice := device.Writeable()
@@ -284,7 +281,7 @@ func (r *UpdateReconciler) removeVMKInterfacesAndIPs(ctx context.Context, netBox
 	if hasVmkInterfaces {
 		logger.Info("device vmk interfaces were deleted", "device", device.Name, "ID", device.ID)
 	} else {
-		logger.Info("no vmk interfaces found for device to delete", "device", device.Name, "ID", device.ID)
+		logger.Info("device do not have vmk interfaces", "device", device.Name, "ID", device.ID)
 	}
 
 	return nil

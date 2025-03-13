@@ -7,35 +7,20 @@ package extras
 import (
 	"fmt"
 
+	"github.com/sapcc/go-netbox-go/extras"
 	"github.com/sapcc/go-netbox-go/models"
 )
-
-type ExtrasClient interface {
-	ListTags(opts models.ListTagsRequest) (*models.ListTagsResponse, error)
-}
-
-type ExtrasCLientWrapper struct {
-	client ExtrasClient
-}
-
-func NewExtrasCLientWrapper(client ExtrasClient) *ExtrasCLientWrapper {
-	return &ExtrasCLientWrapper{client: client}
-}
-
-func (d *ExtrasCLientWrapper) ListDevices(opts models.ListTagsRequest) (*models.ListTagsResponse, error) {
-	return d.client.ListTags(opts)
-}
 
 type Extras interface {
 	GetTagByName(tagName string) (*models.Tag, error)
 }
 
 type ExtrasService struct {
-	client ExtrasClient
+	netboxAPI extras.NetboxAPI
 }
 
-func NewExtras(client ExtrasClient) Extras {
-	return &ExtrasService{client: client}
+func NewExtras(netboxAPI extras.NetboxAPI) Extras {
+	return &ExtrasService{netboxAPI: netboxAPI}
 }
 
 func (e *ExtrasService) GetTagByName(tagName string) (*models.Tag, error) {
@@ -43,7 +28,7 @@ func (e *ExtrasService) GetTagByName(tagName string) (*models.Tag, error) {
 		WithName(tagName),
 	).BuildRequest()
 
-	res, err := e.client.ListTags(listTagsRequest)
+	res, err := e.netboxAPI.ListTags(listTagsRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list tags by name %s: %w", tagName, err)
 	}
