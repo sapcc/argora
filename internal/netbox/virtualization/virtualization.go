@@ -8,23 +8,8 @@ import (
 	"fmt"
 
 	"github.com/sapcc/go-netbox-go/models"
+	"github.com/sapcc/go-netbox-go/virtualization"
 )
-
-type VirtualizationClient interface {
-	ListClusters(opts models.ListClusterRequest) (*models.ListClusterResponse, error)
-}
-
-func (vcw *VirtualizationClientWrapper) ListClusters(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
-	return vcw.client.ListClusters(opts)
-}
-
-type VirtualizationClientWrapper struct {
-	client VirtualizationClient
-}
-
-func NewVirtualizationClientWrapper(client VirtualizationClient) *VirtualizationClientWrapper {
-	return &VirtualizationClientWrapper{client: client}
-}
 
 type Virtualization interface {
 	GetClusterByName(clusterName string) (*models.Cluster, error)
@@ -32,11 +17,11 @@ type Virtualization interface {
 }
 
 type VirtualizationService struct {
-	client VirtualizationClient
+	netboxAPI virtualization.NetboxAPI
 }
 
-func NewVirtualization(client VirtualizationClient) Virtualization {
-	return &VirtualizationService{client: client}
+func NewVirtualization(netboxAPI virtualization.NetboxAPI) Virtualization {
+	return &VirtualizationService{netboxAPI: netboxAPI}
 }
 
 func (v *VirtualizationService) GetClusterByName(clusterName string) (*models.Cluster, error) {
@@ -44,7 +29,7 @@ func (v *VirtualizationService) GetClusterByName(clusterName string) (*models.Cl
 		WithName(clusterName),
 	).BuildRequest()
 
-	res, err := v.client.ListClusters(listClusterRequest)
+	res, err := v.netboxAPI.ListClusters(listClusterRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list clusters by name %s: %w", clusterName, err)
 	}
@@ -62,7 +47,7 @@ func (v *VirtualizationService) GetClusterByNameRegionType(name, region, cluster
 		WithType(clusterType),
 	).BuildRequest()
 
-	res, err := v.client.ListClusters(listClusterRequest)
+	res, err := v.netboxAPI.ListClusters(listClusterRequest)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,8 @@ package dcim_test
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -21,54 +23,177 @@ func TestConfig(t *testing.T) {
 }
 
 type MockDCIMClient struct {
-	GetRegionFunc func(id int) (*models.Region, error)
-	GetSiteFunc   func(id int) (*models.Site, error)
+	// http connectable
+	HTTPClientFunc    func() *http.Client
+	SetHTTPClientFunc func(httpClient *http.Client)
+	BaseURLFunc       func() *url.URL
+	SetBaseURLFunc    func(url *url.URL)
+	AuthTokenFunc     func() string
+	SetAuthTokenFunc  func(authToken string)
 
-	ListDevicesFunc     func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error)
+	// cables
+	GetCableFunc    func(id int) (*models.Cable, error)
+	CreateCableFunc func(cable models.WriteableCable) (*models.Cable, error)
+	DeleteCableFunc func(id int) error
+	UpdateCableFunc func(cable models.WriteableCable) (*models.Cable, error)
+
+	// device-roles
 	ListDeviceRolesFunc func(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error)
+
+	// device-types
+	ListDeviceTypesFunc func(opts models.ListDeviceTypesRequest) (*models.ListDeviceTypesResponse, error)
+
+	// devices
+	ListDevicesFunc          func(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error)
+	GetDeviceFunc            func(id int) (*models.Device, error)
+	GetDeviceWithContextFunc func(id int) (*models.Device, error)
+	CreateDeviceFunc         func(dev models.WritableDeviceWithConfigContext) (*models.Device, error)
+	DeleteDeviceFunc         func(id int) error
+	UpdateDeviceFunc         func(dev models.WritableDeviceWithConfigContext) (*models.Device, error)
+
+	// interfaces
 	ListInterfacesFunc  func(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error)
-	ListPlatformsFunc   func(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
-
-	UpdateDeviceFunc    func(dev models.WritableDeviceWithConfigContext) (*models.Device, error)
 	UpdateInterfaceFunc func(iface models.WritableInterface, id int) (*models.Interface, error)
-
+	CreateInterfaceFunc func(interf models.WritableInterface) (*models.Interface, error)
 	DeleteInterfaceFunc func(id int) error
+
+	// platforms
+	ListPlatformsFunc func(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error)
+
+	// racks
+	ListRacksFunc func(opts models.ListRacksRequest) (*models.ListRacksResponse, error)
+
+	// regions
+	ListRegionsFunc func(opts models.ListRegionsRequest) (*models.ListRegionsResponse, error)
+	GetRegionFunc   func(id int) (*models.Region, error)
+
+	// site groups
+	ListSiteGroupsFunc func(opts models.ListSiteGroupsRequest) (*models.ListSiteGroupsResponse, error)
+	GetSiteGroupFunc   func(id int) (*models.SiteGroup, error)
+
+	// sites
+	ListSitesFunc func(opts models.ListSitesRequest) (*models.ListSitesResponse, error)
+	GetSiteFunc   func(id int) (*models.Site, error)
 }
 
-func (d *MockDCIMClient) GetRegion(id int) (*models.Region, error) {
-	return d.GetRegionFunc(id)
+func (m *MockDCIMClient) HTTPClient() *http.Client {
+	return m.HTTPClientFunc()
 }
 
-func (d *MockDCIMClient) GetSite(id int) (*models.Site, error) {
-	return d.GetSiteFunc(id)
+func (m *MockDCIMClient) SetHTTPClient(httpClient *http.Client) {
+	m.SetHTTPClientFunc(httpClient)
 }
 
-func (d *MockDCIMClient) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
-	return d.ListDevicesFunc(opts)
+func (m *MockDCIMClient) BaseURL() *url.URL {
+	return m.BaseURLFunc()
 }
 
-func (d *MockDCIMClient) ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
-	return d.ListDeviceRolesFunc(opts)
+func (m *MockDCIMClient) SetBaseURL(url *url.URL) {
+	m.SetBaseURLFunc(url)
 }
 
-func (d *MockDCIMClient) ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
-	return d.ListInterfacesFunc(opts)
+func (m *MockDCIMClient) AuthToken() string {
+	return m.AuthTokenFunc()
 }
 
-func (d *MockDCIMClient) ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error) {
-	return d.ListPlatformsFunc(opts)
+func (m *MockDCIMClient) SetAuthToken(authToken string) {
+	m.SetAuthTokenFunc(authToken)
 }
 
-func (d *MockDCIMClient) UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error) {
-	return d.UpdateDeviceFunc(device)
+func (m *MockDCIMClient) GetCable(id int) (*models.Cable, error) {
+	return m.GetCableFunc(id)
 }
 
-func (d *MockDCIMClient) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
-	return d.UpdateInterfaceFunc(iface, id)
+func (m *MockDCIMClient) CreateCable(cable models.WriteableCable) (*models.Cable, error) {
+	return m.CreateCableFunc(cable)
 }
 
-func (d *MockDCIMClient) DeleteInterface(id int) error {
-	return d.DeleteInterfaceFunc(id)
+func (m *MockDCIMClient) DeleteCable(id int) error {
+	return m.DeleteCableFunc(id)
+}
+
+func (m *MockDCIMClient) UpdateCable(cable models.WriteableCable) (*models.Cable, error) {
+	return m.UpdateCableFunc(cable)
+}
+
+func (m *MockDCIMClient) ListDeviceRoles(opts models.ListDeviceRolesRequest) (*models.ListDeviceRolesResponse, error) {
+	return m.ListDeviceRolesFunc(opts)
+}
+
+func (m *MockDCIMClient) ListDeviceTypes(opts models.ListDeviceTypesRequest) (*models.ListDeviceTypesResponse, error) {
+	return m.ListDeviceTypesFunc(opts)
+}
+
+func (m *MockDCIMClient) ListDevices(opts models.ListDevicesRequest) (*models.ListDevicesResponse, error) {
+	return m.ListDevicesFunc(opts)
+}
+
+func (m *MockDCIMClient) GetDevice(id int) (*models.Device, error) {
+	return m.GetDeviceFunc(id)
+}
+
+func (m *MockDCIMClient) GetDeviceWithContext(id int) (*models.Device, error) {
+	return m.GetDeviceWithContextFunc(id)
+}
+
+func (m *MockDCIMClient) CreateDevice(dev models.WritableDeviceWithConfigContext) (*models.Device, error) {
+	return m.CreateDeviceFunc(dev)
+}
+
+func (m *MockDCIMClient) DeleteDevice(id int) error {
+	return m.DeleteDeviceFunc(id)
+}
+
+func (m *MockDCIMClient) UpdateDevice(dev models.WritableDeviceWithConfigContext) (*models.Device, error) {
+	return m.UpdateDeviceFunc(dev)
+}
+
+func (m *MockDCIMClient) ListInterfaces(opts models.ListInterfacesRequest) (*models.ListInterfacesResponse, error) {
+	return m.ListInterfacesFunc(opts)
+}
+
+func (m *MockDCIMClient) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
+	return m.UpdateInterfaceFunc(iface, id)
+}
+
+func (m *MockDCIMClient) CreateInterface(interf models.WritableInterface) (*models.Interface, error) {
+	return m.CreateInterfaceFunc(interf)
+}
+
+func (m *MockDCIMClient) DeleteInterface(id int) error {
+	return m.DeleteInterfaceFunc(id)
+}
+
+func (m *MockDCIMClient) ListPlatforms(opts models.ListPlatformsRequest) (*models.ListPlatformsResponse, error) {
+	return m.ListPlatformsFunc(opts)
+}
+
+func (m *MockDCIMClient) ListRacks(opts models.ListRacksRequest) (*models.ListRacksResponse, error) {
+	return m.ListRacksFunc(opts)
+}
+
+func (m *MockDCIMClient) ListRegions(opts models.ListRegionsRequest) (*models.ListRegionsResponse, error) {
+	return m.ListRegionsFunc(opts)
+}
+
+func (m *MockDCIMClient) GetRegion(id int) (*models.Region, error) {
+	return m.GetRegionFunc(id)
+}
+
+func (m *MockDCIMClient) ListSiteGroups(opts models.ListSiteGroupsRequest) (*models.ListSiteGroupsResponse, error) {
+	return m.ListSiteGroupsFunc(opts)
+}
+
+func (m *MockDCIMClient) GetSiteGroup(id int) (*models.SiteGroup, error) {
+	return m.GetSiteGroupFunc(id)
+}
+
+func (m *MockDCIMClient) ListSites(opts models.ListSitesRequest) (*models.ListSitesResponse, error) {
+	return m.ListSitesFunc(opts)
+}
+
+func (m *MockDCIMClient) GetSite(id int) (*models.Site, error) {
+	return m.GetSiteFunc(id)
 }
 
 var _ = Describe("DCIM", func() {

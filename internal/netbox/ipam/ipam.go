@@ -7,40 +7,9 @@ package ipam
 import (
 	"fmt"
 
+	"github.com/sapcc/go-netbox-go/ipam"
 	"github.com/sapcc/go-netbox-go/models"
 )
-
-type IPAMClient interface {
-	ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error)
-	ListIPAddresses(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error)
-	ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error)
-
-	DeleteIPAddress(id int) error
-}
-
-func (w *IPAMCLientWrapper) ListVlans(opts models.ListVlanRequest) (*models.ListVlanResponse, error) {
-	return w.client.ListVlans(opts)
-}
-
-func (w *IPAMCLientWrapper) ListIPAddresses(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
-	return w.client.ListIPAddresses(opts)
-}
-
-func (w *IPAMCLientWrapper) ListPrefixes(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
-	return w.client.ListPrefixes(opts)
-}
-
-func (w *IPAMCLientWrapper) DeleteIPAddress(id int) error {
-	return w.client.DeleteIPAddress(id)
-}
-
-type IPAMCLientWrapper struct {
-	client IPAMClient
-}
-
-func NewIPAMCLientWrapper(client IPAMClient) *IPAMCLientWrapper {
-	return &IPAMCLientWrapper{client: client}
-}
 
 type IPAM interface {
 	GetVlanByName(vlanName string) (*models.Vlan, error)
@@ -53,11 +22,11 @@ type IPAM interface {
 }
 
 type IPAMService struct {
-	client IPAMClient
+	netboxAPI ipam.NetboxAPI
 }
 
-func NewIPAM(client IPAMClient) IPAM {
-	return &IPAMService{client: client}
+func NewIPAM(netboxAPI ipam.NetboxAPI) IPAM {
+	return &IPAMService{netboxAPI: netboxAPI}
 }
 
 func (i *IPAMService) GetVlanByName(vlanName string) (*models.Vlan, error) {
@@ -65,7 +34,7 @@ func (i *IPAMService) GetVlanByName(vlanName string) (*models.Vlan, error) {
 		VlanWithName(vlanName),
 	).BuildRequest()
 
-	res, err := i.client.ListVlans(ListVlanRequest)
+	res, err := i.netboxAPI.ListVlans(ListVlanRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list VLANs by name %s: %w", vlanName, err)
 	}
@@ -80,7 +49,7 @@ func (i *IPAMService) GetIPAddressByAddress(address string) (*models.IPAddress, 
 		IPAddressesWithAddress(address),
 	).BuildRequest()
 
-	res, err := i.client.ListIPAddresses(ListIPAddressesRequest)
+	res, err := i.netboxAPI.ListIPAddresses(ListIPAddressesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list IP addresses with address %s: %w", address, err)
 	}
@@ -95,7 +64,7 @@ func (i *IPAMService) GetIPAddressesForInterface(interfaceID int) ([]models.IPAd
 		IPAddressesWithInterfaceID(interfaceID),
 	).BuildRequest()
 
-	res, err := i.client.ListIPAddresses(ListIPAddressesRequest)
+	res, err := i.netboxAPI.ListIPAddresses(ListIPAddressesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list IP addresses for interface ID %d: %w", interfaceID, err)
 	}
@@ -118,7 +87,7 @@ func (i *IPAMService) GetPrefixesContaining(contains string) ([]models.Prefix, e
 		PrefixWithContains(contains),
 	).BuildRequest()
 
-	res, err := i.client.ListPrefixes(ListPrefixesRequest)
+	res, err := i.netboxAPI.ListPrefixes(ListPrefixesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list prefixes containing %s: %w", contains, err)
 	}
@@ -129,7 +98,7 @@ func (i *IPAMService) GetPrefixesContaining(contains string) ([]models.Prefix, e
 }
 
 func (i *IPAMService) DeleteIPAddress(id int) error {
-	err := i.client.DeleteIPAddress(id)
+	err := i.netboxAPI.DeleteIPAddress(id)
 	if err != nil {
 		return fmt.Errorf("unable to delete IP address (%d): %w", id, err)
 	}

@@ -6,6 +6,8 @@ package extras_test
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -22,7 +24,40 @@ func TestConfig(t *testing.T) {
 }
 
 type MockExtrasClient struct {
+	// http connectable
+	HTTPClientFunc    func() *http.Client
+	SetHTTPClientFunc func(httpClient *http.Client)
+	BaseURLFunc       func() *url.URL
+	SetBaseURLFunc    func(url *url.URL)
+	AuthTokenFunc     func() string
+	SetAuthTokenFunc  func(authToken string)
+
+	// tags
 	ListTagsFunc func(opts models.ListTagsRequest) (*models.ListTagsResponse, error)
+}
+
+func (m *MockExtrasClient) HTTPClient() *http.Client {
+	return m.HTTPClientFunc()
+}
+
+func (m *MockExtrasClient) SetHTTPClient(httpClient *http.Client) {
+	m.SetHTTPClientFunc(httpClient)
+}
+
+func (m *MockExtrasClient) BaseURL() *url.URL {
+	return m.BaseURLFunc()
+}
+
+func (m *MockExtrasClient) SetBaseURL(url *url.URL) {
+	m.SetBaseURLFunc(url)
+}
+
+func (m *MockExtrasClient) AuthToken() string {
+	return m.AuthTokenFunc()
+}
+
+func (m *MockExtrasClient) SetAuthToken(authToken string) {
+	m.SetAuthTokenFunc(authToken)
 }
 
 func (m *MockExtrasClient) ListTags(opts models.ListTagsRequest) (*models.ListTagsResponse, error) {
