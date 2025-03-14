@@ -152,7 +152,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = controller.NewIronCoreReconciler(mgr.GetClient(), mgr.GetScheme(), cfg, flagVar.reconcileInterval).SetupWithManager(mgr); err != nil {
+	if err = controller.NewIronCoreReconciler(mgr.GetClient(), mgr.GetScheme(), cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ironCore")
 		os.Exit(1)
 	}
