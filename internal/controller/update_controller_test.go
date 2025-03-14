@@ -149,7 +149,7 @@ var _ = Describe("Update Controller", func() {
 		}
 
 		BeforeEach(func() {
-			By("creating Update CR")
+			By("create Update CR")
 			err := k8sClient.Get(ctx, typeNamespacedName, update)
 			if err != nil && apierrors.IsNotFound(err) {
 				resource := &argorav1alpha1.Update{
@@ -175,23 +175,25 @@ var _ = Describe("Update Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, update)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("cleanup Update CR")
+			By("delete Update CR")
 			Expect(k8sClient.Delete(ctx, update)).To(Succeed())
 		})
 
 		It("should successfully reconcile the CR", func() {
 			// given
 			netBoxMock := prepareMockSuccessNoUpdate()
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeCalls = 1
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 1
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls = 2
@@ -204,17 +206,18 @@ var _ = Describe("Update Controller", func() {
 
 		It("should return an error if netbox reload fails", func() {
 			// given
-			controllerReconciler := createReconciler(&mock.NetBoxMock{ReturnError: true}, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(&mock.NetBoxMock{ReturnError: true}, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to reload netbox"))
+			Expect(res.Requeue).To(BeFalse())
 		})
 
 		It("should return an error if GetClusterByNameRegionType fails", func() {
@@ -228,17 +231,18 @@ var _ = Describe("Update Controller", func() {
 				return nil, errors.New("unable to find clusters")
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to find clusters"))
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile cluster: unable to find clusters")
 		})
@@ -261,17 +265,18 @@ var _ = Describe("Update Controller", func() {
 				return nil, errors.New("unable to find devices")
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to find devices"))
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile devices on cluster cluster1 (1): unable to find devices")
 		})
@@ -295,16 +300,17 @@ var _ = Describe("Update Controller", func() {
 				}, nil
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -332,16 +338,18 @@ var _ = Describe("Update Controller", func() {
 				}, nil
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Requeue).To(BeFalse())
+
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateInterfaceCalls).To(Equal(1))
 
 			expectStatus(argorav1alpha1.Ready, "")
@@ -367,16 +375,18 @@ var _ = Describe("Update Controller", func() {
 				return nil, errors.New("unable to rename iDRAC interface")
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).To(HaveOccurred())
+			Expect(res.Requeue).To(BeFalse())
+
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateInterfaceCalls).To(Equal(1))
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to rename remoteboard interface for device device1: unable to rename iDRAC interface: unable to rename iDRAC interface")
@@ -393,17 +403,18 @@ var _ = Describe("Update Controller", func() {
 				return nil, errors.New("remoteboard interface not found")
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("unable to update device device1 data: remoteboard interface not found"))
+			Expect(res.Requeue).To(BeFalse())
 
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(0))
 
@@ -428,17 +439,18 @@ var _ = Describe("Update Controller", func() {
 				}, nil
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -463,17 +475,18 @@ var _ = Describe("Update Controller", func() {
 				}, nil
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -493,17 +506,18 @@ var _ = Describe("Update Controller", func() {
 				return nil, errors.New("unable to update device")
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to update device device1 data: unable to update device")
 		})
@@ -541,11 +555,11 @@ var _ = Describe("Update Controller", func() {
 				return nil
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
@@ -553,6 +567,7 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(1))
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -589,11 +604,11 @@ var _ = Describe("Update Controller", func() {
 				return errors.New("failed to delete IP (2)")
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
@@ -601,6 +616,7 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(0))
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to remove vmk interfaces and IPs for device device1: unable to delete IP address (192.168.0.1): failed to delete IP (2)")
 		})
@@ -638,11 +654,11 @@ var _ = Describe("Update Controller", func() {
 				return errors.New("failed to delete interface (2)")
 			}
 
-			controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 			// when
 			By("reconciling Update CR")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 
@@ -650,6 +666,7 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(1))
+			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to remove vmk interfaces and IPs for device device1: unable to delete vmk0 interface: failed to delete interface (2)")
 		})
@@ -665,7 +682,7 @@ var _ = Describe("Update Controller", func() {
 			ExtrasMock:         &mock.ExtrasMock{},
 		}
 
-		controllerReconciler := createReconciler(netBoxMock, fileReaderMock)
+		controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
 
 		// when
 		By("reconciling Update CR")
@@ -679,11 +696,11 @@ var _ = Describe("Update Controller", func() {
 		// then
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("updates.argora.cloud.sap \"non-existent-resource\" not found"))
-		Expect(res).To(Equal(reconcile.Result{}))
+		Expect(res.Requeue).To(BeFalse())
 	})
 })
 
-func createReconciler(netBoxMock *mock.NetBoxMock, fileReaderMock config.FileReader) *UpdateReconciler {
+func createUpdateReconciler(netBoxMock *mock.NetBoxMock, fileReaderMock config.FileReader) *UpdateReconciler {
 	return &UpdateReconciler{
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),

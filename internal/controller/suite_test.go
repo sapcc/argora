@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
 	"k8s.io/client-go/kubernetes/scheme"
@@ -53,11 +54,17 @@ var _ = BeforeSuite(func() {
 	err = argorav1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = metalv1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:scheme
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "config", "crd", "bases"),
+			filepath.Join("..", "..", "hack", "crd"),
+		},
 		ErrorIfCRDPathMissing: true,
 	}
 
