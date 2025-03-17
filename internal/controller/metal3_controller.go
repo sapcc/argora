@@ -69,14 +69,16 @@ type Metal3Reconciler struct {
 	k8sClient         client.Client
 	scheme            *runtime.Scheme
 	cfg               *config.Config
+	netBox            netbox.Netbox
 	reconcileInterval time.Duration
 }
 
-func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *config.Config, reconcileInterval time.Duration) *Metal3Reconciler {
+func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *Metal3Reconciler {
 	return &Metal3Reconciler{
 		k8sClient:         client,
 		scheme:            scheme,
 		cfg:               cfg,
+		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
 	}
 }
@@ -120,9 +122,9 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxURL, r.cfg.NetboxToken)
+	err = r.netBox.Reload(r.cfg.NetboxURL, r.cfg.NetboxToken)
 	if err != nil {
-		logger.Error(err, "unable to create netbox client")
+		logger.Error(err, "unable to reload netbox")
 		return ctrl.Result{}, err
 	}
 
@@ -136,20 +138,20 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	clusterType := capiCluster.Labels[ClusterRoleLabel]
 	logger.Info("reconciling cluster", "name", capiCluster.Name, "type", clusterType)
 
-	cluster, err := netBox.Virtualization().GetClusterByNameRegionType(capiCluster.Name, "", clusterType)
+	cluster, err := r.netBox.Virtualization().GetClusterByNameRegionType(capiCluster.Name, "", clusterType)
 	if err != nil {
 		logger.Error(err, "unable to find cluster in netbox", "name", capiCluster.Name, "type", clusterType)
 		return ctrl.Result{}, err
 	}
 
-	devices, err := netBox.DCIM().GetDevicesByClusterID(cluster.ID)
+	devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 	if err != nil {
 		logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 		return ctrl.Result{}, err
 	}
 
 	for _, device := range devices {
-		err = r.reconcileDevice(ctx, netBox, capiCluster, &device)
+		err = r.reconcileDevice(ctx, capiCluster, &device)
 		if err != nil {
 			logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
 			return ctrl.Result{}, err
@@ -159,7 +161,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
-func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster *clusterv1.Cluster, device *models.Device) error {
+func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, cluster *clusterv1.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
@@ -189,13 +191,13 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 		return fmt.Errorf("unable to create root hint: %w", err)
 	}
 
-	mac, err := getMacForIP(netBox, device.PrimaryIP4.Address)
+	mac, err := getMacForIP(r.netBox, device.PrimaryIP4.Address)
 	if err != nil {
 		logger.Info("unable to lookup mac for ip", "error", err)
 		mac = ""
 	}
 
-	region, err := netBox.DCIM().GetRegionForDevice(device)
+	region, err := r.netBox.DCIM().GetRegionForDevice(device)
 	if err != nil {
 		return fmt.Errorf("unable to get region for device: %w", err)
 	}
@@ -222,7 +224,7 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 		logger.Info("role found in tags", "role", role)
 	}
 
-	secretName := "networkdata-" + device.Name
+	ndSecretName := "networkdata-" + device.Name
 	bareMetalHost := &bmov1alpha1.BareMetalHost{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:      device.Name,
@@ -248,7 +250,7 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 			},
 			BootMACAddress: mac,
 			NetworkData: &corev1.SecretReference{
-				Name:      secretName,
+				Name:      ndSecretName,
 				Namespace: cluster.Namespace,
 			},
 			RootDeviceHints: rootHint,
@@ -261,28 +263,28 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 
 	logger.Info("created BareMetalHost custom resource", "name", bareMetalHost.Name)
 
-	if err = r.createNetworkDataForDevice(ctx, netBox, bareMetalHost, cluster, device, role, secretName); err != nil {
+	if err = r.createNetworkDataSecret(ctx, bareMetalHost, cluster, device, role, ndSecretName); err != nil {
 		return fmt.Errorf("unable to create network data: %w", err)
 	}
 
-	logger.Info("created NetworkData Secret resource", "name", secretName)
+	logger.Info("created NetworkData Secret resource", "name", ndSecretName)
 
 	return nil
 }
 
 // CreateNetworkDataForDevice uses the device to get to the netbox interfaces and creates a secret containing the network data for this device
-func (r *Metal3Reconciler) createNetworkDataForDevice(ctx context.Context, netBox netbox.Netbox, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role, secretName string) error {
-	iface, err := netBox.DCIM().GetInterfaceForDevice(device, "LAG1")
+func (r *Metal3Reconciler) createNetworkDataSecret(ctx context.Context, bareMetalHost *bmov1alpha1.BareMetalHost, cluster *clusterv1.Cluster, device *models.Device, role, secretName string) error {
+	iface, err := r.netBox.DCIM().GetInterfaceForDevice(device, "LAG1")
 	if err != nil {
 		return fmt.Errorf("unable to find interface LAG1 for device %s: %w", device.Name, err)
 	}
 
-	ip, err := netBox.IPAM().GetIPAddressForInterface(iface.ID)
+	ip, err := r.netBox.IPAM().GetIPAddressForInterface(iface.ID)
 	if err != nil {
 		return fmt.Errorf("unable to get IP for interface ID %d: %w", iface.ID, err)
 	}
 
-	prefixes, err := netBox.IPAM().GetPrefixesContaining(ip.Address)
+	prefixes, err := r.netBox.IPAM().GetPrefixesContaining(ip.Address)
 	if err != nil {
 		return fmt.Errorf("unable to get prefixes containing IP %s: %w", ip.Address, err)
 	}

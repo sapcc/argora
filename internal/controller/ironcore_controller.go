@@ -212,6 +212,10 @@ func (r *IronCoreReconciler) createBmcSecret(ctx context.Context, device *models
 	}
 
 	bmcSecret := &metalv1alpha1.BMCSecret{
+		TypeMeta: ctrl.TypeMeta{
+			APIVersion: metalv1alpha1.GroupVersion.String(),
+			Kind:       "BMCSecret",
+		},
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:   device.Name,
 			Labels: labels,
@@ -242,6 +246,10 @@ func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Devic
 	}
 
 	bmc := &metalv1alpha1.BMC{
+		TypeMeta: ctrl.TypeMeta{
+			APIVersion: metalv1alpha1.GroupVersion.String(),
+			Kind:       "BMC",
+		},
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:   device.Name,
 			Labels: labels,
