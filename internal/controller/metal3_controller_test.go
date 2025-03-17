@@ -8,9 +8,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sapcc/argora/internal/config"
-	"github.com/sapcc/argora/internal/controller/mock"
-	"github.com/sapcc/argora/internal/networkdata"
 	"github.com/sapcc/go-netbox-go/models"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
@@ -21,6 +18,10 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/sapcc/argora/internal/config"
+	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/networkdata"
 )
 
 var _ = Describe("Metal3 Controller", func() {
