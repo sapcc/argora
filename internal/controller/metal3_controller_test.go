@@ -237,8 +237,10 @@ var _ = Describe("Metal3 Controller", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(networkData.Links).To(BeEmpty())
+		Expect(networkData.Services).To(BeEmpty())
 		Expect(networkData.Networks).To(HaveLen(1))
 		Expect(networkData.Networks[0].ID).To(Equal(0))
+		Expect(networkData.Networks[0].Type).To(Equal(networkdata.Ipv4))
 		Expect(networkData.Networks[0].IPAddress).To(Equal(ptr.To("192.168.1.2/24")))
 		Expect(networkData.Networks[0].Link).To(Equal("en*f0np*"))
 		Expect(networkData.Networks[0].Netmask).To(Equal(ptr.To("255.255.255.0")))
@@ -247,6 +249,7 @@ var _ = Describe("Metal3 Controller", func() {
 		Expect(networkData.Networks[0].Routes[0].Gateway).To(Equal("192.168.1.1"))
 		Expect(networkData.Networks[0].Routes[0].Netmask).To(Equal("0.0.0.0"))
 		Expect(networkData.Networks[0].Routes[0].Network).To(Equal("0.0.0.0"))
+		Expect(networkData.Networks[0].Routes[0].Services).To(BeEmpty())
 	}
 
 	Context("Reconcile", func() {
