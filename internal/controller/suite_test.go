@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
 	"k8s.io/client-go/kubernetes/scheme"
