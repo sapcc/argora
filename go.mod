@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
-	github.com/metal3-io/baremetal-operator/apis v0.9.0
+	github.com/metal3-io/baremetal-operator/apis v0.9.1
 	github.com/sapcc/go-api-declarations v1.14.0
 	github.com/sapcc/go-netbox-go v0.0.0-20250313134419-813a4fd4d130
 	k8s.io/api v0.32.2
@@ -67,7 +67,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/net v0.36.0 // indirect
-	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
