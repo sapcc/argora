@@ -87,14 +87,16 @@ var _ = Describe("Update Controller", func() {
 				ExtrasMock:         &mock.ExtrasMock{},
 			}
 
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
 				Expect(name).To(BeEmpty())
 				Expect(region).To(Equal("region1"))
 				Expect(clusterType).To(Equal("type1"))
 
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
@@ -194,7 +196,7 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeCalls = 1
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 1
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls = 2
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls = 1
@@ -220,10 +222,10 @@ var _ = Describe("Update Controller", func() {
 			Expect(res.Requeue).To(BeFalse())
 		})
 
-		It("should return an error if GetClusterByNameRegionType fails", func() {
+		It("should return an error if GetClustersByNameRegionType fails", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
 				Expect(name).To(BeEmpty())
 				Expect(region).To(Equal("region1"))
 				Expect(clusterType).To(Equal("type1"))
@@ -250,14 +252,16 @@ var _ = Describe("Update Controller", func() {
 		It("should return an error if GetDevicesByClusterID fails", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
 				Expect(name).To(BeEmpty())
 				Expect(region).To(Equal("region1"))
 				Expect(clusterType).To(Equal("type1"))
 
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
@@ -284,10 +288,12 @@ var _ = Describe("Update Controller", func() {
 		It("should skip the device when the device is not active", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {

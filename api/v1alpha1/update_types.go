@@ -34,11 +34,9 @@ type UpdateSpec struct {
 }
 
 type Clusters struct {
-	Name string `json:"name,omitempty"`
-	// +kubebuilder:validation:Required
-	Region string `json:"region"`
-	// +kubebuilder:validation:Required
-	Type string `json:"type"`
+	Name   string `json:"name,omitempty"`
+	Region string `json:"region,omitempty"`
+	Type   string `json:"type,omitempty"`
 }
 
 // UpdateStatus defines the observed state of Update.

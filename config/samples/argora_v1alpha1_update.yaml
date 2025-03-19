@@ -8,6 +8,6 @@ metadata:
   namespace: argora-system
 spec:
   clusters:
-  - name:
-    region: qa-de-1
-    type: cc-kvm-compute
+  - name: cc-b0-qa-de-1
+    region:
+    type:

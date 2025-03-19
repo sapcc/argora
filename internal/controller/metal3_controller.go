@@ -136,25 +136,33 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	clusterType := capiCluster.Labels[ClusterRoleLabel]
-	logger.Info("reconciling cluster", "name", capiCluster.Name, "type", clusterType)
+	logger.Info("fetching clusters data", "name", capiCluster.Name, "type", clusterType)
 
-	cluster, err := r.netBox.Virtualization().GetClusterByNameRegionType(capiCluster.Name, "", clusterType)
+	clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(capiCluster.Name, "", clusterType)
 	if err != nil {
 		logger.Error(err, "unable to find cluster in netbox", "name", capiCluster.Name, "type", clusterType)
 		return ctrl.Result{}, err
 	}
 
-	devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
-	if err != nil {
-		logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
-		return ctrl.Result{}, err
+	if len(clusters) > 1 {
+		return ctrl.Result{}, fmt.Errorf("multiple clusters found")
 	}
 
-	for _, device := range devices {
-		err = r.reconcileDevice(ctx, capiCluster, &device)
+	for _, cluster := range clusters {
+		logger.Info("reconciling cluster", "name", cluster.Name, "ID", cluster.ID)
+
+		devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 		if err != nil {
-			logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+			logger.Error(err, "unable to find devices for cluster", "name", cluster.Name, "ID", cluster.ID)
 			return ctrl.Result{}, err
+		}
+
+		for _, device := range devices {
+			err = r.reconcileDevice(ctx, capiCluster, &device)
+			if err != nil {
+				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+				return ctrl.Result{}, err
+			}
 		}
 	}
 

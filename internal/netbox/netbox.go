@@ -20,16 +20,9 @@ type Netbox interface {
 	Reload(url, token string) error
 
 	Virtualization() _virtualization.Virtualization
-	SetVirtualization(virtualization _virtualization.Virtualization)
-
 	DCIM() _dcim.DCIM
-	SetDCIM(dcim _dcim.DCIM)
-
 	IPAM() _ipam.IPAM
-	SetIPAM(ipam _ipam.IPAM)
-
 	Extras() _extras.Extras
-	SetExtras(extras _extras.Extras)
 }
 
 type NetboxService struct {
@@ -46,31 +39,6 @@ func NewNetbox() Netbox {
 		ipam:           nil,
 		extras:         nil,
 	}
-}
-
-func NewDefaultNetbox(url, token string) (Netbox, error) {
-	virtualization, err := virtualization.NewClient(url, token, false)
-	if err != nil {
-		return nil, err
-	}
-	dcim, err := dcim.NewClient(url, token, false)
-	if err != nil {
-		return nil, err
-	}
-	ipam, err := ipam.NewClient(url, token, false)
-	if err != nil {
-		return nil, err
-	}
-	extras, err := extras.NewClient(url, token, false)
-	if err != nil {
-		return nil, err
-	}
-	return &NetboxService{
-		virtualization: _virtualization.NewVirtualization(virtualization),
-		dcim:           _dcim.NewDCIM(dcim),
-		ipam:           _ipam.NewIPAM(ipam),
-		extras:         _extras.NewExtras(extras),
-	}, nil
 }
 
 func (n *NetboxService) Reload(url, token string) error {
@@ -101,30 +69,14 @@ func (n *NetboxService) Virtualization() _virtualization.Virtualization {
 	return n.virtualization
 }
 
-func (n *NetboxService) SetVirtualization(virtualization _virtualization.Virtualization) {
-	n.virtualization = virtualization
-}
-
 func (n *NetboxService) DCIM() _dcim.DCIM {
 	return n.dcim
-}
-
-func (n *NetboxService) SetDCIM(dcim _dcim.DCIM) {
-	n.dcim = dcim
 }
 
 func (n *NetboxService) IPAM() _ipam.IPAM {
 	return n.ipam
 }
 
-func (n *NetboxService) SetIPAM(ipam _ipam.IPAM) {
-	n.ipam = ipam
-}
-
 func (n *NetboxService) Extras() _extras.Extras {
 	return n.extras
-}
-
-func (n *NetboxService) SetExtras(extras _extras.Extras) {
-	n.extras = extras
 }

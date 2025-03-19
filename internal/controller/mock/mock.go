@@ -109,20 +109,13 @@ func (n *NetBoxMock) SetExtras(extras extras.Extras) {
 }
 
 type VirtualizationMock struct {
-	GetClusterByNameFunc            func(clusterName string) (*models.Cluster, error)
-	GetClusterByNameCalls           int
-	GetClusterByNameRegionTypeFunc  func(name, region, clusterType string) (*models.Cluster, error)
-	GetClusterByNameRegionTypeCalls int
+	GetClustersByNameRegionTypeFunc  func(name, region, clusterType string) ([]models.Cluster, error)
+	GetClustersByNameRegionTypeCalls int
 }
 
-func (v *VirtualizationMock) GetClusterByName(clusterName string) (*models.Cluster, error) {
-	v.GetClusterByNameCalls++
-	return v.GetClusterByNameFunc(clusterName)
-}
-
-func (v *VirtualizationMock) GetClusterByNameRegionType(name, region, clusterType string) (*models.Cluster, error) {
-	v.GetClusterByNameRegionTypeCalls++
-	return v.GetClusterByNameRegionTypeFunc(name, region, clusterType)
+func (v *VirtualizationMock) GetClustersByNameRegionType(name, region, clusterType string) ([]models.Cluster, error) {
+	v.GetClustersByNameRegionTypeCalls++
+	return v.GetClustersByNameRegionTypeFunc(name, region, clusterType)
 }
 
 type DCIMMock struct {

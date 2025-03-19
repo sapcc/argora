@@ -91,14 +91,16 @@ var _ = Describe("Metal3 Controller", func() {
 			ExtrasMock:         &mock.ExtrasMock{},
 		}
 
-		netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
+		netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
 			Expect(name).To(Equal(clusterName))
 			Expect(region).To(BeEmpty())
 			Expect(clusterType).To(Equal(clusterType))
 
-			return &models.Cluster{
-				ID:   1,
-				Name: "cluster1",
+			return []models.Cluster{
+				{
+					ID:   1,
+					Name: "cluster1",
+				},
 			}, nil
 		}
 		netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
@@ -332,7 +334,7 @@ var _ = Describe("Metal3 Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			expectNetworkDataSecret(ndSecret)
 
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeCalls = 1
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 1
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 1
 		})
@@ -351,10 +353,10 @@ var _ = Describe("Metal3 Controller", func() {
 			Expect(err).To(MatchError("unable to reload netbox"))
 		})
 
-		It("should return an error if GetClusterByNameRegionType fails", func() {
+		It("should return an error if GetClustersByNameRegionType fails", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, ctype string) (*models.Cluster, error) {
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, ctype string) ([]models.Cluster, error) {
 				Expect(name).To(Equal(clusterName))
 				Expect(region).To(BeEmpty())
 				Expect(ctype).To(Equal(clusterType))
@@ -375,17 +377,52 @@ var _ = Describe("Metal3 Controller", func() {
 			Expect(res.Requeue).To(BeFalse())
 		})
 
-		It("should return an error if GetDevicesByClusterID fails", func() {
+		It("should return an error if GetClustersByNameRegionType returns multiple clusters", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, ctype string) (*models.Cluster, error) {
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, ctype string) ([]models.Cluster, error) {
 				Expect(name).To(Equal(clusterName))
 				Expect(region).To(BeEmpty())
 				Expect(ctype).To(Equal(clusterType))
 
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
+					{
+						ID:   2,
+						Name: "cluster2",
+					},
+				}, nil
+			}
+
+			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
+
+			// when
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("multiple clusters found"))
+			Expect(res.Requeue).To(BeFalse())
+		})
+
+		It("should return an error if GetDevicesByClusterID fails", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, ctype string) ([]models.Cluster, error) {
+				Expect(name).To(Equal(clusterName))
+				Expect(region).To(BeEmpty())
+				Expect(ctype).To(Equal(clusterType))
+
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
@@ -409,14 +446,16 @@ var _ = Describe("Metal3 Controller", func() {
 		It("should skip the device when the device is not active", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, ctype string) (*models.Cluster, error) {
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, ctype string) ([]models.Cluster, error) {
 				Expect(name).To(Equal(clusterName))
 				Expect(region).To(BeEmpty())
 				Expect(ctype).To(Equal(clusterType))
 
-				return &models.Cluster{
-					ID:   1,
-					Name: "cluster1",
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {

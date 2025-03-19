@@ -115,25 +115,31 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 	for _, clusterType := range clusterTypes {
 		logger.Info("reconciling IronCore clusters", "type", clusterType, "region", r.cfg.IronCoreRegion)
 
-		cluster, err := r.netBox.Virtualization().GetClusterByNameRegionType("", r.cfg.IronCoreRegion, clusterType)
+		clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType("", r.cfg.IronCoreRegion, clusterType)
 		if err != nil {
 			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", clusterType)
 			return ctrl.Result{}, err
 		}
 
-		logger.Info("reconciling cluster", "cluster", cluster.Name, "ID", cluster.ID)
-
-		devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
-		if err != nil {
-			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
-			return ctrl.Result{}, err
+		if len(clusters) > 1 {
+			return ctrl.Result{}, fmt.Errorf("multiple clusters found")
 		}
 
-		for _, device := range devices {
-			err = r.reconcileDevice(ctx, r.netBox, cluster.Name, &device)
+		for _, cluster := range clusters {
+			logger.Info("reconciling cluster", "cluster", cluster.Name, "ID", cluster.ID)
+
+			devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 			if err != nil {
-				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+				logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
 				return ctrl.Result{}, err
+			}
+
+			for _, device := range devices {
+				err = r.reconcileDevice(ctx, r.netBox, cluster.Name, &device)
+				if err != nil {
+					logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+					return ctrl.Result{}, err
+				}
 			}
 		}
 	}
