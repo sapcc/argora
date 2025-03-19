@@ -5,6 +5,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -349,141 +351,147 @@ var _ = Describe("Metal3 Controller", func() {
 			Expect(err).To(MatchError("unable to reload netbox"))
 		})
 
-		// It("should return an error if GetClusterByNameRegionType fails", func() {
-		// 	// given
-		// 	netBoxMock := prepareNetboxMock()
-		// 	netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-		// 		Expect(name).To(Equal(clusterName))
-		// 		Expect(region).To(BeEmpty())
-		// 		Expect(clusterType).To(Equal(""))
+		It("should return an error if GetClusterByNameRegionType fails", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, ctype string) (*models.Cluster, error) {
+				Expect(name).To(Equal(clusterName))
+				Expect(region).To(BeEmpty())
+				Expect(ctype).To(Equal(clusterType))
 
-		// 		return nil, errors.New("unable to find clusters")
-		// 	}
+				return nil, errors.New("unable to find clusters")
+			}
 
-		// 	controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
+			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
 
-		// 	// when
-		// 	res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedClusterName,
-		// 	})
+			// when
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
 
-		// 	// then
-		// 	Expect(err).To(HaveOccurred())
-		// 	Expect(err).To(MatchError("unable to find clusters"))
-		// 	Expect(res.Requeue).To(BeFalse())
-		// })
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to find clusters"))
+			Expect(res.Requeue).To(BeFalse())
+		})
 
-		// It("should return an error if GetDevicesByClusterID fails", func() {
-		// 	// given
-		// 	netBoxMock := prepareNetboxMock()
-		// 	netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-		// 		Expect(name).To(Equal(clusterName))
-		// 		Expect(region).To(BeEmpty())
-		// 		Expect(clusterType).To(Equal(""))
+		It("should return an error if GetDevicesByClusterID fails", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, ctype string) (*models.Cluster, error) {
+				Expect(name).To(Equal(clusterName))
+				Expect(region).To(BeEmpty())
+				Expect(ctype).To(Equal(clusterType))
 
-		// 		return &models.Cluster{
-		// 			ID:   1,
-		// 			Name: "cluster1",
-		// 		}, nil
-		// 	}
-		// 	netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-		// 		Expect(clusterID).To(Equal(1))
-		// 		return nil, errors.New("unable to find devices")
-		// 	}
+				return &models.Cluster{
+					ID:   1,
+					Name: "cluster1",
+				}, nil
+			}
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
+				Expect(clusterID).To(Equal(1))
+				return nil, errors.New("unable to find devices")
+			}
 
-		// 	controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
+			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
 
-		// 	// when
-		// 	res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedClusterName,
-		// 	})
+			// when
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
 
-		// 	// then
-		// 	Expect(err).To(HaveOccurred())
-		// 	Expect(err).To(MatchError("unable to find devices"))
-		// 	Expect(res.Requeue).To(BeFalse())
-		// })
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to find devices"))
+			Expect(res.Requeue).To(BeFalse())
+		})
 
-		// It("should skip the device when the device is not active", func() {
-		// 	// given
-		// 	netBoxMock := prepareNetboxMock()
-		// 	netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, clusterType string) (*models.Cluster, error) {
-		// 		return &models.Cluster{
-		// 			ID:   1,
-		// 			Name: "cluster1",
-		// 		}, nil
-		// 	}
-		// 	netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-		// 		return []models.Device{
-		// 			{
-		// 				ID:     1,
-		// 				Name:   "device1",
-		// 				Status: models.DeviceStatus{Value: "inactive"},
-		// 			},
-		// 		}, nil
-		// 	}
+		It("should skip the device when the device is not active", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClusterByNameRegionTypeFunc = func(name, region, ctype string) (*models.Cluster, error) {
+				Expect(name).To(Equal(clusterName))
+				Expect(region).To(BeEmpty())
+				Expect(ctype).To(Equal(clusterType))
 
-		// 	controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
+				return &models.Cluster{
+					ID:   1,
+					Name: "cluster1",
+				}, nil
+			}
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
+				Expect(clusterID).To(Equal(1))
 
-		// 	// when
-		// 	res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedClusterName,
-		// 	})
+				return []models.Device{
+					{
+						ID:     1,
+						Name:   "device1",
+						Status: models.DeviceStatus{Value: "inactive"},
+					},
+				}, nil
+			}
 
-		// 	// then
-		// 	Expect(err).NotTo(HaveOccurred())
-		// 	Expect(res.Requeue).To(BeFalse())
-		// })
+			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
 
-		// It("should return an error if GetRegionForDevice fails", func() {
-		// 	// given
-		// 	netBoxMock := prepareNetboxMock()
-		// 	netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceFunc = func(device *models.Device) (string, error) {
-		// 		return "", errors.New("unable to get region for device")
-		// 	}
+			// when
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
 
-		// 	controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
+			// then
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Requeue).To(BeFalse())
+		})
 
-		// 	// when
-		// 	res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedClusterName,
-		// 	})
+		It("should return an error if GetRegionForDevice fails", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceFunc = func(device *models.Device) (string, error) {
+				return "", errors.New("unable to get region for device")
+			}
 
-		// 	// then
-		// 	Expect(err).To(HaveOccurred())
-		// 	Expect(err).To(MatchError("unable to get region for device: unable to get region for device"))
-		// 	Expect(res.Requeue).To(BeFalse())
-		// })
+			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
 
-		// It("should skip the device when BareMetalHost custom resource already exists", func() {
-		// 	// given
-		// 	netBoxMock := prepareNetboxMock()
-		// 	controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
+			// when
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
 
-		// 	// create existing BareMetalHost
-		// 	bmh := &v1alpha1.BareMetalHost{
-		// 		ObjectMeta: ctrl.ObjectMeta{
-		// 			Name:      deviceName,
-		// 			Namespace: clusterNamespace,
-		// 		},
-		// 		Spec: v1alpha1.BareMetalHostSpec{
-		// 			BMC: v1alpha1.BMCDetails{
-		// 				Address: "redfish://192.168.1.1/redfish/v1/Systems/1",
-		// 			},
-		// 		},
-		// 	}
-		// 	err := k8sClient.Create(ctx, bmh)
-		// 	Expect(err).NotTo(HaveOccurred())
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to get region for device: unable to get region for device"))
+			Expect(res.Requeue).To(BeFalse())
+		})
 
-		// 	// when
-		// 	res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedClusterName,
-		// 	})
+		It("should skip the device when BareMetalHost custom resource already exists", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
 
-		// 	// then
-		// 	Expect(err).NotTo(HaveOccurred())
-		// 	Expect(res.Requeue).To(BeFalse())
-		// })
+			// create existing BareMetalHost
+			bmh := &v1alpha1.BareMetalHost{
+				ObjectMeta: ctrl.ObjectMeta{
+					Name:      deviceName,
+					Namespace: clusterNamespace,
+				},
+				Spec: v1alpha1.BareMetalHostSpec{
+					BMC: v1alpha1.BMCDetails{
+						Address: "redfish://192.168.1.1/redfish/v1/Systems/1",
+					},
+				},
+			}
+			err := k8sClient.Create(ctx, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			// when
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
+
+			// then
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Requeue).To(BeFalse())
+		})
 	})
 })
 
