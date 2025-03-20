@@ -153,12 +153,12 @@ var _ = Describe("NetboxService", func() {
 			token := "test-token"
 
 			err := netboxService.Reload(url, token)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
-			Expect(netboxService.Virtualization()).NotTo(BeNil())
-			Expect(netboxService.DCIM()).NotTo(BeNil())
-			Expect(netboxService.IPAM()).NotTo(BeNil())
-			Expect(netboxService.Extras()).NotTo(BeNil())
+			Expect(netboxService.Virtualization()).ToNot(BeNil())
+			Expect(netboxService.DCIM()).ToNot(BeNil())
+			Expect(netboxService.IPAM()).ToNot(BeNil())
+			Expect(netboxService.Extras()).ToNot(BeNil())
 		})
 	})
 })

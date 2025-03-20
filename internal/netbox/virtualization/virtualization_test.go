@@ -148,7 +148,7 @@ var _ = Describe("Virtualization", func() {
 			}
 
 			clusters, err := virtualizationService.GetClustersByNameRegionType("test-cluster", "", "")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(clusters).To(HaveLen(1))
 			Expect(clusters[0].Name).To(Equal("test-cluster"))
 		})

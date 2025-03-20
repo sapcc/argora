@@ -116,8 +116,8 @@ github.com/rogpeppe/go-internal v1.12.0 h1:exVL4IDcn6na9z1rAb56Vxr+CgyK3nn3O+epU
 github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99yedzYV+kq4uf4=
 github.com/sapcc/go-api-declarations v1.14.0 h1:L6PrfbAcbjg4fnlkuCzKrbCSAQMaMr2H1TiVLu7hZYU=
 github.com/sapcc/go-api-declarations v1.14.0/go.mod h1:KEYQoknn0gSjhmI19b85YUEZkav9SOu2bC21VeDNlnU=
-github.com/sapcc/go-netbox-go v0.0.0-20250313134419-813a4fd4d130 h1:FrFOFEyuny+Hv/wVIKXYkYmJwW9yp14A5Dla+FfJ6xo=
-github.com/sapcc/go-netbox-go v0.0.0-20250313134419-813a4fd4d130/go.mod h1:IoX6mSz2xpV2qfT4REaHD4tY8Y1HsV8SlcGPRCK7vZc=
+github.com/sapcc/go-netbox-go v0.0.0-20250320120152-8004fd429a39 h1:1Hg77MSNHiZIExqJBhPnO+ctP+BXSPIljH5atJZRwmI=
+github.com/sapcc/go-netbox-go v0.0.0-20250320120152-8004fd429a39/go.mod h1:IoX6mSz2xpV2qfT4REaHD4tY8Y1HsV8SlcGPRCK7vZc=
 github.com/seborama/govcr v4.5.0+incompatible h1:XvdHtXi0d4cUAn+0aWolvwfS3nmhNC8Z+yMQwn/M64I=
 github.com/seborama/govcr v4.5.0+incompatible/go.mod h1:EgcISudCCYDLzbiAImJ8i7kk4+wTA44Kp+j4S0LhASI=
 github.com/spf13/pflag v1.0.6 h1:jFzHGLGAlb3ruxLB8MhbI6A8+AQX/2eW4qeyNZXNp2o=

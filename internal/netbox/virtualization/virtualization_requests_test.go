@@ -14,19 +14,19 @@ var _ = Describe("ListClusterRequest", func() {
 	Context("When creating a new ListClusterRequest", func() {
 		It("should create a request with the provided name", func() {
 			req := virtualization.NewListClusterRequest(virtualization.WithName("test-name"))
-			Expect(req).NotTo(BeNil())
+			Expect(req).ToNot(BeNil())
 			Expect(req.BuildRequest().Name).To(Equal("test-name"))
 		})
 
 		It("should create a request with the provided role", func() {
 			req := virtualization.NewListClusterRequest(virtualization.WithType("test-type"))
-			Expect(req).NotTo(BeNil())
+			Expect(req).ToNot(BeNil())
 			Expect(req.BuildRequest().Type).To(Equal("test-type"))
 		})
 
 		It("should create a request with the provided region", func() {
 			req := virtualization.NewListClusterRequest(virtualization.WithRegion("test-region"))
-			Expect(req).NotTo(BeNil())
+			Expect(req).ToNot(BeNil())
 			Expect(req.BuildRequest().Region).To(Equal("test-region"))
 		})
 
@@ -36,7 +36,7 @@ var _ = Describe("ListClusterRequest", func() {
 				virtualization.WithType("test-type"),
 				virtualization.WithRegion("test-region"),
 			)
-			Expect(req).NotTo(BeNil())
+			Expect(req).ToNot(BeNil())
 
 			builtReq := req.BuildRequest()
 			Expect(builtReq.Name).To(Equal("test-name"))

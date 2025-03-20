@@ -63,7 +63,7 @@ var _ = Describe("Update Controller", func() {
 
 		expectStatus := func(state argorav1alpha1.State, description string) {
 			err := k8sClient.Get(ctx, typeNamespacedUpdateName, update)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(update.Status.State).To(Equal(state))
 			Expect(update.Status.Description).To(Equal(description))
 			Expect(update.Status.Conditions).ToNot(BeNil())
@@ -178,7 +178,7 @@ var _ = Describe("Update Controller", func() {
 
 		AfterEach(func() {
 			err := k8sClient.Get(ctx, typeNamespacedUpdateName, update)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			By("delete Update CR")
 			Expect(k8sClient.Delete(ctx, update)).To(Succeed())
@@ -196,7 +196,7 @@ var _ = Describe("Update Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
@@ -318,7 +318,7 @@ var _ = Describe("Update Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Requeue).To(BeFalse())
 
 			expectStatus(argorav1alpha1.Ready, "")
@@ -356,7 +356,7 @@ var _ = Describe("Update Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Requeue).To(BeFalse())
 
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateInterfaceCalls).To(Equal(1))
@@ -457,7 +457,7 @@ var _ = Describe("Update Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
 			Expect(res.Requeue).To(BeFalse())
 
@@ -493,7 +493,7 @@ var _ = Describe("Update Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
 			Expect(res.Requeue).To(BeFalse())
 
@@ -573,7 +573,7 @@ var _ = Describe("Update Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(1))
 			Expect(res.Requeue).To(BeFalse())
