@@ -33,8 +33,11 @@ var _ = Describe("Update Controller", func() {
 	}
 	fileReaderMock.FileContent["/etc/config/config.json"] = `{
 		"serverController": "ironcore",
-		"ironCoreTypes": "role1",
-		"ironCoreRegion": "region1",
+		"ironCore": {
+			"name": "name1",
+			"region": "region1",
+			"types": "type1"
+		},
 		"netboxUrl": "http://netbox"
 	}`
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{

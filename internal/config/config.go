@@ -14,6 +14,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type ControllerType string
+
+const (
+	ControllerTypeIroncore ControllerType = "ironcore"
+	ControllerTypeMetal3   ControllerType = "metal3"
+)
+
+func (c ControllerType) String() string {
+	switch c {
+	case ControllerTypeIroncore:
+		return "ironcore"
+	case ControllerTypeMetal3:
+		return "metal3"
+	}
+	panic(fmt.Errorf("%#v has unimplemented String() method", c))
+}
+
 type FileReader interface {
 	ReadFile(fileName string) ([]byte, error)
 }
@@ -42,10 +59,9 @@ type Config struct {
 	reader FileReader
 
 	// /etc/config/config.json
-	ServerController string `json:"serverController"`
-	IronCoreTypes    string `json:"ironCoreTypes"`
-	IronCoreRegion   string `json:"ironCoreRegion"`
-	NetboxURL        string `json:"netboxURL"`
+	ServerController ControllerType `json:"serverController"`
+	IronCore         IronCore       `json:"ironCore"`
+	NetboxURL        string         `json:"netboxURL"`
 
 	// /etc/credentials/credentials.json
 	BMCUser     string `json:"bmcUser"`
@@ -53,12 +69,27 @@ type Config struct {
 	NetboxToken string `json:"netboxToken"`
 }
 
+type IronCore struct {
+	Name   string `json:"name"`
+	Region string `json:"region"`
+	Types  string `json:"types"`
+}
+
 func NewDefaultConfiguration(client client.Client, configReader FileReader) *Config {
-	return &Config{client, configReader, "", "", "", "", "", "", ""}
+	return &Config{
+		client:           client,
+		reader:           configReader,
+		ServerController: "",
+		IronCore:         IronCore{},
+		NetboxURL:        "",
+		BMCUser:          "",
+		BMCPassword:      "",
+		NetboxToken:      "",
+	}
 }
 
 func (c *Config) String() string {
-	return fmt.Sprintf("ironCoreTypes:%s,ironCoreRegion:%s,serverController:%s,netboxURL:%s", c.IronCoreTypes, c.IronCoreRegion, c.ServerController, c.NetboxURL)
+	return fmt.Sprintf("ironCore.Name:%s,ironCore.Region:%s,ironCore.Types:%s,serverController:%s,netboxURL:%s", c.IronCore.Name, c.IronCore.Region, c.IronCore.Types, c.ServerController, c.NetboxURL)
 }
 
 func (c *Config) Validate() error {
@@ -66,16 +97,12 @@ func (c *Config) Validate() error {
 	if c.ServerController == "" {
 		return errors.New("server controller name is required")
 	}
-	if c.IronCoreTypes == "" {
-		return errors.New("ironcore types are required")
-	}
-	if c.IronCoreRegion == "" {
-		return errors.New("ironcore region is required")
+	if c.ServerController == ControllerTypeIroncore && c.IronCore.Name == "" && c.IronCore.Region == "" && c.IronCore.Types == "" {
+		return errors.New("ironcore configuration is required")
 	}
 	if c.NetboxURL == "" {
 		return errors.New("netbox URL is required")
 	}
-
 	// /etc/credentials/credentials.json
 	if c.BMCUser == "" {
 		return errors.New("bmc user is required")

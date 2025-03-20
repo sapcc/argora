@@ -36,8 +36,11 @@ var _ = Describe("Ironcore Controller", func() {
 	}
 	fileReaderMock.FileContent["/etc/config/config.json"] = `{
 		"serverController": "ironcore",
-		"ironCoreTypes": "type1",
-		"ironCoreRegion": "region1",
+		"ironCore": {
+			"name": "name1",
+			"region": "region1",
+			"types": "type1"
+		},
 		"netboxUrl": "http://netbox"
 	}`
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
@@ -64,9 +67,9 @@ var _ = Describe("Ironcore Controller", func() {
 			}
 
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
-				Expect(name).To(BeEmpty())
+				Expect(name).To(Equal("name1"))
 				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(Equal("type1"))
+				Expect(clusterType).To(BeElementOf("type1", "type2"))
 
 				return []models.Cluster{
 					{
@@ -189,9 +192,9 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).NotTo(HaveOccurred())
 				expectBMC(bmc)
 
-				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 1
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 1
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 2
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 2
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 2
 			})
 
 			It("should return an error if netbox reload fails", func() {
@@ -210,7 +213,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
-					Expect(name).To(BeEmpty())
+					Expect(name).To(Equal("name1"))
 					Expect(region).To(Equal("region1"))
 					Expect(clusterType).To(Equal("type1"))
 
@@ -232,7 +235,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
-					Expect(name).To(BeEmpty())
+					Expect(name).To(Equal("name1"))
 					Expect(region).To(Equal("region1"))
 					Expect(clusterType).To(Equal("type1"))
 
@@ -263,7 +266,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
-					Expect(name).To(BeEmpty())
+					Expect(name).To(Equal("name1"))
 					Expect(region).To(Equal("region1"))
 					Expect(clusterType).To(Equal("type1"))
 

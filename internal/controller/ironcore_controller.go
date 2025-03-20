@@ -96,7 +96,7 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 
 	logger.Info("configuration reloaded", "config", r.cfg)
 
-	if r.cfg.ServerController != "ironcore" {
+	if r.cfg.ServerController != config.ControllerTypeIroncore {
 		logger.Info("ironcore controller not enabled")
 		return ctrl.Result{}, nil
 	}
@@ -108,16 +108,16 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 	}
 
 	var clusterTypes []string
-	if r.cfg.IronCoreTypes != "" {
-		clusterTypes = strings.Split(r.cfg.IronCoreTypes, ",")
+	if r.cfg.IronCore.Types != "" {
+		clusterTypes = strings.Split(r.cfg.IronCore.Types, ",")
 	}
 
 	for _, clusterType := range clusterTypes {
-		logger.Info("reconciling IronCore clusters", "type", clusterType, "region", r.cfg.IronCoreRegion)
+		logger.Info("reconciling IronCore clusters", "name", r.cfg.IronCore.Name, "region", r.cfg.IronCore.Region, "type", clusterType)
 
-		clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType("", r.cfg.IronCoreRegion, clusterType)
+		clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(r.cfg.IronCore.Name, r.cfg.IronCore.Region, clusterType)
 		if err != nil {
-			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", clusterType)
+			logger.Error(err, "unable to find cluster in netbox", "name", r.cfg.IronCore.Name, "region", r.cfg.IronCore.Region, "type", clusterType)
 			return ctrl.Result{}, err
 		}
 

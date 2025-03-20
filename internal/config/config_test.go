@@ -26,8 +26,9 @@ var _ = Describe("Config", func() {
 		cfg = NewDefaultConfiguration(client, &ConfigReader{})
 
 		cfg.ServerController = "controller1"
-		cfg.IronCoreTypes = "type1"
-		cfg.IronCoreRegion = "region1"
+		cfg.IronCore.Name = "name1"
+		cfg.IronCore.Region = "region1"
+		cfg.IronCore.Types = "type1"
 		cfg.NetboxURL = "http://netbox"
 
 		cfg.BMCUser = "user"
@@ -36,7 +37,7 @@ var _ = Describe("Config", func() {
 	})
 
 	Describe("Validate", func() {
-		Context("when all fields are valid", func() {
+		Context("should succeed when all fields are valid", func() {
 			It("should not return an error", func() {
 				// when
 				err := cfg.Validate()
@@ -46,7 +47,7 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("when ServerController is empty", func() {
+		Context("should return an error when ServerController is empty", func() {
 			It("should return an error", func() {
 				// given
 				cfg.ServerController = ""
@@ -60,35 +61,40 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("when IronCoreTypes is empty", func() {
+		Context("should return an error when serverController is ironcore and configuration is missing", func() {
 			It("should return an error", func() {
 				// given
-				cfg.IronCoreTypes = ""
+				cfg.ServerController = ControllerTypeIroncore
+				cfg.IronCore.Name = ""
+				cfg.IronCore.Region = ""
+				cfg.IronCore.Types = ""
 
 				// when
 				err := cfg.Validate()
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("ironcore types are required"))
+				Expect(err).To(MatchError("ironcore configuration is required"))
 			})
 		})
 
-		Context("when IronCoreRegion is empty", func() {
+		Context("should succeed when serverController is metal3 and configuration is missing", func() {
 			It("should return an error", func() {
 				// given
-				cfg.IronCoreRegion = ""
+				cfg.ServerController = ControllerTypeMetal3
+				cfg.IronCore.Name = ""
+				cfg.IronCore.Region = ""
+				cfg.IronCore.Types = ""
 
 				// when
 				err := cfg.Validate()
 
 				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("ironcore region is required"))
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
-		Context("when NetboxURL is empty", func() {
+		Context("should return an error when NetboxURL is empty", func() {
 			It("should return an error", func() {
 				// given
 				cfg.NetboxURL = ""
@@ -102,7 +108,7 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("when BMCUser is empty", func() {
+		Context("should return an error when BMCUser is empty", func() {
 			It("should return an error", func() {
 				// given
 				cfg.BMCUser = ""
@@ -116,7 +122,7 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("when BMCPassword is empty", func() {
+		Context("should return an error when BMCPassword is empty", func() {
 			It("should return an error", func() {
 				// given
 				cfg.BMCPassword = ""
@@ -130,7 +136,7 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("when NetboxToken is empty", func() {
+		Context("should return an error when NetboxToken is empty", func() {
 			It("should return an error", func() {
 				// given
 				cfg.NetboxToken = ""
@@ -168,16 +174,19 @@ var _ = Describe("Reload", func() {
 			fileContent: make(map[string]string),
 			returnError: false,
 		}
-		cfg = &Config{client, fileReaderMock, "", "", "", "", "", "", ""}
+		cfg = NewDefaultConfiguration(client, fileReaderMock)
 	})
 
 	Context("when all fields are valid", func() {
 		It("should not return an error", func() {
 			// given
 			configJson := `{
-				"serverController": "controller1",
-				"ironCoreTypes": "type1",
-				"ironCoreRegion": "region1",
+				"serverController": "ironcore",
+				"ironCore": {
+				  "name": "name1",
+				  "region": "region1",
+					"types": "type1"
+				},
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
@@ -194,9 +203,10 @@ var _ = Describe("Reload", func() {
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.ServerController).To(Equal("controller1"))
-			Expect(cfg.IronCoreTypes).To(Equal("type1"))
-			Expect(cfg.IronCoreRegion).To(Equal("region1"))
+			Expect(cfg.ServerController).To(Equal(ControllerTypeIroncore))
+			Expect(cfg.IronCore.Name).To(Equal("name1"))
+			Expect(cfg.IronCore.Types).To(Equal("type1"))
+			Expect(cfg.IronCore.Region).To(Equal("region1"))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 
 			Expect(cfg.BMCUser).To(Equal("user"))
@@ -273,8 +283,11 @@ var _ = Describe("Reload", func() {
 			// given
 			configJson := `{
 				"serverController": "controller1",
-				"ironCoreTypes": "type1",
-				"ironCoreRegion": "region1",
+				"ironCore": {
+				  "name": "name1",
+				  "region": "region1",
+					"types": "type1"
+				},
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `b`
@@ -314,16 +327,19 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 			fileContent: make(map[string]string),
 			returnError: false,
 		}
-		cfg = &Config{client, fileReaderMock, "", "", "", "", "", "", ""}
+		cfg = NewDefaultConfiguration(client, fileReaderMock)
 	})
 
 	Context("when the file is read successfully", func() {
-		It("should unmarshal the JSON and decode base64 fields", func() {
+		It("should unmarshal the JSON content", func() {
 			// given
 			configJsonContent := `{
-				"serverController": "controller1",
-				"ironCoreTypes": "type1",
-				"ironCoreRegion": "region1",
+				"serverController": "ironcore",
+				"ironCore": {
+				  "name": "name1",
+				  "region": "region1",
+					"types": "type1"
+				},
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJsonContent := `{
@@ -339,9 +355,10 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 
 			// then
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.ServerController).To(Equal("controller1"))
-			Expect(cfg.IronCoreTypes).To(Equal("type1"))
-			Expect(cfg.IronCoreRegion).To(Equal("region1"))
+			Expect(cfg.ServerController).To(Equal(ControllerTypeIroncore))
+			Expect(cfg.IronCore.Name).To(Equal("name1"))
+			Expect(cfg.IronCore.Region).To(Equal("region1"))
+			Expect(cfg.IronCore.Types).To(Equal("type1"))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 
 			// when
