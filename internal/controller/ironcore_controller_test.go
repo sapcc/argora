@@ -179,17 +179,17 @@ var _ = Describe("Ironcore Controller", func() {
 				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
 
 				// then
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Requeue).To(BeFalse())
 
 				bmcSecret := &metalv1alpha1.BMCSecret{}
 				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmcSecret)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				expectBMCSecret(bmcSecret)
 
 				bmc := &metalv1alpha1.BMC{}
 				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmc)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				expectBMC(bmc)
 
 				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 2
@@ -320,7 +320,7 @@ var _ = Describe("Ironcore Controller", func() {
 				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
 
 				// then
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Requeue).To(BeFalse())
 			})
 
@@ -360,13 +360,13 @@ var _ = Describe("Ironcore Controller", func() {
 					},
 				}
 				err := k8sClient.Create(ctx, bmc)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// when
 				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
 
 				// then
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Requeue).To(BeFalse())
 			})
 		})

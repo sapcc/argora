@@ -93,7 +93,7 @@ var _ = Describe("Extras", func() {
 				}
 
 				tag, err := extrasService.GetTagByName("test-tag")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(tag).To(Equal(&expectedTag))
 			})
 		})

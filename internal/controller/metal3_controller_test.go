@@ -241,7 +241,7 @@ var _ = Describe("Metal3 Controller", func() {
 
 		var networkData networkdata.NetworkData
 		err := yaml.Unmarshal(ndSecret.Data["networkData"], &networkData)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		Expect(networkData.Links).To(BeEmpty())
 		Expect(networkData.Services).To(BeEmpty())
@@ -319,22 +319,22 @@ var _ = Describe("Metal3 Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Requeue).To(BeFalse())
 
 			bmcSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, typeNamespacedSecretName, bmcSecret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			expectBMCSecret(bmcSecret)
 
 			bmh := &v1alpha1.BareMetalHost{}
 			err = k8sClient.Get(ctx, typeNamespacedBareMetalHostName, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			expectBareMetalHost(bmh)
 
 			ndSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, typeNamespacedNDSecretName, ndSecret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			expectNetworkDataSecret(ndSecret)
 
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
@@ -481,7 +481,7 @@ var _ = Describe("Metal3 Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Requeue).To(BeFalse())
 		})
 
@@ -523,7 +523,7 @@ var _ = Describe("Metal3 Controller", func() {
 				},
 			}
 			err := k8sClient.Create(ctx, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// when
 			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -531,7 +531,7 @@ var _ = Describe("Metal3 Controller", func() {
 			})
 
 			// then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Requeue).To(BeFalse())
 		})
 	})

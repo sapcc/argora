@@ -47,8 +47,8 @@ var _ = Describe("Runner", func() {
 				WithEventChannel(eventChannel),
 			)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(r).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(r).ToNot(BeNil())
 			Expect(r.client).To(Equal(client))
 			Expect(r.interval).To(Equal(interval))
 			Expect(r.eventChannel).To(Equal(eventChannel))
@@ -63,11 +63,11 @@ var _ = Describe("Runner", func() {
 				WithInterval(interval),
 				WithEventChannel(eventChannel),
 			)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			go func() {
 				err := runner.Start(ctx)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}()
 
 			Eventually(eventChannel).Should(Receive())
@@ -80,11 +80,11 @@ var _ = Describe("Runner", func() {
 				WithInterval(interval),
 				WithEventChannel(eventChannel),
 			)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			go func() {
 				err := runner.Start(ctx)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}()
 
 			Eventually(eventChannel).Should(Receive())
@@ -101,11 +101,11 @@ var _ = Describe("Runner", func() {
 				WithInterval(interval),
 				WithEventChannel(eventChannel),
 			)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			go func() {
 				err := runner.Start(ctx)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}()
 
 			var receivedEvent event.GenericEvent
