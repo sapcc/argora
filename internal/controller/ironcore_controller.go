@@ -122,7 +122,7 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 		}
 
 		if len(clusters) > 1 {
-			return ctrl.Result{}, fmt.Errorf("multiple clusters found")
+			return ctrl.Result{}, errors.New("multiple clusters found")
 		}
 
 		for _, cluster := range clusters {

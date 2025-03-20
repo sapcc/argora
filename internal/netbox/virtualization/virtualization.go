@@ -5,7 +5,7 @@
 package virtualization
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/sapcc/go-netbox-go/models"
 	"github.com/sapcc/go-netbox-go/virtualization"
@@ -35,7 +35,7 @@ func (v *VirtualizationService) GetClustersByNameRegionType(name, region, cluste
 		return nil, err
 	}
 	if res.Count == 0 {
-		return nil, fmt.Errorf("no clusters found")
+		return nil, errors.New("no clusters found")
 	}
 	return res.Results, nil
 }
