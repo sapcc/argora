@@ -1,7 +1,7 @@
 // Copyright 2025 SAP SE
 // SPDX-License-Identifier: Apache-2.0
 
-package netbox_test
+package netbox
 
 import (
 	"testing"
@@ -9,8 +9,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/models"
-
-	"github.com/sapcc/argora/internal/netbox"
 )
 
 func TestConfig(t *testing.T) {
@@ -23,11 +21,7 @@ type MockDCIM struct{}
 type MockIPAM struct{}
 type MockExtras struct{}
 
-func (m *MockVirtualization) GetClusterByName(clusterName string) (*models.Cluster, error) {
-	return nil, nil
-}
-
-func (m *MockVirtualization) GetClusterByNameRegionType(name, region, clusterType string) (*models.Cluster, error) {
+func (m *MockVirtualization) GetClustersByNameRegionType(name, region, clusterType string) ([]models.Cluster, error) {
 	return nil, nil
 }
 
@@ -117,7 +111,7 @@ var _ = Describe("NetboxService", func() {
 		mockDCIM           *MockDCIM
 		mockIPAM           *MockIPAM
 		mockExtras         *MockExtras
-		netboxService      netbox.Netbox
+		netboxService      Netbox
 	)
 
 	BeforeEach(func() {
@@ -126,22 +120,12 @@ var _ = Describe("NetboxService", func() {
 		mockIPAM = &MockIPAM{}
 		mockExtras = &MockExtras{}
 
-		netboxService = netbox.NewNetbox()
-		netboxService.SetVirtualization(mockVirtualization)
-		netboxService.SetDCIM(mockDCIM)
-		netboxService.SetIPAM(mockIPAM)
-		netboxService.SetExtras(mockExtras)
+		netboxService = &NetboxService{mockVirtualization, mockDCIM, mockIPAM, mockExtras}
 	})
 
 	Describe("Virtualization", func() {
 		It("should return the correct virtualization service", func() {
 			Expect(netboxService.Virtualization()).To(Equal(mockVirtualization))
-		})
-
-		It("should set the correct virtualization service", func() {
-			newMockVirtualization := &MockVirtualization{}
-			netboxService.SetVirtualization(newMockVirtualization)
-			Expect(netboxService.Virtualization()).To(Equal(newMockVirtualization))
 		})
 	})
 
@@ -149,50 +133,17 @@ var _ = Describe("NetboxService", func() {
 		It("should return the correct DCIM service", func() {
 			Expect(netboxService.DCIM()).To(Equal(mockDCIM))
 		})
-
-		It("should set the correct DCIM service", func() {
-			newMockDCIM := &MockDCIM{}
-			netboxService.SetDCIM(newMockDCIM)
-			Expect(netboxService.DCIM()).To(Equal(newMockDCIM))
-		})
 	})
 
 	Describe("IPAM", func() {
 		It("should return the correct IPAM service", func() {
 			Expect(netboxService.IPAM()).To(Equal(mockIPAM))
 		})
-
-		It("should set the correct IPAM service", func() {
-			newMockIPAM := &MockIPAM{}
-			netboxService.SetIPAM(newMockIPAM)
-			Expect(netboxService.IPAM()).To(Equal(newMockIPAM))
-		})
 	})
 
 	Describe("Extras", func() {
 		It("should return the correct Extras service", func() {
 			Expect(netboxService.Extras()).To(Equal(mockExtras))
-		})
-
-		It("should set the correct Extras service", func() {
-			newMockExtras := &MockExtras{}
-			netboxService.SetExtras(newMockExtras)
-			Expect(netboxService.Extras()).To(Equal(newMockExtras))
-		})
-	})
-
-	Describe("NewDefaultNetbox", func() {
-		It("should return a new NetboxService with the correct services", func() {
-			url := "http://example.com"
-			token := "test-token"
-
-			netboxService, err := netbox.NewDefaultNetbox(url, token)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(netboxService).NotTo(BeNil())
-			Expect(netboxService.Virtualization()).NotTo(BeNil())
-			Expect(netboxService.DCIM()).NotTo(BeNil())
-			Expect(netboxService.IPAM()).NotTo(BeNil())
-			Expect(netboxService.Extras()).NotTo(BeNil())
 		})
 	})
 
@@ -203,6 +154,7 @@ var _ = Describe("NetboxService", func() {
 
 			err := netboxService.Reload(url, token)
 			Expect(err).NotTo(HaveOccurred())
+
 			Expect(netboxService.Virtualization()).NotTo(BeNil())
 			Expect(netboxService.DCIM()).NotTo(BeNil())
 			Expect(netboxService.IPAM()).NotTo(BeNil())

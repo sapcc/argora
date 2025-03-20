@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
-	github.com/metal3-io/baremetal-operator/apis v0.9.0
+	github.com/metal3-io/baremetal-operator/apis v0.9.1
 	github.com/sapcc/go-api-declarations v1.14.0
 	github.com/sapcc/go-netbox-go v0.0.0-20250313134419-813a4fd4d130
 	k8s.io/api v0.32.2
@@ -13,7 +13,7 @@ require (
 )
 
 require (
-	github.com/ironcore-dev/metal-operator v0.0.0-20250311125029-0a7b932d06b0
+	github.com/ironcore-dev/metal-operator v0.0.0-20250314134415-326100cd0d13
 	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
@@ -21,6 +21,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
+	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 )
 
 require (
@@ -67,7 +68,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/net v0.36.0 // indirect
-	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
@@ -80,7 +81,6 @@ require (
 	k8s.io/apiextensions-apiserver v0.32.2 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7 // indirect
-	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect

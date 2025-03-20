@@ -128,25 +128,37 @@ var _ = Describe("Virtualization", func() {
 		virtualizationService = virtualization.NewVirtualization(mockClient)
 	})
 
-	Describe("GetClusterByName", func() {
+	Describe("GetClustersByNameRegionType", func() {
 		It("should return the cluster when found", func() {
-			expectedCluster := models.Cluster{Name: "test-cluster"}
 			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
+				Expect(opts.Name).To(Equal("test-cluster"))
+				Expect(opts.Region).To(Equal(""))
+				Expect(opts.Type).To(Equal(""))
+
 				return &models.ListClusterResponse{
 					ReturnValues: common.ReturnValues{
 						Count: 1,
 					},
-					Results: []models.Cluster{expectedCluster},
+					Results: []models.Cluster{
+						{
+							Name: "test-cluster",
+						},
+					},
 				}, nil
 			}
 
-			cluster, err := virtualizationService.GetClusterByName("test-cluster")
+			clusters, err := virtualizationService.GetClustersByNameRegionType("test-cluster", "", "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cluster).To(Equal(&expectedCluster))
+			Expect(clusters).To(HaveLen(1))
+			Expect(clusters[0].Name).To(Equal("test-cluster"))
 		})
 
 		It("should return an error when no clusters are found", func() {
 			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
+				Expect(opts.Name).To(Equal(""))
+				Expect(opts.Region).To(Equal("test-region"))
+				Expect(opts.Type).To(Equal(""))
+
 				return &models.ListClusterResponse{
 					ReturnValues: common.ReturnValues{
 						Count: 0,
@@ -155,95 +167,22 @@ var _ = Describe("Virtualization", func() {
 				}, nil
 			}
 
-			cluster, err := virtualizationService.GetClusterByName("test-cluster")
+			cluster, err := virtualizationService.GetClustersByNameRegionType("", "test-region", "")
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of clusters found (0)"))
-			Expect(cluster).To(BeNil())
-		})
-
-		It("should return an error when multiple clusters are found", func() {
-			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
-				return &models.ListClusterResponse{
-					ReturnValues: common.ReturnValues{
-						Count: 2,
-					},
-					Results: []models.Cluster{{Name: "test-cluster-1"}, {Name: "test-cluster-2"}},
-				}, nil
-			}
-
-			cluster, err := virtualizationService.GetClusterByName("test-cluster")
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of clusters found (2)"))
+			Expect(err).To(MatchError("no clusters found"))
 			Expect(cluster).To(BeNil())
 		})
 
 		It("should return an error when the client returns an error", func() {
 			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
+				Expect(opts.Name).To(Equal(""))
+				Expect(opts.Region).To(Equal(""))
+				Expect(opts.Type).To(Equal("test-type"))
+
 				return nil, errors.New("client error")
 			}
 
-			cluster, err := virtualizationService.GetClusterByName("test-cluster")
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unable to list clusters by name test-cluster: client error"))
-			Expect(cluster).To(BeNil())
-		})
-	})
-
-	Describe("GetClusterByNameRegionType", func() {
-		It("should return the cluster when found", func() {
-			expectedCluster := models.Cluster{Name: "test-cluster"}
-			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
-				return &models.ListClusterResponse{
-					ReturnValues: common.ReturnValues{
-						Count: 1,
-					},
-					Results: []models.Cluster{expectedCluster},
-				}, nil
-			}
-
-			cluster, err := virtualizationService.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cluster).To(Equal(&expectedCluster))
-		})
-
-		It("should return an error when no clusters are found", func() {
-			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
-				return &models.ListClusterResponse{
-					ReturnValues: common.ReturnValues{
-						Count: 0,
-					},
-					Results: []models.Cluster{},
-				}, nil
-			}
-
-			cluster, err := virtualizationService.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of clusters found (0)"))
-			Expect(cluster).To(BeNil())
-		})
-
-		It("should return an error when multiple clusters are found", func() {
-			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
-				return &models.ListClusterResponse{
-					ReturnValues: common.ReturnValues{
-						Count: 2,
-					},
-					Results: []models.Cluster{{Name: "test-cluster-1"}, {Name: "test-cluster-2"}},
-				}, nil
-			}
-
-			cluster, err := virtualizationService.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of clusters found (2)"))
-			Expect(cluster).To(BeNil())
-		})
-
-		It("should return an error when the client returns an error", func() {
-			mockClient.ListClustersFunc = func(opts models.ListClusterRequest) (*models.ListClusterResponse, error) {
-				return nil, errors.New("client error")
-			}
-
-			cluster, err := virtualizationService.GetClusterByNameRegionType("test-cluster", "test-region", "test-type")
+			cluster, err := virtualizationService.GetClustersByNameRegionType("", "", "test-type")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("client error"))
 			Expect(cluster).To(BeNil())

@@ -25,9 +25,11 @@ image:
   tag: "0.0.x"
 
 config:
-  ironCoreRoles: "cc-kvm-compute"
-  ironCoreRegion: "qa-de-1"
   serverController: "ironcore"
+  ironCore:
+    name: ""
+    region: "qa-de-1"
+    types: "cc-kvm-compute,cc-kvm-admin"
   netboxURL: "https://netbox.global.cloud.sap/"
 
 credentials:

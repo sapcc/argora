@@ -41,15 +41,17 @@ type IronCoreReconciler struct {
 	k8sClient         client.Client
 	scheme            *runtime.Scheme
 	cfg               *config.Config
+	netBox            netbox.Netbox
 	reconcileInterval time.Duration
 	eventChannel      chan event.GenericEvent
 }
 
-func NewIronCoreReconciler(client client.Client, scheme *runtime.Scheme, config *config.Config, reconcileInterval time.Duration) *IronCoreReconciler {
+func NewIronCoreReconciler(client client.Client, scheme *runtime.Scheme, config *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
 	return &IronCoreReconciler{
 		k8sClient:         client,
 		scheme:            scheme,
 		cfg:               config,
+		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
 		eventChannel:      make(chan event.GenericEvent),
 	}
@@ -94,44 +96,50 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 
 	logger.Info("configuration reloaded", "config", r.cfg)
 
-	if r.cfg.ServerController != "ironcore" {
+	if r.cfg.ServerController != config.ControllerTypeIroncore {
 		logger.Info("ironcore controller not enabled")
 		return ctrl.Result{}, nil
 	}
 
-	netBox, err := netbox.NewDefaultNetbox(r.cfg.NetboxURL, r.cfg.NetboxToken)
+	err = r.netBox.Reload(r.cfg.NetboxURL, r.cfg.NetboxToken)
 	if err != nil {
-		logger.Error(err, "unable to create netbox client")
+		logger.Error(err, "unable to reload netbox")
 		return ctrl.Result{}, err
 	}
 
 	var clusterTypes []string
-	if r.cfg.IronCoreTypes != "" {
-		clusterTypes = strings.Split(r.cfg.IronCoreTypes, ",")
+	if r.cfg.IronCore.Types != "" {
+		clusterTypes = strings.Split(r.cfg.IronCore.Types, ",")
 	}
 
 	for _, clusterType := range clusterTypes {
-		logger.Info("reconciling IronCore clusters", "type", clusterType, "region", r.cfg.IronCoreRegion)
+		logger.Info("reconciling IronCore clusters", "name", r.cfg.IronCore.Name, "region", r.cfg.IronCore.Region, "type", clusterType)
 
-		cluster, err := netBox.Virtualization().GetClusterByNameRegionType("", r.cfg.IronCoreRegion, clusterType)
+		clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(r.cfg.IronCore.Name, r.cfg.IronCore.Region, clusterType)
 		if err != nil {
-			logger.Error(err, "unable to find cluster in netbox", "region", r.cfg.IronCoreRegion, "type", clusterType)
+			logger.Error(err, "unable to find cluster in netbox", "name", r.cfg.IronCore.Name, "region", r.cfg.IronCore.Region, "type", clusterType)
 			return ctrl.Result{}, err
 		}
 
-		logger.Info("reconciling cluster", "cluster", cluster.Name, "ID", cluster.ID)
-
-		devices, err := netBox.DCIM().GetDevicesByClusterID(cluster.ID)
-		if err != nil {
-			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
-			return ctrl.Result{}, err
+		if len(clusters) > 1 {
+			return ctrl.Result{}, errors.New("multiple clusters found")
 		}
 
-		for _, device := range devices {
-			err = r.reconcileDevice(ctx, netBox, cluster.Name, &device)
+		for _, cluster := range clusters {
+			logger.Info("reconciling cluster", "cluster", cluster.Name, "ID", cluster.ID)
+
+			devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 			if err != nil {
-				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+				logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
 				return ctrl.Result{}, err
+			}
+
+			for _, device := range devices {
+				err = r.reconcileDevice(ctx, r.netBox, cluster.Name, &device)
+				if err != nil {
+					logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+					return ctrl.Result{}, err
+				}
 			}
 		}
 	}
@@ -210,6 +218,10 @@ func (r *IronCoreReconciler) createBmcSecret(ctx context.Context, device *models
 	}
 
 	bmcSecret := &metalv1alpha1.BMCSecret{
+		TypeMeta: ctrl.TypeMeta{
+			APIVersion: metalv1alpha1.GroupVersion.String(),
+			Kind:       "BMCSecret",
+		},
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:   device.Name,
 			Labels: labels,
@@ -240,6 +252,10 @@ func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Devic
 	}
 
 	bmc := &metalv1alpha1.BMC{
+		TypeMeta: ctrl.TypeMeta{
+			APIVersion: metalv1alpha1.GroupVersion.String(),
+			Kind:       "BMC",
+		},
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:   device.Name,
 			Labels: labels,
