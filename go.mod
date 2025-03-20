@@ -13,7 +13,7 @@ require (
 )
 
 require (
-	github.com/ironcore-dev/metal-operator v0.0.0-20250311125029-0a7b932d06b0
+	github.com/ironcore-dev/metal-operator v0.0.0-20250314134415-326100cd0d13
 	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
