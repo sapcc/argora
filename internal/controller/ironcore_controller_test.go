@@ -197,6 +197,57 @@ var _ = Describe("Ironcore Controller", func() {
 				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 2
 			})
 
+			It("should successfully reconcile if cluster selection is only by name", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+					Expect(name).To(Equal("name1"))
+					Expect(region).To(BeEmpty())
+					Expect(clusterType).To(BeEmpty())
+
+					return []models.Cluster{
+						{
+							ID:   1,
+							Name: "cluster1",
+						},
+					}, nil
+				}
+				fileReaderMockWithNameOnly := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: false,
+				}
+				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
+					"serverController": "ironcore",
+					"ironCore": {
+						"name": "name1"
+					},
+					"netboxUrl": "http://netbox"
+				}`
+				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Requeue).To(BeFalse())
+
+				bmcSecret := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				expectBMCSecret(bmcSecret)
+
+				bmc := &metalv1alpha1.BMC{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmc)
+				Expect(err).ToNot(HaveOccurred())
+				expectBMC(bmc)
+
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 2
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 2
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 2
+			})
+
 			It("should return an error if netbox reload fails", func() {
 				// given
 				controllerReconciler := createIronCoreReconciler(k8sClient, &mock.NetBoxMock{ReturnError: true}, fileReaderMock)
