@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -246,6 +247,58 @@ var _ = Describe("Ironcore Controller", func() {
 				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 2
 				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 2
 				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 2
+			})
+
+			It("should return an error if configuration reload fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				fileReaderMockToError := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: true,
+				}
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockToError)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("unable to read config.json: error"))
+			})
+
+			It("should not reconcile if server controller is not set to ironcore", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				fileReaderMockWithNameOnly := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: false,
+				}
+				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
+					"serverController": "metal3",
+					"ironCore": { },
+					"netboxUrl": "http://netbox"
+				}`
+				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Requeue).To(BeFalse())
+
+				bmcSecret := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmcSecret)
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+				bmc := &metalv1alpha1.BMC{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmc)
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 0
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 0
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 0
 			})
 
 			It("should return an error if netbox reload fails", func() {

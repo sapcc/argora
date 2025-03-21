@@ -219,7 +219,7 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, cluster *cluster
 		return fmt.Errorf("unable to upload bmc secret: %w", err)
 	}
 
-	logger.Info("created BMC Secret resource", "name", bmcSecret.Name)
+	logger.Info("created BMC Secret", "name", bmcSecret.Name)
 
 	role, err := getRoleFromTags(device)
 	if err != nil {
@@ -269,13 +269,13 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, cluster *cluster
 		return fmt.Errorf("unable to create baremetal host: %w", err)
 	}
 
-	logger.Info("created BareMetalHost custom resource", "name", bareMetalHost.Name)
+	logger.Info("created BareMetalHost CR", "name", bareMetalHost.Name)
 
 	if err = r.createNetworkDataSecret(ctx, bareMetalHost, cluster, device, role, ndSecretName); err != nil {
 		return fmt.Errorf("unable to create network data: %w", err)
 	}
 
-	logger.Info("created NetworkData Secret resource", "name", ndSecretName)
+	logger.Info("created NetworkData Secret", "name", ndSecretName)
 
 	return nil
 }

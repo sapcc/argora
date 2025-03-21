@@ -77,8 +77,6 @@ func init() {
 
 // nolint:gocyclo
 func main() {
-	setupLog.Info("argora", "version", bininfo.Version())
-
 	flagVar := createFlagVar()
 	opts := zap.Options{
 		Development: true,
@@ -172,6 +170,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	setupLog.Info("argora", "version", bininfo.Version())
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")

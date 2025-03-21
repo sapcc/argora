@@ -18,6 +18,42 @@ func TestConfig(t *testing.T) {
 	RunSpecs(t, "Config Suite")
 }
 
+var _ = Describe("ControllerType", func() {
+	Context("String method", func() {
+		It("should return 'ironcore' for ControllerTypeIroncore", func() {
+			// given
+			controllerType := ControllerTypeIroncore
+
+			// when
+			result := controllerType.String()
+
+			// then
+			Expect(result).To(Equal("ironcore"))
+		})
+
+		It("should return 'metal3' for ControllerTypeMetal3", func() {
+			// given
+			controllerType := ControllerTypeMetal3
+
+			// when
+			result := controllerType.String()
+
+			// then
+			Expect(result).To(Equal("metal3"))
+		})
+
+		It("should panic for an unimplemented ControllerType", func() {
+			// given
+			controllerType := ControllerType("unknown")
+
+			// when/then
+			Expect(func() {
+				_ = controllerType.String()
+			}).To(Panic())
+		})
+	})
+})
+
 var _ = Describe("Config", func() {
 	var cfg *Config
 

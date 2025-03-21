@@ -201,14 +201,14 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		return fmt.Errorf("unable to create bmc secret: %w", err)
 	}
 
-	logger.Info("created BMC Secret resource", "name", bmcSecret.Name)
+	logger.Info("created BMC Secret", "name", bmcSecret.Name)
 
 	bmc, err := r.createBmc(ctx, device, oobIP, bmcSecret, commonLabels)
 	if err != nil {
 		return fmt.Errorf("unable to create bmc: %w", err)
 	}
 
-	logger.Info("created BMC custom resource", "name", bmc.Name)
+	logger.Info("created BMC CR", "name", bmc.Name)
 
 	if err := r.setOwnerReferenceAndPatch(ctx, bmc, bmcSecret); err != nil {
 		return err

@@ -209,6 +209,23 @@ var _ = Describe("Update Controller", func() {
 			expectStatus(argorav1alpha1.Ready, "")
 		})
 
+		It("should return an error if configuration reload fails", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			fileReaderMockToError := &mock.FileReaderMock{
+				FileContent: make(map[string]string),
+				ReturnError: true,
+			}
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMockToError)
+
+			// when
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to read config.json: error"))
+		})
+
 		It("should return an error if netbox reload fails", func() {
 			// given
 			controllerReconciler := createUpdateReconciler(&mock.NetBoxMock{ReturnError: true}, fileReaderMock)
