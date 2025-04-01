@@ -144,7 +144,7 @@ var _ = Describe("Update Controller", func() {
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
-				Expect(platformName).To(Equal("Linux KVM"))
+				Expect(platformName).To(Equal("GardenLinux"))
 				return &models.Platform{
 					NestedPlatform: models.NestedPlatform{ID: 1},
 				}, nil
@@ -451,7 +451,7 @@ var _ = Describe("Update Controller", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
-				Expect(platformName).To(Equal("Linux KVM"))
+				Expect(platformName).To(Equal("GardenLinux"))
 				return &models.Platform{
 					NestedPlatform: models.NestedPlatform{ID: 2},
 				}, nil
@@ -521,7 +521,7 @@ var _ = Describe("Update Controller", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {
-				Expect(platformName).To(Equal("Linux KVM"))
+				Expect(platformName).To(Equal("GardenLinux"))
 				return &models.Platform{
 					NestedPlatform: models.NestedPlatform{ID: 2},
 				}, nil

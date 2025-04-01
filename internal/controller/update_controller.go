@@ -222,7 +222,7 @@ func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox netbox.N
 		return err
 	}
 
-	platform, err := netBox.DCIM().GetPlatformByName("Linux KVM")
+	platform, err := netBox.DCIM().GetPlatformByName("GardenLinux")
 	if err != nil {
 		return err
 	}
