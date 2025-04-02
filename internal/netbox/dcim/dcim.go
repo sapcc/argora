@@ -47,7 +47,7 @@ func (d *DCIMService) GetDeviceByName(deviceName string) (*models.Device, error)
 		return nil, fmt.Errorf("unable to list devices by name %s: %w", deviceName, err)
 	}
 	if res.Count != 1 {
-		return nil, fmt.Errorf("unexpected number of devices found (%d)", res.Count)
+		return nil, fmt.Errorf("unexpected number of devices found by name %s: %d", deviceName, res.Count)
 	}
 	return &res.Results[0], nil
 }
@@ -59,10 +59,10 @@ func (d *DCIMService) GetDeviceByID(id int) (*models.Device, error) {
 
 	res, err := d.netboxAPI.ListDevices(listDevicesRequest)
 	if err != nil {
-		return nil, fmt.Errorf("unable to list devices for id %d: %w", id, err)
+		return nil, fmt.Errorf("unable to list devices for ID %d: %w", id, err)
 	}
 	if res.Count != 1 {
-		return nil, fmt.Errorf("unexpected number of devices found (%d)", res.Count)
+		return nil, fmt.Errorf("unexpected number of devices found for ID %d: %d", id, res.Count)
 	}
 	return &res.Results[0], nil
 }
@@ -89,7 +89,7 @@ func (d *DCIMService) GetRoleByName(roleName string) (*models.DeviceRole, error)
 		return nil, fmt.Errorf("unable to list roles by name %s: %w", roleName, err)
 	}
 	if res.Count != 1 {
-		return nil, fmt.Errorf("unexpected number of roles found (%d)", res.Count)
+		return nil, fmt.Errorf("unexpected number of roles found by name %s: %d", roleName, res.Count)
 	}
 	return &res.Results[0], nil
 }
@@ -171,7 +171,7 @@ func (d *DCIMService) GetPlatformByName(platformName string) (*models.Platform, 
 		return nil, fmt.Errorf("unable to list platforms by name %s: %w", platformName, err)
 	}
 	if res.Count != 1 {
-		return nil, fmt.Errorf("unexpected number of platforms found (%d)", res.Count)
+		return nil, fmt.Errorf("unexpected number of platforms found by name %s: %d", platformName, res.Count)
 	}
 	return &res.Results[0], nil
 }

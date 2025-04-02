@@ -39,7 +39,7 @@ func (i *IPAMService) GetVlanByName(vlanName string) (*models.Vlan, error) {
 		return nil, fmt.Errorf("unable to list VLANs by name %s: %w", vlanName, err)
 	}
 	if res.Count != 1 {
-		return nil, fmt.Errorf("unexpected number of VLANs found (%d)", res.Count)
+		return nil, fmt.Errorf("unexpected number of VLANs found by name %s: %d", vlanName, res.Count)
 	}
 	return &res.Results[0], nil
 }
@@ -54,7 +54,7 @@ func (i *IPAMService) GetIPAddressByAddress(address string) (*models.IPAddress, 
 		return nil, fmt.Errorf("unable to list IP addresses with address %s: %w", address, err)
 	}
 	if len(res.Results) != 1 {
-		return nil, fmt.Errorf("unexpected number of IP addresses found (%d)", len(res.Results))
+		return nil, fmt.Errorf("unexpected number of IP addresses found with address %s: %d", address, len(res.Results))
 	}
 	return &res.Results[0], nil
 }
@@ -77,7 +77,7 @@ func (i *IPAMService) GetIPAddressForInterface(interfaceID int) (*models.IPAddre
 		return nil, err
 	}
 	if len(ifaces) != 1 {
-		return nil, fmt.Errorf("unexpected number of IP addresses found (%d)", len(ifaces))
+		return nil, fmt.Errorf("unexpected number of IP addresses found for interface ID %d: %d", interfaceID, len(ifaces))
 	}
 	return &ifaces[0], nil
 }
