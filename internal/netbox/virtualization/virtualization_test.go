@@ -134,7 +134,6 @@ var _ = Describe("Virtualization", func() {
 				Expect(opts.Name).To(Equal("test-cluster"))
 				Expect(opts.Region).To(Equal(""))
 				Expect(opts.Type).To(Equal(""))
-
 				return &models.ListClusterResponse{
 					ReturnValues: common.ReturnValues{
 						Count: 1,
@@ -158,7 +157,6 @@ var _ = Describe("Virtualization", func() {
 				Expect(opts.Name).To(Equal(""))
 				Expect(opts.Region).To(Equal("test-region"))
 				Expect(opts.Type).To(Equal(""))
-
 				return &models.ListClusterResponse{
 					ReturnValues: common.ReturnValues{
 						Count: 0,
@@ -178,7 +176,6 @@ var _ = Describe("Virtualization", func() {
 				Expect(opts.Name).To(Equal(""))
 				Expect(opts.Region).To(Equal(""))
 				Expect(opts.Type).To(Equal("test-type"))
-
 				return nil, errors.New("client error")
 			}
 
