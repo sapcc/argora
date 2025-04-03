@@ -5,6 +5,7 @@
 package netbox
 
 import (
+	"github.com/go-logr/logr"
 	"github.com/sapcc/go-netbox-go/dcim"
 	"github.com/sapcc/go-netbox-go/extras"
 	"github.com/sapcc/go-netbox-go/ipam"
@@ -17,7 +18,7 @@ import (
 )
 
 type Netbox interface {
-	Reload(url, token string) error
+	Reload(url, token string, logger logr.Logger) error
 
 	Virtualization() _virtualization.Virtualization
 	DCIM() _dcim.DCIM
@@ -41,7 +42,7 @@ func NewNetbox() Netbox {
 	}
 }
 
-func (n *NetboxService) Reload(url, token string) error {
+func (n *NetboxService) Reload(url, token string, logger logr.Logger) error {
 	virtualization, err := virtualization.NewClient(url, token, false)
 	if err != nil {
 		return err
@@ -58,10 +59,10 @@ func (n *NetboxService) Reload(url, token string) error {
 	if err != nil {
 		return err
 	}
-	n.virtualization = _virtualization.NewVirtualization(virtualization)
-	n.dcim = _dcim.NewDCIM(dcim)
-	n.ipam = _ipam.NewIPAM(ipam)
-	n.extras = _extras.NewExtras(extras)
+	n.virtualization = _virtualization.NewVirtualization(virtualization, logger.WithValues("nbComponent", "virtualization"))
+	n.dcim = _dcim.NewDCIM(dcim, logger.WithValues("nbComponent", "dcim"))
+	n.ipam = _ipam.NewIPAM(ipam, logger.WithValues("nbComponent", "ipam"))
+	n.extras = _extras.NewExtras(extras, logger.WithValues("nbComponent", "extras"))
 	return nil
 }
 

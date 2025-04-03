@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/go-logr/logr"
 	"github.com/sapcc/go-netbox-go/models"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
@@ -73,7 +74,7 @@ type NetBoxMock struct {
 	ExtrasMock         extras.Extras
 }
 
-func (n *NetBoxMock) Reload(_, _ string) error {
+func (n *NetBoxMock) Reload(_, _ string, _ logr.Logger) error {
 	if n.ReturnError {
 		return errors.New("unable to reload netbox")
 	}

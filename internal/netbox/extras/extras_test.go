@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/common"
@@ -72,7 +73,7 @@ var _ = Describe("Extras", func() {
 
 	BeforeEach(func() {
 		mockClient = &MockExtrasClient{}
-		extrasService = extras.NewExtras(mockClient)
+		extrasService = extras.NewExtras(mockClient, logr.Discard())
 	})
 
 	Describe("GetTagByName", func() {
@@ -84,6 +85,7 @@ var _ = Describe("Extras", func() {
 					},
 				}
 				mockClient.ListTagsFunc = func(opts models.ListTagsRequest) (*models.ListTagsResponse, error) {
+					Expect(opts.Name).To(Equal("test-tag"))
 					return &models.ListTagsResponse{
 						ReturnValues: common.ReturnValues{
 							Count: 1,
@@ -101,6 +103,7 @@ var _ = Describe("Extras", func() {
 		Context("when the tag does not exist", func() {
 			It("should return an error", func() {
 				mockClient.ListTagsFunc = func(opts models.ListTagsRequest) (*models.ListTagsResponse, error) {
+					Expect(opts.Name).To(Equal("nonexistent-tag"))
 					return &models.ListTagsResponse{
 						ReturnValues: common.ReturnValues{
 							Count: 0,
@@ -111,7 +114,7 @@ var _ = Describe("Extras", func() {
 
 				tag, err := extrasService.GetTagByName("nonexistent-tag")
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError(fmt.Sprintf("unexpected number of tags found (%d)", 0)))
+				Expect(err).To(MatchError(fmt.Sprintf("unexpected number of tags found by name nonexistent-tag: %d", 0)))
 				Expect(tag).To(BeNil())
 			})
 		})
@@ -119,6 +122,7 @@ var _ = Describe("Extras", func() {
 		Context("when there is an error listing tags", func() {
 			It("should return an error", func() {
 				mockClient.ListTagsFunc = func(opts models.ListTagsRequest) (*models.ListTagsResponse, error) {
+					Expect(opts.Name).To(Equal("test-tag"))
 					return nil, errors.New("list tags error")
 				}
 
@@ -132,6 +136,7 @@ var _ = Describe("Extras", func() {
 		Context("when multiple tags are found", func() {
 			It("should return an error", func() {
 				mockClient.ListTagsFunc = func(opts models.ListTagsRequest) (*models.ListTagsResponse, error) {
+					Expect(opts.Name).To(Equal("test-tag"))
 					return &models.ListTagsResponse{
 						ReturnValues: common.ReturnValues{
 							Count: 2,
@@ -153,7 +158,7 @@ var _ = Describe("Extras", func() {
 
 				tag, err := extrasService.GetTagByName("test-tag")
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError(fmt.Sprintf("unexpected number of tags found (%d)", 2)))
+				Expect(err).To(MatchError(fmt.Sprintf("unexpected number of tags found by name test-tag: %d", 2)))
 				Expect(tag).To(BeNil())
 			})
 		})

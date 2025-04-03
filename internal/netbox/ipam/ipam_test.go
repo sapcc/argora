@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/common"
@@ -149,12 +150,13 @@ var _ = Describe("IPAM", func() {
 
 	BeforeEach(func() {
 		mockClient = &MockIPAMClient{}
-		ipamService = ipam.NewIPAM(mockClient)
+		ipamService = ipam.NewIPAM(mockClient, logr.Discard())
 	})
 
 	Describe("GetVlanByName", func() {
 		It("should return the VLAN when found", func() {
 			mockClient.ListVlansFunc = func(opts models.ListVlanRequest) (*models.ListVlanResponse, error) {
+				Expect(opts.Name).To(Equal("test-vlan"))
 				return &models.ListVlanResponse{
 					ReturnValues: common.ReturnValues{
 						Count: 1,
@@ -174,6 +176,7 @@ var _ = Describe("IPAM", func() {
 
 		It("should return an error when VLAN is not found", func() {
 			mockClient.ListVlansFunc = func(opts models.ListVlanRequest) (*models.ListVlanResponse, error) {
+				Expect(opts.Name).To(Equal("non-existent-vlan"))
 				return &models.ListVlanResponse{
 					ReturnValues: common.ReturnValues{
 						Count: 0,
@@ -183,13 +186,14 @@ var _ = Describe("IPAM", func() {
 
 			_, err := ipamService.GetVlanByName("non-existent-vlan")
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of VLANs found (0)"))
+			Expect(err).To(MatchError("unexpected number of VLANs found by name non-existent-vlan: 0"))
 		})
 	})
 
 	Describe("GetIPAddressByAddress", func() {
 		It("should return the IP address when found", func() {
 			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+				Expect(opts.Address).To(Equal("192.168.1.1"))
 				return &models.ListIPAddressesResponse{
 					Results: []models.IPAddress{
 						{
@@ -208,18 +212,20 @@ var _ = Describe("IPAM", func() {
 
 		It("should return an error when IP address is not found", func() {
 			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+				Expect(opts.Address).To(Equal("192.168.1.2"))
 				return &models.ListIPAddressesResponse{Results: []models.IPAddress{}}, nil
 			}
 
 			_, err := ipamService.GetIPAddressByAddress("192.168.1.2")
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of IP addresses found (0)"))
+			Expect(err).To(MatchError("unexpected number of IP addresses found with address 192.168.1.2: 0"))
 		})
 	})
 
 	Describe("GetIPAddressesForInterface", func() {
 		It("should return the IP addresses for the interface", func() {
 			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+				Expect(opts.InterfaceID).To(Equal(1))
 				return &models.ListIPAddressesResponse{
 					Results: []models.IPAddress{
 						{
@@ -243,6 +249,7 @@ var _ = Describe("IPAM", func() {
 
 		It("should return an error when unable to list IP addresses", func() {
 			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+				Expect(opts.InterfaceID).To(Equal(1))
 				return nil, errors.New("error listing IP addresses")
 			}
 
@@ -255,6 +262,7 @@ var _ = Describe("IPAM", func() {
 	Describe("GetIPAddressForInterface", func() {
 		It("should return the IP address for the interface", func() {
 			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+				Expect(opts.InterfaceID).To(Equal(1))
 				return &models.ListIPAddressesResponse{
 					Results: []models.IPAddress{
 						{
@@ -273,6 +281,7 @@ var _ = Describe("IPAM", func() {
 
 		It("should return an error when multiple IP addresses are found", func() {
 			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+				Expect(opts.InterfaceID).To(Equal(1))
 				return &models.ListIPAddressesResponse{
 					Results: []models.IPAddress{
 						{
@@ -291,13 +300,14 @@ var _ = Describe("IPAM", func() {
 
 			_, err := ipamService.GetIPAddressForInterface(1)
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of IP addresses found (2)"))
+			Expect(err).To(MatchError("unexpected number of IP addresses found for interface ID 1: 2"))
 		})
 	})
 
 	Describe("GetPrefixesContaining", func() {
 		It("should return the prefixes containing the specified address", func() {
 			mockClient.ListPrefixesFunc = func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+				Expect(opts.Contains).To(Equal("192.168.1.1"))
 				return &models.ListPrefixesReponse{
 					Results: []models.Prefix{{Prefix: "192.168.1.0/24"}},
 				}, nil
@@ -310,6 +320,7 @@ var _ = Describe("IPAM", func() {
 
 		It("should return an error when no prefixes are found", func() {
 			mockClient.ListPrefixesFunc = func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+				Expect(opts.Contains).To(Equal("192.168.1.1"))
 				return &models.ListPrefixesReponse{Results: []models.Prefix{}}, nil
 			}
 
@@ -322,6 +333,7 @@ var _ = Describe("IPAM", func() {
 	Describe("DeleteIPAddress", func() {
 		It("should delete the IP address successfully", func() {
 			mockClient.DeleteIPAddressFunc = func(id int) error {
+				Expect(id).To(Equal(1))
 				return nil
 			}
 
@@ -331,6 +343,7 @@ var _ = Describe("IPAM", func() {
 
 		It("should return an error when unable to delete the IP address", func() {
 			mockClient.DeleteIPAddressFunc = func(id int) error {
+				Expect(id).To(Equal(1))
 				return errors.New("error deleting IP address")
 			}
 

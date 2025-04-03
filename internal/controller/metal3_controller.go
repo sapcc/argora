@@ -122,7 +122,7 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	err = r.netBox.Reload(r.cfg.NetboxURL, r.cfg.NetboxToken)
+	err = r.netBox.Reload(r.cfg.NetboxURL, r.cfg.NetboxToken, logger)
 	if err != nil {
 		logger.Error(err, "unable to reload netbox")
 		return ctrl.Result{}, err

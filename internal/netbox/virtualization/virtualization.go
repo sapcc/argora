@@ -7,6 +7,7 @@ package virtualization
 import (
 	"errors"
 
+	"github.com/go-logr/logr"
 	"github.com/sapcc/go-netbox-go/models"
 	"github.com/sapcc/go-netbox-go/virtualization"
 )
@@ -17,10 +18,11 @@ type Virtualization interface {
 
 type VirtualizationService struct {
 	netboxAPI virtualization.NetboxAPI
+	logger    logr.Logger
 }
 
-func NewVirtualization(netboxAPI virtualization.NetboxAPI) Virtualization {
-	return &VirtualizationService{netboxAPI: netboxAPI}
+func NewVirtualization(netboxAPI virtualization.NetboxAPI, logger logr.Logger) Virtualization {
+	return &VirtualizationService{netboxAPI, logger}
 }
 
 func (v *VirtualizationService) GetClustersByNameRegionType(name, region, clusterType string) ([]models.Cluster, error) {
@@ -29,7 +31,7 @@ func (v *VirtualizationService) GetClustersByNameRegionType(name, region, cluste
 		WithRegion(region),
 		WithType(clusterType),
 	).BuildRequest()
-
+	v.logger.V(1).Info("list clusters", "request", listClusterRequest)
 	res, err := v.netboxAPI.ListClusters(listClusterRequest)
 	if err != nil {
 		return nil, err

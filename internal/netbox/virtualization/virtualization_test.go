@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/common"
@@ -125,7 +126,7 @@ var _ = Describe("Virtualization", func() {
 
 	BeforeEach(func() {
 		mockClient = &MockVirtualizationClient{}
-		virtualizationService = virtualization.NewVirtualization(mockClient)
+		virtualizationService = virtualization.NewVirtualization(mockClient, logr.Discard())
 	})
 
 	Describe("GetClustersByNameRegionType", func() {
@@ -134,7 +135,6 @@ var _ = Describe("Virtualization", func() {
 				Expect(opts.Name).To(Equal("test-cluster"))
 				Expect(opts.Region).To(Equal(""))
 				Expect(opts.Type).To(Equal(""))
-
 				return &models.ListClusterResponse{
 					ReturnValues: common.ReturnValues{
 						Count: 1,
@@ -158,7 +158,6 @@ var _ = Describe("Virtualization", func() {
 				Expect(opts.Name).To(Equal(""))
 				Expect(opts.Region).To(Equal("test-region"))
 				Expect(opts.Type).To(Equal(""))
-
 				return &models.ListClusterResponse{
 					ReturnValues: common.ReturnValues{
 						Count: 0,
@@ -178,7 +177,6 @@ var _ = Describe("Virtualization", func() {
 				Expect(opts.Name).To(Equal(""))
 				Expect(opts.Region).To(Equal(""))
 				Expect(opts.Type).To(Equal("test-type"))
-
 				return nil, errors.New("client error")
 			}
 
