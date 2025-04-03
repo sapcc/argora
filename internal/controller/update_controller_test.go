@@ -305,23 +305,56 @@ var _ = Describe("Update Controller", func() {
 			expectStatus(argorav1alpha1.Error, "unable to reconcile devices on cluster cluster1 (1): unable to find devices")
 		})
 
-		It("should skip the device when the device is not active", func() {
+		It("should succeed when device is in staged status", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
-				return []models.Cluster{
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
+				Expect(clusterID).To(Equal(1))
+				return []models.Device{
 					{
-						ID:   1,
-						Name: "cluster1",
+						ID:     1,
+						Name:   "device1",
+						Status: models.DeviceStatus{Value: "staged"},
+						Platform: models.NestedPlatform{
+							ID: 1,
+						},
+						OOBIp: models.NestedIPAddress{
+							ID: 1,
+						},
 					},
 				}, nil
 			}
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 1
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls = 2
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls = 1
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls = 1
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls = 1
+
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should skip the device when the device is not active or staged", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
 				return []models.Device{
 					{
 						ID:     1,
 						Name:   "device1",
-						Status: models.DeviceStatus{Value: "inactive"},
+						Status: models.DeviceStatus{Value: "planned"},
 					},
 				}, nil
 			}
