@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/common"
@@ -204,7 +205,7 @@ var _ = Describe("DCIM", func() {
 
 	BeforeEach(func() {
 		mockClient = &MockDCIMClient{}
-		dcimService = dcim.NewDCIM(mockClient)
+		dcimService = dcim.NewDCIM(mockClient, logr.Discard())
 	})
 
 	Describe("GetDeviceByName", func() {

@@ -13,6 +13,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 
 	"github.com/sapcc/go-api-declarations/bininfo"
+	"go.uber.org/zap/zapcore"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
@@ -50,7 +51,7 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-type FlagVar struct {
+type FlagVariables struct {
 	metricsAddr          string
 	probeAddr            string
 	enableLeaderElection bool
@@ -77,9 +78,10 @@ func init() {
 
 // nolint:gocyclo
 func main() {
-	flagVar := createFlagVar()
+	flagVar := getFlagVariables()
 	opts := zap.Options{
 		Development: true,
+		Level:       zapcore.InfoLevel,
 	}
 
 	opts.BindFlags(flag.CommandLine)
@@ -178,20 +180,20 @@ func main() {
 	}
 }
 
-func createFlagVar() *FlagVar {
-	flagVar := new(FlagVar)
+func getFlagVariables() *FlagVariables {
+	flagVariables := new(FlagVariables)
 
-	flag.StringVar(&flagVar.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
-	flag.StringVar(&flagVar.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&flagVar.enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&flagVar.secureMetrics, "metrics-secure", true, "If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.BoolVar(&flagVar.enableHTTP2, "enable-http2", false, "If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&flagVariables.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
+	flag.StringVar(&flagVariables.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&flagVariables.enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
+	flag.BoolVar(&flagVariables.enableHTTP2, "enable-http2", false, "If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
-	flag.IntVar(&flagVar.rateLimiterBurst, "rate-limiter-burst", rateLimiterBurstDefault, "Indicates the burst value for the bucket rate limiter.")
-	flag.IntVar(&flagVar.rateLimiterFrequency, "rate-limiter-frequency", rateLimiterFrequencyDefault, "Indicates the bucket rate limiter frequency, signifying no. of events per second.")
-	flag.DurationVar(&flagVar.failureBaseDelay, "failure-base-delay", failureBaseDelayDefault, "Indicates the failure base delay for rate limiter.")
-	flag.DurationVar(&flagVar.failureMaxDelay, "failure-max-delay", failureMaxDelayDefault, "Indicates the failure max delay.")
-	flag.DurationVar(&flagVar.reconcileInterval, "reconcile-interval", reconcileIntervalDefault, "Indicates the time based reconcile interval.")
+	flag.IntVar(&flagVariables.rateLimiterBurst, "rate-limiter-burst", rateLimiterBurstDefault, "Indicates the burst value for the bucket rate limiter.")
+	flag.IntVar(&flagVariables.rateLimiterFrequency, "rate-limiter-frequency", rateLimiterFrequencyDefault, "Indicates the bucket rate limiter frequency, signifying no. of events per second.")
+	flag.DurationVar(&flagVariables.failureBaseDelay, "failure-base-delay", failureBaseDelayDefault, "Indicates the failure base delay for rate limiter.")
+	flag.DurationVar(&flagVariables.failureMaxDelay, "failure-max-delay", failureMaxDelayDefault, "Indicates the failure max delay.")
+	flag.DurationVar(&flagVariables.reconcileInterval, "reconcile-interval", reconcileIntervalDefault, "Indicates the time based reconcile interval.")
 
-	return flagVar
+	return flagVariables
 }

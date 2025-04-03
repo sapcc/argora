@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/common"
@@ -149,7 +150,7 @@ var _ = Describe("IPAM", func() {
 
 	BeforeEach(func() {
 		mockClient = &MockIPAMClient{}
-		ipamService = ipam.NewIPAM(mockClient)
+		ipamService = ipam.NewIPAM(mockClient, logr.Discard())
 	})
 
 	Describe("GetVlanByName", func() {

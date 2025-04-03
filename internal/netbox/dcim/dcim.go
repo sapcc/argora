@@ -7,6 +7,7 @@ package dcim
 import (
 	"fmt"
 
+	"github.com/go-logr/logr"
 	"github.com/sapcc/go-netbox-go/dcim"
 	"github.com/sapcc/go-netbox-go/models"
 )
@@ -31,17 +32,18 @@ type DCIM interface {
 
 type DCIMService struct {
 	netboxAPI dcim.NetboxAPI
+	logger    logr.Logger
 }
 
-func NewDCIM(netboxAPI dcim.NetboxAPI) DCIM {
-	return &DCIMService{netboxAPI: netboxAPI}
+func NewDCIM(netboxAPI dcim.NetboxAPI, logger logr.Logger) DCIM {
+	return &DCIMService{netboxAPI, logger}
 }
 
 func (d *DCIMService) GetDeviceByName(deviceName string) (*models.Device, error) {
 	listDevicesRequest := NewListDevicesRequest(
 		DeviceWithName(deviceName),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list devices", "request", listDevicesRequest)
 	res, err := d.netboxAPI.ListDevices(listDevicesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list devices by name %s: %w", deviceName, err)
@@ -56,7 +58,7 @@ func (d *DCIMService) GetDeviceByID(id int) (*models.Device, error) {
 	listDevicesRequest := NewListDevicesRequest(
 		DeviceWithID(id),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list devices", "request", listDevicesRequest)
 	res, err := d.netboxAPI.ListDevices(listDevicesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list devices for ID %d: %w", id, err)
@@ -71,7 +73,7 @@ func (d *DCIMService) GetDevicesByClusterID(clusterID int) ([]models.Device, err
 	listDevicesRequest := NewListDevicesRequest(
 		DeviceWithClusterID(clusterID),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list devices", "request", listDevicesRequest)
 	res, err := d.netboxAPI.ListDevices(listDevicesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to liste devices by cluster ID %d: %w", clusterID, err)
@@ -83,7 +85,7 @@ func (d *DCIMService) GetRoleByName(roleName string) (*models.DeviceRole, error)
 	listDeviceRolesRequest := NewListDeviceRolesRequest(
 		RoleWithName(roleName),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list device roles", "request", listDeviceRolesRequest)
 	res, err := d.netboxAPI.ListDeviceRoles(listDeviceRolesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list roles by name %s: %w", roleName, err)
@@ -95,10 +97,12 @@ func (d *DCIMService) GetRoleByName(roleName string) (*models.DeviceRole, error)
 }
 
 func (d *DCIMService) GetRegionForDevice(device *models.Device) (string, error) {
+	d.logger.V(1).Info("get site", "ID", device.Site.ID)
 	site, err := d.netboxAPI.GetSite(device.Site.ID)
 	if err != nil {
 		return "", fmt.Errorf("unable to get site for ID %d: %w", device.Site.ID, err)
 	}
+	d.logger.V(1).Info("get region", "ID", site.Region.ID)
 	region, err := d.netboxAPI.GetRegion(site.Region.ID)
 	if err != nil {
 		return "", fmt.Errorf("unable to get region for ID %d: %w", site.Region.ID, err)
@@ -110,7 +114,7 @@ func (d *DCIMService) GetInterfaceByID(id int) (*models.Interface, error) {
 	listInterfacesRequest := NewListInterfacesRequest(
 		InterfaceWithID(id),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list interfaces", "request", listInterfacesRequest)
 	rir, err := d.netboxAPI.ListInterfaces(listInterfacesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list interface for ID %d: %w", id, err)
@@ -125,7 +129,7 @@ func (d *DCIMService) GetInterfacesForDevice(device *models.Device) ([]models.In
 	listInterfacesRequest := NewListInterfacesRequest(
 		InterfaceWithDeviceID(device.ID),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list interfaces", "request", listInterfacesRequest)
 	rir, err := d.netboxAPI.ListInterfaces(listInterfacesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list interfaces for device: %s: %w", device.Name, err)
@@ -138,7 +142,7 @@ func (d *DCIMService) GetInterfaceForDevice(device *models.Device, ifaceName str
 		InterfaceWithName(ifaceName),
 		InterfaceWithDeviceID(device.ID),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list interfaces", "request", listInterfacesRequest)
 	rir, err := d.netboxAPI.ListInterfaces(listInterfacesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list interfaces by name %s (device ID: %d): %w", ifaceName, device.ID, err)
@@ -153,7 +157,7 @@ func (d *DCIMService) GetInterfacesByLagID(lagID int) ([]models.Interface, error
 	listInterfacesRequest := NewListInterfacesRequest(
 		InterfaceWithLagID(lagID),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list interfaces", "request", listInterfacesRequest)
 	rir, err := d.netboxAPI.ListInterfaces(listInterfacesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list interfaces for LAG ID %d: %w", lagID, err)
@@ -165,7 +169,7 @@ func (d *DCIMService) GetPlatformByName(platformName string) (*models.Platform, 
 	listPlatformsRequest := NewListPlatformsRequest(
 		PlatformWithName(platformName),
 	).BuildRequest()
-
+	d.logger.V(1).Info("list platforms", "request", listPlatformsRequest)
 	res, err := d.netboxAPI.ListPlatforms(listPlatformsRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list platforms by name %s: %w", platformName, err)
@@ -177,6 +181,7 @@ func (d *DCIMService) GetPlatformByName(platformName string) (*models.Platform, 
 }
 
 func (d *DCIMService) UpdateDevice(device models.WritableDeviceWithConfigContext) (*models.Device, error) {
+	d.logger.V(1).Info("update device", "device", device)
 	res, err := d.netboxAPI.UpdateDevice(device)
 	if err != nil {
 		return nil, fmt.Errorf("unable to update device: %w", err)
@@ -185,6 +190,7 @@ func (d *DCIMService) UpdateDevice(device models.WritableDeviceWithConfigContext
 }
 
 func (d *DCIMService) UpdateInterface(iface models.WritableInterface, id int) (*models.Interface, error) {
+	d.logger.V(1).Info("update interface", "interface", iface, "ID", id)
 	res, err := d.netboxAPI.UpdateInterface(iface, id)
 	if err != nil {
 		return nil, fmt.Errorf("unable to update interface: %w", err)
@@ -193,6 +199,7 @@ func (d *DCIMService) UpdateInterface(iface models.WritableInterface, id int) (*
 }
 
 func (d *DCIMService) DeleteInterface(id int) error {
+	d.logger.V(1).Info("delete interface", "ID", id)
 	err := d.netboxAPI.DeleteInterface(id)
 	if err != nil {
 		return fmt.Errorf("unable to delete interface (%d): %w", id, err)

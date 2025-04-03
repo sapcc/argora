@@ -6,6 +6,7 @@ package netbox
 import (
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/models"
@@ -152,7 +153,7 @@ var _ = Describe("NetboxService", func() {
 			url := "http://example.com"
 			token := "test-token"
 
-			err := netboxService.Reload(url, token)
+			err := netboxService.Reload(url, token, logr.Discard())
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(netboxService.Virtualization()).ToNot(BeNil())

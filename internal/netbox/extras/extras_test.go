@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/common"
@@ -72,7 +73,7 @@ var _ = Describe("Extras", func() {
 
 	BeforeEach(func() {
 		mockClient = &MockExtrasClient{}
-		extrasService = extras.NewExtras(mockClient)
+		extrasService = extras.NewExtras(mockClient, logr.Discard())
 	})
 
 	Describe("GetTagByName", func() {
