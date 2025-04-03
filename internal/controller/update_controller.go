@@ -161,8 +161,8 @@ func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
-	if device.Status.Value != "active" {
-		logger.Info("device is not active, will skip", "status", device.Status.Value)
+	if !slices.Contains([]string{"active", "staged"}, device.Status.Value) {
+		logger.Info("device is neither active or staged, will skip", "status", device.Status.Value)
 		return nil
 	}
 
