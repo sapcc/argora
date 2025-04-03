@@ -94,7 +94,7 @@ linters:
     gomoddirectives:
       replace-allow-list:
         - github.com/mdlayher/arp
-      toolchain-forbidden: true
+      toolchain-forbidden: false
       go-version-pattern: 1\.\d+(\.0)?$
     gosec:
       excludes:
