@@ -8,7 +8,7 @@ require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.9.1
 	github.com/sapcc/go-api-declarations v1.14.3
-	github.com/sapcc/go-netbox-go v0.0.0-20250331150522-d5f0e3efac86
+	github.com/sapcc/go-netbox-go v0.0.0-20250403114111-96a407ad8844
 	k8s.io/api v0.32.3
 	sigs.k8s.io/cluster-api v1.9.6
 	sigs.k8s.io/controller-runtime v0.20.4
