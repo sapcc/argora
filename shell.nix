@@ -11,7 +11,6 @@ mkShell {
     ginkgo
     go-licence-detector
     go_1_24
-    goreleaser
     gotools # goimports
     kubernetes-controller-tools # controller-gen
     setup-envtest
