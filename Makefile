@@ -3,7 +3,7 @@
 # Edit Makefile.maker.yaml instead.                                            #
 ################################################################################
 
-# SPDX-FileCopyrightText: 2024 SAP SE
+# Copyright 2024 SAP SE
 # SPDX-License-Identifier: Apache-2.0
 
 MAKEFLAGS=--warn-undefined-variables
@@ -154,48 +154,24 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	- $(CONTAINER_TOOL) buildx rm argora-builder
 	rm Dockerfile.cross
 
-.PHONY: build-installer
-build-installer: manifests gen kustomize
-	mkdir -p helm/templates
-	$(KUSTOMIZE) build config/default > helm/templates/manifest.yaml
-
 ##@ Deployment
 
-define CHART
-apiVersion: v2
-name: argora
-type: application
-version: 0.0.1
-appVersion: 0.0.1
-endef
-export CHART
-
-.PHONY: helm-prepare
-helm-prepare:
-	@echo "$$CHART" > helm/Chart.yaml
-
 .PHONY: helm-set-image
-helm-set-image:
-	yq -i '.image.repository = "$(IMG_REPO)"' helm/values.yaml
-	yq -i '.image.tag = "$(IMG_TAG)"' helm/values.yaml
+helm-set-image: manifests
+	yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
+	yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
 
 .PHONY: helm-lint
-helm-lint: helm helm-prepare build-installer
-	helm lint helm
+helm-lint: helm manifests
+	helm lint dist/chart
 
 .PHONY: helm-build-local-image
-helm-build-local-image: helm helm-prepare build-installer
-	mkdir -p dist
-	helm template helm -s templates/manifest.yaml > dist/manifest.yaml
+helm-build-local-image: helm manifests
+	helm template dist/chart > dist/manifest.yaml
 
 .PHONY: helm-build
-helm-build: helm helm-prepare helm-set-image build-installer
-	mkdir -p dist
-	helm template helm -s templates/manifest.yaml > dist/manifest.yaml
-
-.PHONY: helm-deploy
-helm-deploy: helm helm-prepare helm-set-image build-installer
-	helm template helm -s templates/manifest.yaml | $(KUBECTL) apply -f -
+helm-build: helm helm-set-image
+	helm template dist/chart > dist/manifest.yaml
 
 .PHONY: install-crd
 install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -380,16 +356,15 @@ tidy-deps: FORCE
 	go mod tidy
 	go mod verify
 
-license-headers: FORCE install-addlicense
-	@printf "\e[1;36m>> addlicense (for license headers on source code files)\e[0m\n"
-	@echo -n $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...)) | xargs -d" " -I{} bash -c 'year="$$(rg -P "Copyright.* (\d{4})" -Nor "\$$1" {} | head -n1)"; awk -i inplace '"'"'{if (display) {print} else {!/^\/\*/ && !/^\*/ && !/^\$$/}}; /^package /{print;display=1}'"'"' {}; addlicense -c "SAP SE" -s=only -y "$$year" -- {}; sed -i '"'"'1s+// Copyright +// SPDX-FileCopyrightText: +'"'"' {}'
-	@printf "\e[1;36m>> reuse annotate (for license headers on other files)\e[0m\n"
-	@reuse lint -j | jq -r '.non_compliant.missing_licensing_info[]' | grep -vw vendor | xargs reuse annotate -c 'SAP SE' -l Apache-2.0 --skip-unrecognised
-	@printf "\e[1;36m>> reuse download --all\e[0m\n"
-	@reuse download --all
-	@printf "\e[1;35mPlease review the changes. If *.license files were generated, consider instructing go-makefile-maker to add overrides to REUSE.toml instead.\e[0m\n"
+force-license-headers: FORCE install-addlicense
+	@printf "\e[1;36m>> addlicense\e[0m\n"
+	echo -n $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...)) | xargs -d" " -I{} bash -c 'year="$$(rg -P "Copyright (....) SAP SE" -Nor "\$$1" {})"; awk -i inplace '"'"'{if (display) {print} else {!/^\/\*/ && !/^\*/ && !/^\$$/}}; /^package /{print;display=1}'"'"' {}; addlicense -c "SAP SE" -s=only -y "$$year" -- {}'
 
-check-license-headers: FORCE install-addlicense tidy-deps
+license-headers: FORCE install-addlicense
+	@printf "\e[1;36m>> addlicense\e[0m\n"
+	@addlicense -c "SAP SE" -s=only -- $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...))
+
+check-license-headers: FORCE install-addlicense
 	@printf "\e[1;36m>> addlicense --check\e[0m\n"
 	@addlicense --check -- $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...))
 
@@ -449,7 +424,8 @@ help: FORCE
 	@printf "\n"
 	@printf "\e[1mDevelopment\e[0m\n"
 	@printf "  \e[36mtidy-deps\e[0m                    Run go mod tidy and go mod verify.\n"
-	@printf "  \e[36mlicense-headers\e[0m              Add (or overwrite) license headers on all non-vendored source code files.\n"
+	@printf "  \e[36mforce-license-headers\e[0m        Remove and re-add all license headers to all non-vendored source code files.\n"
+	@printf "  \e[36mlicense-headers\e[0m              Add license headers to all non-vendored source code files.\n"
 	@printf "  \e[36mcheck-license-headers\e[0m        Check license headers in all non-vendored .go files.\n"
 	@printf "  \e[36mcheck-dependency-licenses\e[0m    Check all dependency licenses using go-licence-detector.\n"
 	@printf "  \e[36mgoimports\e[0m                    Run goimports on all non-vendored .go files\n"

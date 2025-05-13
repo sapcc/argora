@@ -55,8 +55,8 @@ func (f *ConfigReader) ReadFile(fileName string) ([]byte, error) {
 }
 
 type Config struct {
-	client client.Client
-	reader FileReader
+	k8sClient client.Client
+	reader    FileReader
 
 	// /etc/config/config.json
 	ServerController ControllerType `json:"serverController"`
@@ -75,9 +75,9 @@ type IronCore struct {
 	Types  string `json:"types"`
 }
 
-func NewDefaultConfiguration(client client.Client, configReader FileReader) *Config {
+func NewDefaultConfiguration(k8sClient client.Client, configReader FileReader) *Config {
 	return &Config{
-		client:           client,
+		k8sClient:        k8sClient,
 		reader:           configReader,
 		ServerController: "",
 		IronCore:         IronCore{},

@@ -29,5 +29,5 @@ go.work
 # custom
 hack/deploy/cluster.yaml
 helm/
-dist/
 build/
+dist/manifest.yaml
