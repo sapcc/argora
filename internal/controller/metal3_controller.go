@@ -73,9 +73,9 @@ type Metal3Reconciler struct {
 	reconcileInterval time.Duration
 }
 
-func NewMetal3Reconciler(client client.Client, scheme *runtime.Scheme, cfg *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *Metal3Reconciler {
+func NewMetal3Reconciler(k8sClient client.Client, scheme *runtime.Scheme, cfg *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *Metal3Reconciler {
 	return &Metal3Reconciler{
-		k8sClient:         client,
+		k8sClient:         k8sClient,
 		scheme:            scheme,
 		cfg:               cfg,
 		netBox:            netBox,

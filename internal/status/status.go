@@ -23,24 +23,24 @@ type Status interface {
 	SetCondition(updateCR *argorav1alpha1.Update, reason argorav1alpha1.ReasonWithMessage)
 }
 
-func NewStatusHandler(client client.Client) Status {
+func NewStatusHandler(k8sClient client.Client) Status {
 	return StatusHandler{
-		client: client,
+		k8sClient: k8sClient,
 	}
 }
 
 type StatusHandler struct {
-	client client.Client
+	k8sClient client.Client
 }
 
 func (d StatusHandler) update(ctx context.Context, updateCR *argorav1alpha1.Update) error {
 	newStatus := updateCR.Status
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if getErr := d.client.Get(ctx, client.ObjectKeyFromObject(updateCR), updateCR); getErr != nil {
+		if getErr := d.k8sClient.Get(ctx, client.ObjectKeyFromObject(updateCR), updateCR); getErr != nil {
 			return getErr
 		}
 		updateCR.Status = newStatus
-		if updateErr := d.client.Status().Update(ctx, updateCR); updateErr != nil {
+		if updateErr := d.k8sClient.Status().Update(ctx, updateCR); updateErr != nil {
 			return updateErr
 		}
 		return nil

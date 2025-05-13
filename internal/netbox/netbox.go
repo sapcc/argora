@@ -43,26 +43,26 @@ func NewNetbox() Netbox {
 }
 
 func (n *NetboxService) Reload(url, token string, logger logr.Logger) error {
-	virtualization, err := virtualization.NewClient(url, token, false)
+	virtClient, err := virtualization.NewClient(url, token, false)
 	if err != nil {
 		return err
 	}
-	dcim, err := dcim.NewClient(url, token, false)
+	dcimClient, err := dcim.NewClient(url, token, false)
 	if err != nil {
 		return err
 	}
-	ipam, err := ipam.NewClient(url, token, false)
+	ipamClient, err := ipam.NewClient(url, token, false)
 	if err != nil {
 		return err
 	}
-	extras, err := extras.NewClient(url, token, false)
+	extrasClient, err := extras.NewClient(url, token, false)
 	if err != nil {
 		return err
 	}
-	n.virtualization = _virtualization.NewVirtualization(virtualization, logger.WithValues("nbComponent", "virtualization"))
-	n.dcim = _dcim.NewDCIM(dcim, logger.WithValues("nbComponent", "dcim"))
-	n.ipam = _ipam.NewIPAM(ipam, logger.WithValues("nbComponent", "ipam"))
-	n.extras = _extras.NewExtras(extras, logger.WithValues("nbComponent", "extras"))
+	n.virtualization = _virtualization.NewVirtualization(virtClient, logger.WithValues("nbComponent", "virtualization"))
+	n.dcim = _dcim.NewDCIM(dcimClient, logger.WithValues("nbComponent", "dcim"))
+	n.ipam = _ipam.NewIPAM(ipamClient, logger.WithValues("nbComponent", "ipam"))
+	n.extras = _extras.NewExtras(extrasClient, logger.WithValues("nbComponent", "extras"))
 	return nil
 }
 

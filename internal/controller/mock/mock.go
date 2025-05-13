@@ -85,28 +85,28 @@ func (n *NetBoxMock) Virtualization() virtualization.Virtualization {
 	return n.VirtualizationMock
 }
 
-func (n *NetBoxMock) SetVirtualization(virtualization virtualization.Virtualization) {
+func (n *NetBoxMock) SetVirtualization(_ virtualization.Virtualization) {
 }
 
 func (n *NetBoxMock) DCIM() dcim.DCIM {
 	return n.DCIMMock
 }
 
-func (n *NetBoxMock) SetDCIM(dcim dcim.DCIM) {
+func (n *NetBoxMock) SetDCIM(_ dcim.DCIM) {
 }
 
 func (n *NetBoxMock) IPAM() ipam.IPAM {
 	return n.IPAMMock
 }
 
-func (n *NetBoxMock) SetIPAM(ipam ipam.IPAM) {
+func (n *NetBoxMock) SetIPAM(_ ipam.IPAM) {
 }
 
 func (n *NetBoxMock) Extras() extras.Extras {
 	return n.ExtrasMock
 }
 
-func (n *NetBoxMock) SetExtras(extras extras.Extras) {
+func (n *NetBoxMock) SetExtras(_ extras.Extras) {
 }
 
 type VirtualizationMock struct {
