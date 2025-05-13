@@ -46,11 +46,11 @@ type IronCoreReconciler struct {
 	eventChannel      chan event.GenericEvent
 }
 
-func NewIronCoreReconciler(k8sClient client.Client, scheme *runtime.Scheme, config *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
+func NewIronCoreReconciler(k8sClient client.Client, scheme *runtime.Scheme, cfg *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
 	return &IronCoreReconciler{
 		k8sClient:         k8sClient,
 		scheme:            scheme,
-		cfg:               config,
+		cfg:               cfg,
 		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
 		eventChannel:      make(chan event.GenericEvent),
