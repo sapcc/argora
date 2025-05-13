@@ -181,48 +181,24 @@ verbatim: |
     - $(CONTAINER_TOOL) buildx rm argora-builder
     rm Dockerfile.cross
 
-  .PHONY: build-installer
-  build-installer: manifests gen kustomize
-    mkdir -p helm/templates
-    $(KUSTOMIZE) build config/default > helm/templates/manifest.yaml
-
   ##@ Deployment
 
-  define CHART
-  apiVersion: v2
-  name: argora
-  type: application
-  version: 0.0.1
-  appVersion: 0.0.1
-  endef
-  export CHART
-
-  .PHONY: helm-prepare
-  helm-prepare:
-    @echo "$$CHART" > helm/Chart.yaml
-
   .PHONY: helm-set-image
-  helm-set-image:
-    yq -i '.image.repository = "$(IMG_REPO)"' helm/values.yaml
-    yq -i '.image.tag = "$(IMG_TAG)"' helm/values.yaml
+  helm-set-image: manifests
+    yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
+    yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
 
   .PHONY: helm-lint
-  helm-lint: helm helm-prepare build-installer
-    helm lint helm
+  helm-lint: helm manifests
+    helm lint dist/chart
 
   .PHONY: helm-build-local-image
-  helm-build-local-image: helm helm-prepare build-installer
-    mkdir -p dist
-    helm template helm -s templates/manifest.yaml > dist/manifest.yaml
+  helm-build-local-image: helm manifests
+    helm template dist/chart > dist/manifest.yaml
 
   .PHONY: helm-build
-  helm-build: helm helm-prepare helm-set-image build-installer
-    mkdir -p dist
-    helm template helm -s templates/manifest.yaml > dist/manifest.yaml
-
-  .PHONY: helm-deploy
-  helm-deploy: helm helm-prepare helm-set-image build-installer
-    helm template helm -s templates/manifest.yaml | $(KUBECTL) apply -f -
+  helm-build: helm helm-set-image
+    helm template dist/chart > dist/manifest.yaml
 
   .PHONY: install-crd
   install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
