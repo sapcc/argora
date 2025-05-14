@@ -43,6 +43,27 @@ renovate:
 dockerfile:
   enabled: false
 
+reuse:
+  enabled: true
+  annotations:
+    - paths:
+        - .github/**
+        - .gitignore
+        - .dockerignore
+        - .golangci.yml
+        - .license-scan-overrides.jsonl
+        - .license-scan-rules.json
+        - Makefile
+        - PROJECT
+        - go.mod
+        - go.sum
+        - config/**
+        - dist/**
+        - docs/**
+        - hack/**
+      SPDX-FileCopyrightText: SAP SE
+      SPDX-License-Identifier: Apache-2.0
+
 verbatim: |
   tilt: FORCE helm-build-local-image
     tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
