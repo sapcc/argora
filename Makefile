@@ -3,7 +3,7 @@
 # Edit Makefile.maker.yaml instead.                                            #
 ################################################################################
 
-# SPDX-FileCopyrightText: 2024 SAP SE
+# Copyright 2024 SAP SE
 # SPDX-License-Identifier: Apache-2.0
 
 MAKEFLAGS=--warn-undefined-variables
@@ -156,6 +156,13 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 
 ##@ Deployment
 
+.PHONY: helm-manifests
+helm-manifests: manifests kubebuilder
+	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
+	mkdir -p dist/chart/templates/configmap && cp config/configmap/configmap.yaml dist/chart/templates/configmap/configmap.yaml
+	mkdir -p dist/chart/templates/secret && cp config/secret/secret.yaml dist/chart/templates/secret/secret.yaml
+	mkdir -p dist/chart/crds && cp config/crd/bases/argora.cloud.sap_updates.yaml dist/chart/crds/argora.cloud.sap_updates.yaml
+
 .PHONY: helm-set-image
 helm-set-image: manifests
 	yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
@@ -203,6 +210,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 HELM ?= $(LOCALBIN)/helm
+KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.5.0
@@ -213,6 +221,7 @@ ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 GOLANGCI_LINT_VERSION ?= v1.63.4
 HELM_VERSION ?= v3.17.0
+KUBEBUILDER_VERSION ?= v4.5.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -247,20 +256,23 @@ helm: $(HELM)
 $(HELM): $(LOCALBIN)
 	$(call go-install-tool,$(HELM),helm.sh/helm/v3/cmd/helm,$(HELM_VERSION))
 
+.PHONY: kubebuilder
+kubebuilder: $(KUBEBUILDER) ## Download kubebuilder locally if necessary.
+$(KUBEBUILDER): $(LOCALBIN)
+	$(call go-install-tool,$(KUBEBUILDER),sigs.k8s.io/kubebuilder/v4,$(KUBEBUILDER_VERSION))
+
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
 # $2 - package url which can be installed
 # $3 - specific version of package
 define go-install-tool
-@[ -f "$(1)-$(3)" ] || { \
+@[ -f $(1) ] || { \
 set -e; \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\
-rm -f $(1) || true ;\
 GOBIN=$(LOCALBIN) go install $${package} ;\
-mv $(1) $(1)-$(3) ;\
-} ;\
-ln -sf $(1)-$(3) $(1)
+mv "$$(echo "$(1)" | sed "s/-$(3)$$//")" $(1) ;\
+}
 endef
 
 install-goimports: FORCE
@@ -356,16 +368,15 @@ tidy-deps: FORCE
 	go mod tidy
 	go mod verify
 
-license-headers: FORCE install-addlicense
-	@printf "\e[1;36m>> addlicense (for license headers on source code files)\e[0m\n"
-	@printf "%s\0" $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...)) | xargs -0 -I{} bash -c 'year="$$(grep 'Copyright' {} | head -n1 | grep -E -o '[0-9]{4}')"; gawk -i inplace '"'"'{if (display) {print} else {!/^\/\*/ && !/^\*/ && !/^\$$/}}; /^package /{print;display=1}'"'"' {}; addlicense -c "SAP SE" -s=only -y "$$year" -- {}; sed -i '"'"'1s+// Copyright +// SPDX-FileCopyrightText: +'"'"' {}'
-	@printf "\e[1;36m>> reuse annotate (for license headers on other files)\e[0m\n"
-	@reuse lint -j | jq -r '.non_compliant.missing_licensing_info[]' | grep -vw vendor | xargs reuse annotate -c 'SAP SE' -l Apache-2.0 --skip-unrecognised
-	@printf "\e[1;36m>> reuse download --all\e[0m\n"
-	@reuse download --all
-	@printf "\e[1;35mPlease review the changes. If *.license files were generated, consider instructing go-makefile-maker to add overrides to REUSE.toml instead.\e[0m\n"
+force-license-headers: FORCE install-addlicense
+	@printf "\e[1;36m>> addlicense\e[0m\n"
+	echo -n $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...)) | xargs -d" " -I{} bash -c 'year="$$(rg -P "Copyright (....) SAP SE" -Nor "\$$1" {})"; awk -i inplace '"'"'{if (display) {print} else {!/^\/\*/ && !/^\*/ && !/^\$$/}}; /^package /{print;display=1}'"'"' {}; addlicense -c "SAP SE" -s=only -y "$$year" -- {}'
 
-check-license-headers: FORCE install-addlicense tidy-deps
+license-headers: FORCE install-addlicense
+	@printf "\e[1;36m>> addlicense\e[0m\n"
+	@addlicense -c "SAP SE" -s=only -- $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...))
+
+check-license-headers: FORCE install-addlicense
 	@printf "\e[1;36m>> addlicense --check\e[0m\n"
 	@addlicense --check -- $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...))
 
@@ -425,7 +436,8 @@ help: FORCE
 	@printf "\n"
 	@printf "\e[1mDevelopment\e[0m\n"
 	@printf "  \e[36mtidy-deps\e[0m                    Run go mod tidy and go mod verify.\n"
-	@printf "  \e[36mlicense-headers\e[0m              Add (or overwrite) license headers on all non-vendored source code files.\n"
+	@printf "  \e[36mforce-license-headers\e[0m        Remove and re-add all license headers to all non-vendored source code files.\n"
+	@printf "  \e[36mlicense-headers\e[0m              Add license headers to all non-vendored source code files.\n"
 	@printf "  \e[36mcheck-license-headers\e[0m        Check license headers in all non-vendored .go files.\n"
 	@printf "  \e[36mcheck-dependency-licenses\e[0m    Check all dependency licenses using go-licence-detector.\n"
 	@printf "  \e[36mgoimports\e[0m                    Run goimports on all non-vendored .go files\n"

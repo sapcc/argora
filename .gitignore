@@ -27,6 +27,7 @@ go.work
 *~
 
 # custom
+bin/
 hack/deploy/cluster.yaml
 helm/
 build/

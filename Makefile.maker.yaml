@@ -183,6 +183,13 @@ verbatim: |
 
   ##@ Deployment
 
+  .PHONY: helm-manifests
+  helm-manifests: manifests kubebuilder
+    $(KUBEBUILDER) edit --plugins=helm/v1-alpha
+    mkdir -p dist/chart/templates/configmap && cp config/configmap/configmap.yaml dist/chart/templates/configmap/configmap.yaml
+    mkdir -p dist/chart/templates/secret && cp config/secret/secret.yaml dist/chart/templates/secret/secret.yaml
+    mkdir -p dist/chart/crds && cp config/crd/bases/argora.cloud.sap_updates.yaml dist/chart/crds/argora.cloud.sap_updates.yaml
+
   .PHONY: helm-set-image
   helm-set-image: manifests
     yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
@@ -230,6 +237,7 @@ verbatim: |
   ENVTEST ?= $(LOCALBIN)/setup-envtest
   GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
   HELM ?= $(LOCALBIN)/helm
+  KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
 
   ## Tool Versions
   KUSTOMIZE_VERSION ?= v5.5.0
@@ -240,6 +248,7 @@ verbatim: |
   ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
   GOLANGCI_LINT_VERSION ?= v1.63.4
   HELM_VERSION ?= v3.17.0
+  KUBEBUILDER_VERSION ?= v4.5.1
 
   .PHONY: kustomize
   kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -274,18 +283,21 @@ verbatim: |
   $(HELM): $(LOCALBIN)
     $(call go-install-tool,$(HELM),helm.sh/helm/v3/cmd/helm,$(HELM_VERSION))
 
+  .PHONY: kubebuilder
+  kubebuilder: $(KUBEBUILDER) ## Download kubebuilder locally if necessary.
+  $(KUBEBUILDER): $(LOCALBIN)
+    $(call go-install-tool,$(KUBEBUILDER),sigs.k8s.io/kubebuilder/v4,$(KUBEBUILDER_VERSION))
+
   # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
   # $1 - target path with name of binary
   # $2 - package url which can be installed
   # $3 - specific version of package
   define go-install-tool
-  @[ -f "$(1)-$(3)" ] || { \
+  @[ -f $(1) ] || { \
   set -e; \
   package=$(2)@$(3) ;\
   echo "Downloading $${package}" ;\
-  rm -f $(1) || true ;\
   GOBIN=$(LOCALBIN) go install $${package} ;\
-  mv $(1) $(1)-$(3) ;\
-  } ;\
-  ln -sf $(1)-$(3) $(1)
+  mv "$$(echo "$(1)" | sed "s/-$(3)$$//")" $(1) ;\
+  }
   endef

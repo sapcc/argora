@@ -48,7 +48,7 @@ rbac:
 crd:
   # This option determines whether the CRDs are included
   # in the installation process.
-  enable: true
+  enable: false
 
   # Enabling this option adds the "helm.sh/resource-policy": keep
   # annotation to the CRD, ensuring it remains installed even when
@@ -74,3 +74,16 @@ certmanager:
 # [NETWORK POLICIES]: To enable NetworkPolicies set true
 networkPolicy:
   enable: false
+
+config:
+  serverController: ""
+  ironCore:
+    name: ""
+    region: ""
+    types: ""
+  netboxURL: ""
+
+credentials:
+  bmcUser: ""
+  bmcPassword: ""
+  netboxToken: ""
