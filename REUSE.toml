@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 version = 1
+SPDX-PackageName = "argora"
+SPDX-PackageDownloadLocation = "https://github.com/sapcc/argora"
 
 [[annotations]]
 path = [
