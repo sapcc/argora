@@ -42,6 +42,9 @@ jobs:
       - name: Verify Helm installation
         run: helm version
 
+      - name: Make Helm manifests
+        run: make helm-manifests
+
       - name: Lint Helm Chart
         run: |
           helm lint ./dist/chart
@@ -78,11 +81,11 @@ jobs:
 
       - name: Install Helm chart for project
         run: |
-          helm install my-release ./dist/chart --create-namespace --namespace argora-system
+          helm install argora-release ./dist/chart --create-namespace --namespace argora-system
 
       - name: Check Helm release status
         run: |
-          helm status my-release --namespace argora-system
+          helm status argora-release --namespace argora-system
 
 # TODO: Uncomment if prometheus.enabled is set to true to confirm that the ServiceMonitor gets created
 #      - name: Check Presence of ServiceMonitor

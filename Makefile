@@ -157,11 +157,12 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 ##@ Deployment
 
 .PHONY: helm-manifests
-helm-manifests: manifests kubebuilder
+helm-manifests: manifests kubebuilder kustomize
 	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
+	rm -rf dist/chart/templates/crd
+	mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
 	mkdir -p dist/chart/templates/configmap && cp config/configmap/configmap.yaml dist/chart/templates/configmap/configmap.yaml
 	mkdir -p dist/chart/templates/secret && cp config/secret/secret.yaml dist/chart/templates/secret/secret.yaml
-	mkdir -p dist/chart/crds && cp config/crd/bases/argora.cloud.sap_updates.yaml dist/chart/crds/argora.cloud.sap_updates.yaml
 
 .PHONY: helm-set-image
 helm-set-image: manifests
