@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2025 SAP SE
-
-SPDX-License-Identifier: Apache-2.0
--->
-
 # Argora
 Contains controllers that provide custom Kubernetes resources for Metal3 and IronCore metal operator using Netbox as the source of truth.
 
