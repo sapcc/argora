@@ -122,10 +122,10 @@ Following the options to release and provide this solution to the users.
 1. Build the installer for the image built and published in the registry:
 
 ```sh
-make helm-build
+make build-installer
 ```
 
-**NOTE:** The makefile target mentioned above generates an 'manifest.yaml'
+**NOTE:** The makefile target mentioned above generates an 'install.yaml'
 file in the dist directory. This file contains all the resources built
 with helm, which are necessary to install this project without its
 dependencies.
@@ -136,7 +136,7 @@ Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
 the project, i.e.:
 
 ```sh
-kubectl apply -f ./dist/manifest.yaml
+kubectl apply -f ./dist/install.yaml
 ```
 
 ### By providing a Helm Chart

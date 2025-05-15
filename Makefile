@@ -3,7 +3,7 @@
 # Edit Makefile.maker.yaml instead.                                            #
 ################################################################################
 
-# SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company
+# SPDX-FileCopyrightText: 2024 SAP SE
 # SPDX-License-Identifier: Apache-2.0
 
 MAKEFLAGS=--warn-undefined-variables
@@ -154,29 +154,33 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	- $(CONTAINER_TOOL) buildx rm argora-builder
 	rm Dockerfile.cross
 
+.PHONY: build-installer
+build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
+	mkdir -p dist
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default > dist/install.yaml
+
 ##@ Deployment
 
 .PHONY: helm-manifests
-helm-manifests: manifests kubebuilder kustomize
+helm-manifests: kubebuilder kustomize manifests
 	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
 	rm -rf dist/chart/templates/crd
 	mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
-	mkdir -p dist/chart/templates/configmap && cp config/configmap/configmap.yaml dist/chart/templates/configmap/configmap.yaml
-	mkdir -p dist/chart/templates/secret && cp config/secret/secret.yaml dist/chart/templates/secret/secret.yaml
 
 .PHONY: helm-lint
 helm-lint: helm helm-manifests
-	helm lint dist/chart
+	$(HELM) lint dist/chart
 
 .PHONY: helm-build-local-image
-helm-build-local-image: helm helm-lint
-	helm template dist/chart > dist/manifest.yaml
+helm-build-local-image: helm-lint
+	$(HELM) template dist/chart > dist/install.yaml
 
 .PHONY: helm-build
-helm-build: helm helm-lint
+helm-build: helm-lint
 	yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
 	yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
-	helm template dist/chart > dist/manifest.yaml
+	$(HELM) template dist/chart > dist/install.yaml
 
 .PHONY: install-crd
 install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -370,9 +374,9 @@ tidy-deps: FORCE
 
 license-headers: FORCE install-addlicense
 	@printf "\e[1;36m>> addlicense (for license headers on source code files)\e[0m\n"
-	@printf "%s\0" $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...)) | $(XARGS) -0 -I{} bash -c 'year="$$(grep 'Copyright' {} | head -n1 | grep -E -o '[0-9]{4}')"; gawk -i inplace '"'"'{if (display) {print} else {!/^\/\*/ && !/^\*/}}; {if (!display && $$0 ~ /^(package |$$)/) {display=1} else { }}'"'"' {}; addlicense -c "SAP SE or an SAP affiliate company" -s=only -y "$$year" -- {}; $(SED) -i '"'"'1s+// Copyright +// SPDX-FileCopyrightText: +'"'"' {}'
+	@printf "%s\0" $(patsubst $(shell awk '$$1 == "module" {print $$2}' go.mod)%,.%/*.go,$(shell go list ./...)) | xargs -0 -I{} bash -c 'year="$$(grep 'Copyright' {} | head -n1 | grep -E -o '[0-9]{4}')"; gawk -i inplace '"'"'{if (display) {print} else {!/^\/\*/ && !/^\*/}}; {if (!display) {/^(package |$$)/{print;display=1}} else { }}'"'"' {}; addlicense -c "SAP SE" -s=only -y "$$year" -- {}; sed -i '"'"'1s+// Copyright +// SPDX-FileCopyrightText: +'"'"' {}'
 	@printf "\e[1;36m>> reuse annotate (for license headers on other files)\e[0m\n"
-	@reuse lint -j | jq -r '.non_compliant.missing_licensing_info[]' | grep -vw vendor | $(XARGS) reuse annotate -c 'SAP SE or an SAP affiliate company' -l Apache-2.0 --skip-unrecognised
+	@reuse lint -j | jq -r '.non_compliant.missing_licensing_info[]' | grep -vw vendor | xargs reuse annotate -c 'SAP SE' -l Apache-2.0 --skip-unrecognised
 	@printf "\e[1;36m>> reuse download --all\e[0m\n"
 	@reuse download --all
 	@printf "\e[1;35mPlease review the changes. If *.license files were generated, consider instructing go-makefile-maker to add overrides to REUSE.toml instead.\e[0m\n"

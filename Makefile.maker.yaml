@@ -202,6 +202,12 @@ verbatim: |
     - $(CONTAINER_TOOL) buildx rm argora-builder
     rm Dockerfile.cross
 
+  .PHONY: build-installer
+  build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
+    mkdir -p dist
+    cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+    $(KUSTOMIZE) build config/default > dist/install.yaml
+
   ##@ Deployment
 
   .PHONY: helm-manifests
@@ -209,8 +215,6 @@ verbatim: |
     $(KUBEBUILDER) edit --plugins=helm/v1-alpha
     rm -rf dist/chart/templates/crd
     mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
-    mkdir -p dist/chart/templates/configmap && cp config/configmap/configmap.yaml dist/chart/templates/configmap/configmap.yaml
-    mkdir -p dist/chart/templates/secret && cp config/secret/secret.yaml dist/chart/templates/secret/secret.yaml
 
   .PHONY: helm-lint
   helm-lint: helm helm-manifests
@@ -218,13 +222,13 @@ verbatim: |
 
   .PHONY: helm-build-local-image
   helm-build-local-image: helm-lint
-    $(HELM) template dist/chart > dist/manifest.yaml
+    $(HELM) template dist/chart > dist/install.yaml
 
   .PHONY: helm-build
   helm-build: helm-lint
     yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
     yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
-    $(HELM) template dist/chart > dist/manifest.yaml
+    $(HELM) template dist/chart > dist/install.yaml
 
   .PHONY: install-crd
   install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
