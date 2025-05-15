@@ -14,6 +14,13 @@ ifneq (,$(wildcard /etc/os-release)) # check file existence
 		SHELL := /bin/bash
 	endif
 endif
+UNAME_S := $(shell uname -s)
+SED = sed
+XARGS = xargs
+ifeq ($(UNAME_S),Darwin)
+	SED = gsed
+	XARGS = gxargs
+endif
 
 default: build-all
 
@@ -157,7 +164,7 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 ##@ Deployment
 
 .PHONY: helm-manifests
-helm-manifests: manifests kubebuilder kustomize
+helm-manifests: kubebuilder kustomize manifests
 	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
 	rm -rf dist/chart/templates/crd
 	mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
@@ -166,17 +173,17 @@ helm-manifests: manifests kubebuilder kustomize
 
 .PHONY: helm-lint
 helm-lint: helm helm-manifests
-	helm lint dist/chart
+	$(HELM) lint dist/chart
 
 .PHONY: helm-build-local-image
-helm-build-local-image: helm helm-lint
-	helm template dist/chart > dist/manifest.yaml
+helm-build-local-image: helm-lint
+	$(HELM) template dist/chart > dist/manifest.yaml
 
 .PHONY: helm-build
-helm-build: helm helm-lint
+helm-build: helm-lint
 	yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
 	yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
-	helm template dist/chart > dist/manifest.yaml
+	$(HELM) template dist/chart > dist/manifest.yaml
 
 .PHONY: install-crd
 install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -403,6 +410,9 @@ vars: FORCE
 	@printf "GO_LDFLAGS=$(GO_LDFLAGS)\n"
 	@printf "GO_TESTPKGS=$(GO_TESTPKGS)\n"
 	@printf "PREFIX=$(PREFIX)\n"
+	@printf "SED=$(SED)\n"
+	@printf "UNAME_S=$(UNAME_S)\n"
+	@printf "XARGS=$(XARGS)\n"
 help: FORCE
 	@printf "\n"
 	@printf "\e[1mUsage:\e[0m\n"
