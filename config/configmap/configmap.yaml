@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: config
 data:
-  config.json: {{ toJson .Values.config }}
+  config.json: {{ toJson .Values.config | quote }}
