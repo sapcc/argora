@@ -33,7 +33,7 @@ config:
   ironCore:
     name: ""
     region: "qa-de-1"
-    types: "cc-kvm-compute,cc-kvm-admin"
+    types: "cc-kvm-compute"
   netboxURL: "https://netbox.global.cloud.sap/"
 
 credentials:
