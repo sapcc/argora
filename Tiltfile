@@ -41,5 +41,5 @@ deploy_metal_crd()
 
 k8s_yaml('hack/deploy/cluster-api-components.yaml')
 k8s_yaml('hack/deploy/cluster.yaml')
-k8s_yaml('dist/manifest.yaml')
+k8s_yaml('dist/install.yaml')
 k8s_yaml('config/samples/argora_v1alpha1_update.yaml')

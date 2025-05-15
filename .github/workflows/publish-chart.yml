@@ -6,9 +6,6 @@ on:
       - main
     tags:
       - 'v*.*.*'
-  pull_request:
-    branches:
-      - main
 
 jobs:
   helm-chart:
@@ -46,9 +43,9 @@ jobs:
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
           mv kustomize /usr/local/bin
 
-      - name: Make Helm manifests
+      - name: Make Helm chart
         run: |
-          make helm-manifests
+          make helm-chart
 
       - name: Package Helm chart
         run: |
