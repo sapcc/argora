@@ -14,13 +14,6 @@ ifneq (,$(wildcard /etc/os-release)) # check file existence
 		SHELL := /bin/bash
 	endif
 endif
-UNAME_S := $(shell uname -s)
-SED = sed
-XARGS = xargs
-ifeq ($(UNAME_S),Darwin)
-	SED = gsed
-	XARGS = gxargs
-endif
 
 default: build-all
 
@@ -171,21 +164,18 @@ helm-manifests: manifests kubebuilder kustomize
 	mkdir -p dist/chart/templates/configmap && cp config/configmap/configmap.yaml dist/chart/templates/configmap/configmap.yaml
 	mkdir -p dist/chart/templates/secret && cp config/secret/secret.yaml dist/chart/templates/secret/secret.yaml
 
-.PHONY: helm-set-image
-helm-set-image: manifests
-	yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
-	yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
-
 .PHONY: helm-lint
-helm-lint: helm manifests
+helm-lint: helm helm-manifests
 	helm lint dist/chart
 
 .PHONY: helm-build-local-image
-helm-build-local-image: helm manifests
+helm-build-local-image: helm helm-lint
 	helm template dist/chart > dist/manifest.yaml
 
 .PHONY: helm-build
-helm-build: helm helm-set-image
+helm-build: helm helm-lint
+	yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
+	yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
 	helm template dist/chart > dist/manifest.yaml
 
 .PHONY: install-crd
@@ -413,9 +403,6 @@ vars: FORCE
 	@printf "GO_LDFLAGS=$(GO_LDFLAGS)\n"
 	@printf "GO_TESTPKGS=$(GO_TESTPKGS)\n"
 	@printf "PREFIX=$(PREFIX)\n"
-	@printf "SED=$(SED)\n"
-	@printf "UNAME_S=$(UNAME_S)\n"
-	@printf "XARGS=$(XARGS)\n"
 help: FORCE
 	@printf "\n"
 	@printf "\e[1mUsage:\e[0m\n"

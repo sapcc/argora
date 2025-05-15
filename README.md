@@ -23,12 +23,10 @@ Argora is a Kubernetes operator designed to manage Metal3 and IronCore resources
 
 #### Using Tilt
 
-Helm is used to Template manifest of the operators. You need to provide `helm` values under `helm/values.yaml` in the following format:
+Helm is used to Template manifest of the operators. You need to provide `helm` values under `dist/chart/values.yaml` in the following format:
 
 ```yaml
-image:
-  repository: "docker.io/xxx/argora"
-  tag: "0.0.x"
+...
 
 config:
   serverController: "ironcore"
@@ -39,9 +37,9 @@ config:
   netboxURL: "https://netbox.global.cloud.sap/"
 
 credentials:
-  bmcUser: "<base64enc_value>"
-  bmcPassword: "<base64enc_value>"
-  netboxToken: "<base64enc_value>"
+  bmcUser: "<user>"
+  bmcPassword: "<password>"
+  netboxToken: "<token>"
 ```
 
 **Run on dev cluster**
@@ -81,7 +79,7 @@ make install
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
 ```sh
-make deploy IMG=<some-registry>/argora:tag
+make deploy IMG=<some-registry>/argora:<tag>
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
@@ -124,12 +122,12 @@ Following the options to release and provide this solution to the users.
 1. Build the installer for the image built and published in the registry:
 
 ```sh
-make build-installer IMG=<some-registry>/argora:tag
+make helm-build
 ```
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
+**NOTE:** The makefile target mentioned above generates an 'manifest.yaml'
 file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
+with helm, which are necessary to install this project without its
 dependencies.
 
 2. Using the installer
@@ -138,7 +136,7 @@ Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
 the project, i.e.:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/sapcc/argora/<tag or branch>/dist/manifest.yaml
+kubectl apply -f ./dist/manifest.yaml
 ```
 
 ### By providing a Helm Chart
