@@ -210,14 +210,14 @@ verbatim: |
 
   ##@ Deployment
 
-  .PHONY: helm-manifests
-  helm-manifests: kubebuilder kustomize manifests
+  .PHONY: helm-chart
+  helm-chart: kubebuilder kustomize manifests
     $(KUBEBUILDER) edit --plugins=helm/v1-alpha
     rm -rf dist/chart/templates/crd
     mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
 
   .PHONY: helm-lint
-  helm-lint: helm helm-manifests
+  helm-lint: helm helm-chart
     $(HELM) lint dist/chart
 
   .PHONY: helm-build-local-image

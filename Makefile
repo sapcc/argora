@@ -14,13 +14,6 @@ ifneq (,$(wildcard /etc/os-release)) # check file existence
 		SHELL := /bin/bash
 	endif
 endif
-UNAME_S := $(shell uname -s)
-SED = sed
-XARGS = xargs
-ifeq ($(UNAME_S),Darwin)
-	SED = gsed
-	XARGS = gxargs
-endif
 
 default: build-all
 
@@ -169,14 +162,14 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 
 ##@ Deployment
 
-.PHONY: helm-manifests
-helm-manifests: kubebuilder kustomize manifests
+.PHONY: helm-chart
+helm-chart: kubebuilder kustomize manifests
 	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
 	rm -rf dist/chart/templates/crd
 	mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
 
 .PHONY: helm-lint
-helm-lint: helm helm-manifests
+helm-lint: helm helm-chart
 	$(HELM) lint dist/chart
 
 .PHONY: helm-build-local-image
@@ -416,9 +409,6 @@ vars: FORCE
 	@printf "GO_LDFLAGS=$(GO_LDFLAGS)\n"
 	@printf "GO_TESTPKGS=$(GO_TESTPKGS)\n"
 	@printf "PREFIX=$(PREFIX)\n"
-	@printf "SED=$(SED)\n"
-	@printf "UNAME_S=$(UNAME_S)\n"
-	@printf "XARGS=$(XARGS)\n"
 help: FORCE
 	@printf "\n"
 	@printf "\e[1mUsage:\e[0m\n"

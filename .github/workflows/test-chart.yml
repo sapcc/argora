@@ -42,8 +42,8 @@ jobs:
       - name: Verify Helm installation
         run: helm version
 
-      - name: Make Helm manifests
-        run: make helm-manifests
+      - name: Make Helm chart
+        run: make helm-chart
 
       - name: Lint Helm Chart
         run: |
