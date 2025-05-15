@@ -163,6 +163,14 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 
 ##@ Deployment
 
+.PHONY: helm-manifests
+helm-manifests: manifests kubebuilder kustomize
+	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
+	rm -rf dist/chart/templates/crd
+	mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
+	mkdir -p dist/chart/templates/configmap && cp config/configmap/configmap.yaml dist/chart/templates/configmap/configmap.yaml
+	mkdir -p dist/chart/templates/secret && cp config/secret/secret.yaml dist/chart/templates/secret/secret.yaml
+
 .PHONY: helm-set-image
 helm-set-image: manifests
 	yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
@@ -210,6 +218,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 HELM ?= $(LOCALBIN)/helm
+KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.5.0
@@ -220,6 +229,7 @@ ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 GOLANGCI_LINT_VERSION ?= v1.63.4
 HELM_VERSION ?= v3.17.0
+KUBEBUILDER_VERSION ?= v4.5.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -253,6 +263,11 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 helm: $(HELM)
 $(HELM): $(LOCALBIN)
 	$(call go-install-tool,$(HELM),helm.sh/helm/v3/cmd/helm,$(HELM_VERSION))
+
+.PHONY: kubebuilder
+kubebuilder: $(KUBEBUILDER) ## Download kubebuilder locally if necessary.
+$(KUBEBUILDER): $(LOCALBIN)
+	$(call go-install-tool,$(KUBEBUILDER),sigs.k8s.io/kubebuilder/v4,$(KUBEBUILDER_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary

@@ -1,7 +1,3 @@
-# SPDX-FileCopyrightText: 2025 SAP SE
-#
-# SPDX-License-Identifier: Apache-2.0
-
 # [MANAGER]: Manager Deployment Configurations
 controllerManager:
   replicas: 1
@@ -48,19 +44,6 @@ controllerManager:
 rbac:
   enable: true
 
-# [CRDs]: To enable the CRDs
-crd:
-  # This option determines whether the CRDs are included
-  # in the installation process.
-  enable: true
-
-  # Enabling this option adds the "helm.sh/resource-policy": keep
-  # annotation to the CRD, ensuring it remains installed even when
-  # the Helm release is uninstalled.
-  # NOTE: Removing the CRDs will also remove all cert-manager CR(s)
-  # (Certificates, Issuers, ...) due to garbage collection.
-  keep: true
-
 # [METRICS]: Set to true to generate manifests for exporting metrics.
 # To disable metrics export set false, and ensure that the
 # ControllerManager argument "--metrics-bind-address=:8443" is removed.
@@ -78,3 +61,16 @@ certmanager:
 # [NETWORK POLICIES]: To enable NetworkPolicies set true
 networkPolicy:
   enable: false
+
+config:
+  serverController: ""
+  ironCore:
+    name: ""
+    region: ""
+    types: ""
+  netboxURL: ""
+
+credentials:
+  bmcUser: ""
+  bmcPassword: ""
+  netboxToken: ""

@@ -43,6 +43,27 @@ renovate:
 dockerfile:
   enabled: false
 
+reuse:
+  enabled: true
+  annotations:
+    - paths:
+        - .github/**
+        - .gitignore
+        - .dockerignore
+        - .golangci.yml
+        - .license-scan-overrides.jsonl
+        - .license-scan-rules.json
+        - Makefile
+        - PROJECT
+        - go.mod
+        - go.sum
+        - config/**
+        - dist/**
+        - docs/**
+        - hack/**
+      SPDX-FileCopyrightText: SAP SE
+      SPDX-License-Identifier: Apache-2.0
+
 verbatim: |
   tilt: FORCE helm-build-local-image
     tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
@@ -183,6 +204,14 @@ verbatim: |
 
   ##@ Deployment
 
+  .PHONY: helm-manifests
+  helm-manifests: manifests kubebuilder kustomize
+    $(KUBEBUILDER) edit --plugins=helm/v1-alpha
+    rm -rf dist/chart/templates/crd
+    mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
+    mkdir -p dist/chart/templates/configmap && cp config/configmap/configmap.yaml dist/chart/templates/configmap/configmap.yaml
+    mkdir -p dist/chart/templates/secret && cp config/secret/secret.yaml dist/chart/templates/secret/secret.yaml
+
   .PHONY: helm-set-image
   helm-set-image: manifests
     yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
@@ -230,6 +259,7 @@ verbatim: |
   ENVTEST ?= $(LOCALBIN)/setup-envtest
   GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
   HELM ?= $(LOCALBIN)/helm
+  KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
 
   ## Tool Versions
   KUSTOMIZE_VERSION ?= v5.5.0
@@ -240,6 +270,7 @@ verbatim: |
   ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
   GOLANGCI_LINT_VERSION ?= v1.63.4
   HELM_VERSION ?= v3.17.0
+  KUBEBUILDER_VERSION ?= v4.5.1
 
   .PHONY: kustomize
   kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -273,6 +304,11 @@ verbatim: |
   helm: $(HELM)
   $(HELM): $(LOCALBIN)
     $(call go-install-tool,$(HELM),helm.sh/helm/v3/cmd/helm,$(HELM_VERSION))
+
+  .PHONY: kubebuilder
+  kubebuilder: $(KUBEBUILDER) ## Download kubebuilder locally if necessary.
+  $(KUBEBUILDER): $(LOCALBIN)
+    $(call go-install-tool,$(KUBEBUILDER),sigs.k8s.io/kubebuilder/v4,$(KUBEBUILDER_VERSION))
 
   # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
   # $1 - target path with name of binary

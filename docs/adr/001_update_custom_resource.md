@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2025 SAP SE
-
-SPDX-License-Identifier: Apache-2.0
--->
-
 # Update Custom Resource
 
 ## Status

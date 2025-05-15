@@ -18,3 +18,23 @@ path = [
 ]
 SPDX-FileCopyrightText = "SAP SE"
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  ".github/**",
+  ".gitignore",
+  ".dockerignore",
+  ".golangci.yml",
+  ".license-scan-overrides.jsonl",
+  ".license-scan-rules.json",
+  "Makefile",
+  "PROJECT",
+  "go.mod",
+  "go.sum",
+  "config/**",
+  "dist/**",
+  "docs/**",
+  "hack/**",
+]
+SPDX-FileCopyrightText = "SAP SE"
+SPDX-License-Identifier = "Apache-2.0"

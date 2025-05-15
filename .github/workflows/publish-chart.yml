@@ -1,0 +1,63 @@
+name: Release Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  helm-chart:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+
+      - name: Determine chart version
+        id: chart_version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # Use SHA for main branch
+            CHART_VERSION="0.0.0-$(echo ${{ github.sha }} | cut -c1-7)"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            # Use tag version (strip 'v' prefix)
+            CHART_VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            # Use PR SHA for dry run
+            CHART_VERSION="0.0.0-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+          echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          mv kustomize /usr/local/bin
+
+      - name: Make Helm manifests
+        run: |
+          make helm-manifests
+
+      - name: Package Helm chart
+        run: |
+          helm package dist/chart --version ${{ steps.chart_version.outputs.version }}
+
+      - name: Log in to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push Helm chart to GHCR
+        run: |
+          helm push argora-${{ steps.chart_version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner }}/charts

@@ -1,7 +1,3 @@
-# SPDX-FileCopyrightText: 2025 SAP SE
-#
-# SPDX-License-Identifier: Apache-2.0
-
 # To integrate with Prometheus.
 {{- if .Values.prometheus.enable }}
 apiVersion: monitoring.coreos.com/v1
