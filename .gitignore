@@ -31,4 +31,4 @@ bin/
 hack/deploy/cluster.yaml
 helm/
 build/
-dist/install.yaml
+dist/*.yaml
