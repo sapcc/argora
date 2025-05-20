@@ -49,7 +49,7 @@ jobs:
 
       - name: Install yq
         run: |
-          curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_$(uname | tr '[:upper:]' '[:lower:]')_$(uname -m) -o /usr/local/bin/yq && chmod a+x /usr/local/bin/yq
+          curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq && chmod a+x /usr/local/bin/yq
 
       - name: Set container image repository and tag
         run: |
