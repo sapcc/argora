@@ -47,6 +47,15 @@ jobs:
         run: |
           make helm-chart
 
+      - name: Install yq
+        run: |
+          curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_$(uname | tr '[:upper:]' '[:lower:]')_$(uname -m) -o /usr/local/bin/yq && chmod a+x /usr/local/bin/yq
+
+      - name: Set container image repository and tag
+        run: |
+          yq -i '.controllerManager.container.image.repository = "keppel.global.cloud.sap/ccloud-ghcr-io-mirror/sapcc/argora"' dist/chart/values.yaml
+          yq -i '.controllerManager.container.image.tag = "sha-${{ github.sha }}"' dist/chart/values.yaml
+
       - name: Package Helm chart
         run: |
           helm package dist/chart --version ${{ steps.chart_version.outputs.version }}

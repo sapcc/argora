@@ -41,21 +41,21 @@ The `values.yaml` file allows you to configure various aspects of the Argora Ope
 
 ### Controller Manager
 
-| Key                                | Description                                                                 | Default Value                  |
-|------------------------------------|-----------------------------------------------------------------------------|--------------------------------|
-| `controllerManager.replicas`       | Number of replicas for the manager deployment                               | `1`                            |
-| `controllerManager.container.image.repository` | Image repository for the manager container                                  | `registry/metal-operator`      |
-| `controllerManager.container.image.tag`        | Image tag for the manager container                                         | `"v0.1.0"`                     |
-| `controllerManager.container.args`             | Arguments for the manager container                                         | `--probe-image=probe-image`, `--probe-os-image=probe-os-image`, `--registry-url=registry-url` |
-| `controllerManager.container.resources`        | Resource requests and limits for the manager container                      | `{cpu: 500m, memory: 128Mi}` (limits), `{cpu: 10m, memory: 64Mi}` (requests) |
-| `controllerManager.container.livenessProbe`    | Liveness probe configuration for the manager container                      | `{initialDelaySeconds: 15, periodSeconds: 20, httpGet: {path: /healthz, port: 8081}}` |
-| `controllerManager.container.readinessProbe`   | Readiness probe configuration for the manager container                     | `{initialDelaySeconds: 5, periodSeconds: 10, httpGet: {path: /readyz, port: 8081}}` |
-| `controllerManager.container.securityContext`  | Security context for the manager container                                  | `{allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}` |
-| `controllerManager.securityContext`            | Security context for the manager pod                                        | `{runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}` |
-| `controllerManager.terminationGracePeriodSeconds` | Termination grace period for the manager pod                                | `10`                           |
-| `controllerManager.serviceAccountName`         | Service account name for the manager pod                                    | `metal-operator-controller-manager` |
-| `controllerManager.nodeSelector`               | Node selector for the manager pod                                           | `{kubernetes.io/os: linux, kubernetes.io/arch: arm64}` |
-| `controllerManager.tolerations`                | Tolerations for the manager pod                                             | `[{key: node-role.kubernetes.io/control-plane, effect: NoSchedule}]` |
+| Key                                               | Description                                                     | Default Value                                                                                 |
+|---------------------------------------------------|-----------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| `controllerManager.replicas`                      | Number of replicas for the manager deployment                   | `1`                                                                                           |
+| `controllerManager.container.image.repository`    | Image repository for the manager container                      | `registry/metal-operator`                                                                     |
+| `controllerManager.container.image.tag`           | Image tag for the manager container                             | `"v0.1.0"`                                                                                    |
+| `controllerManager.container.args`                | Arguments for the manager container                             | `--probe-image=probe-image`, `--probe-os-image=probe-os-image`, `--registry-url=registry-url` |
+| `controllerManager.container.resources`           | Resource requests and limits for the manager container          | `{cpu: 500m, memory: 128Mi}` (limits), `{cpu: 10m, memory: 64Mi}` (requests)                  |
+| `controllerManager.container.livenessProbe`       | Liveness probe configuration for the manager container          | `{initialDelaySeconds: 15, periodSeconds: 20, httpGet: {path: /healthz, port: 8081}}`         |
+| `controllerManager.container.readinessProbe`      | Readiness probe configuration for the manager container         | `{initialDelaySeconds: 5, periodSeconds: 10, httpGet: {path: /readyz, port: 8081}}`           |
+| `controllerManager.container.securityContext`     | Security context for the manager container                      | `{allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}`                            |
+| `controllerManager.securityContext`               | Security context for the manager pod                            | `{runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}`                                |
+| `controllerManager.terminationGracePeriodSeconds` | Termination grace period for the manager pod                    | `10`                                                                                          |
+| `controllerManager.serviceAccountName`            | Service account name for the manager pod                        | `metal-operator-controller-manager`                                                           |
+| `controllerManager.nodeSelector`                  | Node selector for the manager pod                               | `{kubernetes.io/os: linux, kubernetes.io/arch: arm64}`                                        |
+| `controllerManager.tolerations`                   | Tolerations for the manager pod                                 | `[{key: node-role.kubernetes.io/control-plane, effect: NoSchedule}]`                          |
 
 - **config**: Configuration which will result in a ConfigMap named `argora-config`.
 
@@ -74,11 +74,11 @@ The `values.yaml` file allows you to configure various aspects of the Argora Ope
 
 ### Credentials
 
-| Key                  | Description      |
-|----------------------|------------------|
-| `config.bmcUser`     | BMC username     |
-| `config.bmcPassword` | BMC passowrd     |
-| `config.netboxToken` | NetBox API token |
+| Key                       | Description      |
+|---------------------------|------------------|
+| `credentials.bmcUser`     | BMC username     |
+| `credentials.bmcPassword` | BMC passowrd     |
+| `credentials.netboxToken` | NetBox API token |
 
 - **rbac**: Enable or disable RBAC.
 - **crd**: Enable or disable CRDs.
