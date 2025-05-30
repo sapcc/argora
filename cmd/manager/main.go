@@ -19,10 +19,9 @@ import (
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -79,6 +78,7 @@ func init() {
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ironcorev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -216,13 +216,7 @@ func getFlagVariables() *FlagVariables {
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=create;deletecollection;delete;get;list;patch;update;watch
 
 func capiCRDExists(ctx context.Context, k8sClient client.Client) (bool, error) {
-	var u unstructured.Unstructured
-	u.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "apiextensions.k8s.io",
-		Version: "v1",
-		Kind:    "CustomResourceDefinition",
-	})
-	err := k8sClient.Get(ctx, types.NamespacedName{Name: "clusters.cluster.x-k8s.io"}, &u)
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: "clusters.cluster.x-k8s.io"}, &apiextensionsv1.CustomResourceDefinition{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return false, nil
