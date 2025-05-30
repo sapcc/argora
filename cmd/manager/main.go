@@ -161,11 +161,13 @@ func main() {
 	}
 
 	if capiCRDExists {
-		setupLog.Info("CAPI CRD exists, enabling Metal3 controller")
+		setupLog.Info("enabling Metal3 controller, CAPI CRD exists")
 		if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "metal3")
 			os.Exit(1)
 		}
+	} else {
+		setupLog.Info("disabled Metal3 controller, CAPI CRD does not exists")
 	}
 
 	if err = controller.NewIronCoreReconciler(mgr.GetClient(), mgr.GetScheme(), cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr); err != nil {
