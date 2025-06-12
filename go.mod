@@ -1,6 +1,6 @@
 module github.com/sapcc/argora
 
-go 1.24.4
+go 1.24
 
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
