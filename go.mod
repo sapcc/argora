@@ -2,7 +2,7 @@ module github.com/sapcc/argora
 
 go 1.24.0
 
-toolchain go1.24.2
+toolchain go1.24.4
 
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0

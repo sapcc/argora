@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -18,10 +19,15 @@ import (
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -146,10 +152,22 @@ func main() {
 	}
 
 	cfg := config.NewDefaultConfiguration(mgr.GetClient(), &config.ConfigReader{})
+	setupLog.Info("argora", "version", bininfo.Version())
 
-	if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "metal3")
+	capiCRDExists, err := capiCRDExists(mgr.GetClient())
+	if err != nil {
+		setupLog.Error(err, "unable to check if CAPI CRD exists")
 		os.Exit(1)
+	}
+
+	if capiCRDExists {
+		setupLog.Info("enabling Metal3 controller, CAPI CRD exists")
+		if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "metal3")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("disabled Metal3 controller, CAPI CRD does not exists")
 	}
 
 	if err = controller.NewIronCoreReconciler(mgr.GetClient(), mgr.GetScheme(), cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr); err != nil {
@@ -172,7 +190,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupLog.Info("argora", "version", bininfo.Version())
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
@@ -196,4 +213,26 @@ func getFlagVariables() *FlagVariables {
 	flag.DurationVar(&flagVariables.reconcileInterval, "reconcile-interval", reconcileIntervalDefault, "Indicates the time based reconcile interval.")
 
 	return flagVariables
+}
+
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get
+
+func capiCRDExists(k8sClient client.Client) (bool, error) {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelFunc()
+	var u unstructured.Unstructured
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apiextensions.k8s.io",
+		Version: "v1",
+		Kind:    "CustomResourceDefinition",
+	})
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: "clusters.cluster.x-k8s.io"}, &u)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
+	return true, nil
 }

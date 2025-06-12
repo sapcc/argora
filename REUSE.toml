@@ -35,6 +35,7 @@ path = [
   "dist/**",
   "docs/**",
   "hack/**",
+  "api/v1alpha1/*generated.deepcopy.go",
 ]
 SPDX-FileCopyrightText = "SAP SE"
 SPDX-License-Identifier = "Apache-2.0"
