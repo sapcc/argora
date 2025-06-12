@@ -24,14 +24,7 @@ rules:
   resources:
   - customresourcedefinitions
   verbs:
-  - create
-  - delete
-  - deletecollection
   - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - argora.cloud.sap
   resources:

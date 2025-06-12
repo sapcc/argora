@@ -154,7 +154,7 @@ func main() {
 	cfg := config.NewDefaultConfiguration(mgr.GetClient(), &config.ConfigReader{})
 	setupLog.Info("argora", "version", bininfo.Version())
 
-	capiCRDExists, err := capiCRDExists(context.Background(), mgr.GetClient())
+	capiCRDExists, err := capiCRDExists(mgr.GetClient())
 	if err != nil {
 		setupLog.Error(err, "unable to check if CAPI CRD exists")
 		os.Exit(1)
@@ -215,9 +215,11 @@ func getFlagVariables() *FlagVariables {
 	return flagVariables
 }
 
-// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=create;deletecollection;delete;get;list;patch;update;watch
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get
 
-func capiCRDExists(ctx context.Context, k8sClient client.Client) (bool, error) {
+func capiCRDExists(k8sClient client.Client) (bool, error) {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelFunc()
 	var u unstructured.Unstructured
 	u.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "apiextensions.k8s.io",
