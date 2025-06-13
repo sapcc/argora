@@ -16,7 +16,7 @@ require (
 
 require (
 	github.com/go-logr/logr v1.4.3
-	github.com/ironcore-dev/metal-operator v0.0.0-20250610154512-cb69959d6da8
+	github.com/ironcore-dev/metal-operator v0.0.0-20250613125047-4b04daeb2b4b
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
 	github.com/pkg/errors v0.9.1
