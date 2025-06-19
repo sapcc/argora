@@ -43,10 +43,6 @@ jobs:
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
           mv kustomize /usr/local/bin
 
-      - name: Package Helm chart with crds folder in template
-        run: |
-          helm package dist/chart --version ${{ steps.chart_version.outputs.version }}-crds
-
       - name: Make Helm chart
         run: |
           make helm-chart
@@ -59,6 +55,16 @@ jobs:
         run: |
           yq -i '.controllerManager.container.image.repository = "keppel.global.cloud.sap/ccloud-ghcr-io-mirror/sapcc/argora"' dist/chart/values.yaml
           yq -i '.controllerManager.container.image.tag = "sha-${{ github.sha }}"' dist/chart/values.yaml
+
+      - name: Package Helm chart with crds folder in template
+        run: |
+          helm package dist/chart --version ${{ steps.chart_version.outputs.version }}-crds
+
+      - name: Prepare CRDs folder
+        run: |
+          mkdir -p dist/chart/crds
+          kustomize build config/default | yq ea 'select(.kind == "CustomResourceDefinition")' > dist/chart/crds/crds.yaml
+          rm -rf dist/chart/templates/crd
 
       - name: Package Helm chart with removed crds folder from template folder
         run: |
