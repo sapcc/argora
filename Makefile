@@ -172,8 +172,6 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 .PHONY: helm-chart
 helm-chart: kubebuilder kustomize manifests
 	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
-	rm -rf dist/chart/templates/crd
-	mkdir -p dist/chart/crds && $(KUSTOMIZE) build config/crd > dist/chart/crds/crds.yaml
 
 .PHONY: helm-lint
 helm-lint: helm helm-chart
