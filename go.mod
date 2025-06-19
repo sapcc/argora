@@ -7,8 +7,8 @@ toolchain go1.24.4
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.9.1
-	github.com/sapcc/go-api-declarations v1.15.0
-	github.com/sapcc/go-netbox-go v0.0.0-20250519145228-3bd0e0ee241b
+	github.com/sapcc/go-api-declarations v1.16.0
+	github.com/sapcc/go-netbox-go v0.0.0-20250617112554-973fa11ba37f
 	k8s.io/api v0.33.1
 	sigs.k8s.io/cluster-api v1.9.6
 	sigs.k8s.io/controller-runtime v0.21.0
