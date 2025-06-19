@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: argora-config
-  namespace: {{ .Release.Namespace }}
-data:
-  config.json: '{{ toJson .Values.config}}'
