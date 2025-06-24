@@ -58,11 +58,12 @@ var (
 )
 
 type FlagVariables struct {
-	metricsAddr          string
-	probeAddr            string
-	enableLeaderElection bool
-	secureMetrics        bool
-	enableHTTP2          bool
+	metricsAddr             string
+	probeAddr               string
+	leaderElectionNamespace string
+	enableLeaderElection    bool
+	secureMetrics           bool
+	enableHTTP2             bool
 
 	failureBaseDelay     time.Duration
 	failureMaxDelay      time.Duration
@@ -129,11 +130,12 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsServerOptions,
-		HealthProbeBindAddress: flagVar.probeAddr,
-		LeaderElection:         flagVar.enableLeaderElection,
-		LeaderElectionID:       "849e53e1.cloud.sap",
+		Scheme:                  scheme,
+		Metrics:                 metricsServerOptions,
+		HealthProbeBindAddress:  flagVar.probeAddr,
+		LeaderElection:          flagVar.enableLeaderElection,
+		LeaderElectionID:        "849e53e1.cloud.sap",
+		LeaderElectionNamespace: flagVar.leaderElectionNamespace,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -203,6 +205,7 @@ func getFlagVariables() *FlagVariables {
 	flag.StringVar(&flagVariables.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&flagVariables.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&flagVariables.enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&flagVariables.leaderElectionNamespace, "leader-elect-ns", "kube-system", "The namespace in which the leader election resource will be created. This is only used if --leader-elect is set to true. Defaults to kube-system.")
 	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&flagVariables.enableHTTP2, "enable-http2", false, "If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
