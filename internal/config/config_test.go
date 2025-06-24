@@ -62,7 +62,7 @@ var _ = Describe("Config", func() {
 		cfg = NewDefaultConfiguration(client, &ConfigReader{})
 
 		cfg.ServerController = "controller1"
-		cfg.IronCore.Name = "name1"
+		cfg.IronCore.Names = "name1"
 		cfg.IronCore.Region = "region1"
 		cfg.IronCore.Types = "type1"
 		cfg.NetboxURL = "http://netbox"
@@ -101,7 +101,7 @@ var _ = Describe("Config", func() {
 			It("should return an error", func() {
 				// given
 				cfg.ServerController = ControllerTypeIroncore
-				cfg.IronCore.Name = ""
+				cfg.IronCore.Names = ""
 				cfg.IronCore.Region = ""
 				cfg.IronCore.Types = ""
 
@@ -118,7 +118,7 @@ var _ = Describe("Config", func() {
 			It("should return an error", func() {
 				// given
 				cfg.ServerController = ControllerTypeMetal3
-				cfg.IronCore.Name = ""
+				cfg.IronCore.Names = ""
 				cfg.IronCore.Region = ""
 				cfg.IronCore.Types = ""
 
@@ -240,7 +240,7 @@ var _ = Describe("Reload", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.ServerController).To(Equal(ControllerTypeIroncore))
-			Expect(cfg.IronCore.Name).To(Equal("name1"))
+			Expect(cfg.IronCore.Names).To(Equal("name1"))
 			Expect(cfg.IronCore.Types).To(Equal("type1"))
 			Expect(cfg.IronCore.Region).To(Equal("region1"))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
@@ -272,7 +272,7 @@ var _ = Describe("Reload", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.ServerController).To(Equal(ControllerTypeMetal3))
-			Expect(cfg.IronCore.Name).To(BeEmpty())
+			Expect(cfg.IronCore.Names).To(BeEmpty())
 			Expect(cfg.IronCore.Types).To(BeEmpty())
 			Expect(cfg.IronCore.Region).To(BeEmpty())
 		})
@@ -422,7 +422,7 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.ServerController).To(Equal(ControllerTypeIroncore))
-			Expect(cfg.IronCore.Name).To(Equal("name1"))
+			Expect(cfg.IronCore.Names).To(Equal("name1"))
 			Expect(cfg.IronCore.Region).To(Equal("region1"))
 			Expect(cfg.IronCore.Types).To(Equal("type1"))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
@@ -453,7 +453,7 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 		// then
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.ServerController).To(Equal(ControllerTypeMetal3))
-		Expect(cfg.IronCore.Name).To(BeEmpty())
+		Expect(cfg.IronCore.Names).To(BeEmpty())
 		Expect(cfg.IronCore.Region).To(BeEmpty())
 		Expect(cfg.IronCore.Types).To(BeEmpty())
 		Expect(cfg.NetboxURL).To(Equal("http://netbox"))

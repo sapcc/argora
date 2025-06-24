@@ -70,7 +70,7 @@ type Config struct {
 }
 
 type IronCore struct {
-	Name   string `json:"name"`
+	Names  string `json:"name"`
 	Region string `json:"region"`
 	Types  string `json:"types"`
 }
@@ -89,7 +89,7 @@ func NewDefaultConfiguration(k8sClient client.Client, configReader FileReader) *
 }
 
 func (c *Config) String() string {
-	return fmt.Sprintf("ironCore.Name:%s,ironCore.Region:%s,ironCore.Types:%s,serverController:%s,netboxURL:%s", c.IronCore.Name, c.IronCore.Region, c.IronCore.Types, c.ServerController, c.NetboxURL)
+	return fmt.Sprintf("ironCore.Names:%s,ironCore.Region:%s,ironCore.Types:%s,serverController:%s,netboxURL:%s", c.IronCore.Names, c.IronCore.Region, c.IronCore.Types, c.ServerController, c.NetboxURL)
 }
 
 func (c *Config) Validate() error {
@@ -97,7 +97,7 @@ func (c *Config) Validate() error {
 	if c.ServerController == "" {
 		return errors.New("server controller name is required")
 	}
-	if c.ServerController == ControllerTypeIroncore && c.IronCore.Name == "" && c.IronCore.Region == "" && c.IronCore.Types == "" {
+	if c.ServerController == ControllerTypeIroncore && c.IronCore.Names == "" && c.IronCore.Region == "" && c.IronCore.Types == "" {
 		return errors.New("ironcore configuration is required")
 	}
 	if c.NetboxURL == "" {
