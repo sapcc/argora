@@ -129,11 +129,12 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsServerOptions,
-		HealthProbeBindAddress: flagVar.probeAddr,
-		LeaderElection:         flagVar.enableLeaderElection,
-		LeaderElectionID:       "849e53e1.cloud.sap",
+		Scheme:                  scheme,
+		Metrics:                 metricsServerOptions,
+		HealthProbeBindAddress:  flagVar.probeAddr,
+		LeaderElection:          flagVar.enableLeaderElection,
+		LeaderElectionID:        "849e53e1.cloud.sap",
+		LeaderElectionNamespace: "kube-system",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
