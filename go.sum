@@ -57,8 +57,8 @@ github.com/google/pprof v0.0.0-20250501235452-c0086092b71a h1:rDA3FfmxwXR+BVKKdz
 github.com/google/pprof v0.0.0-20250501235452-c0086092b71a/go.mod h1:5hDyRhoBCxViHszMt12TnOpEI4VVi+U8Gm9iphldiMA=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/ironcore-dev/metal-operator v0.0.0-20250610154512-cb69959d6da8 h1:/EbaC+gKdbaPEs6hc2TSWsyyZEhVXw6/1tRMRlcKOYQ=
-github.com/ironcore-dev/metal-operator v0.0.0-20250610154512-cb69959d6da8/go.mod h1:buuNnfVP/1c2Oo/AmjpybCknHsIViTNlz4TMoKBvoFo=
+github.com/ironcore-dev/metal-operator v0.0.0-20250625122043-38e7239c47d3 h1:sXP57QcP8WzpmuH5OpuLnTnI5s+Ga76WuIEAiGR80bQ=
+github.com/ironcore-dev/metal-operator v0.0.0-20250625122043-38e7239c47d3/go.mod h1:buuNnfVP/1c2Oo/AmjpybCknHsIViTNlz4TMoKBvoFo=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
