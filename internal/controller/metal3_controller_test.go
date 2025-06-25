@@ -43,11 +43,11 @@ var _ = Describe("Metal3 Controller", func() {
 	}
 	fileReaderMock.FileContent["/etc/config/config.json"] = `{
 		"serverController": "metal3",
-		"ironCore": {
+		"ironCore": [{
 			"name": "name1",
 			"region": "region1",
-			"types": "type1"
-		},
+			"type": "type1"
+		}],
 		"netboxUrl": "http://netbox"
 	}`
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
@@ -320,7 +320,7 @@ var _ = Describe("Metal3 Controller", func() {
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(reconcileIntervalDefault))
 
 			bmcSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, typeNamespacedSecretName, bmcSecret)
@@ -337,9 +337,9 @@ var _ = Describe("Metal3 Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			expectNetworkDataSecret(ndSecret)
 
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 1
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 1
+			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
 		})
 
 		It("should return an error if configuration reload fails", func() {
@@ -368,11 +368,11 @@ var _ = Describe("Metal3 Controller", func() {
 			}
 			fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
 				"serverController": "ironcore",
-				"ironCore": {
+				"ironCore": [{
 					"name": "name1",
 					"region": "region1",
-					"types": "type1"
-				},
+					"type": "type1"
+				}],
 				"netboxUrl": "http://netbox"
 			}`
 			fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
@@ -383,7 +383,7 @@ var _ = Describe("Metal3 Controller", func() {
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			bmcSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, typeNamespacedSecretName, bmcSecret)
@@ -397,9 +397,9 @@ var _ = Describe("Metal3 Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedNDSecretName, ndSecret)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 0
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 0
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 0
+			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(0))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(0))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(0))
 		})
 
 		It("should return an error if netbox reload fails", func() {
@@ -437,7 +437,7 @@ var _ = Describe("Metal3 Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to find clusters"))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 		})
 
 		It("should return an error if GetClustersByNameRegionType returns multiple clusters", func() {
@@ -470,7 +470,7 @@ var _ = Describe("Metal3 Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("multiple clusters found"))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 		})
 
 		It("should return an error if GetDevicesByClusterID fails", func() {
@@ -503,7 +503,7 @@ var _ = Describe("Metal3 Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to find devices"))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 		})
 
 		It("should skip the device when the device is not active", func() {
@@ -542,7 +542,7 @@ var _ = Describe("Metal3 Controller", func() {
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(reconcileIntervalDefault))
 		})
 
 		It("should return an error if GetRegionForDevice fails", func() {
@@ -562,7 +562,7 @@ var _ = Describe("Metal3 Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to get region for device: unable to get region for device"))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 		})
 
 		It("should skip the device when BareMetalHost custom resource already exists", func() {
@@ -592,7 +592,7 @@ var _ = Describe("Metal3 Controller", func() {
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(reconcileIntervalDefault))
 		})
 	})
 })

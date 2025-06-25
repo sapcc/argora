@@ -34,6 +34,19 @@ controllerManager:
       capabilities:
         drop:
           - "ALL"
+    volumes:
+    - name: secret-volume
+      mountPath: /etc/credentials
+      readOnly: true
+      source:
+        secret:
+          secretName: argora-secret
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+      source:
+        configMap:
+          name: argora-config
   securityContext:
     runAsNonRoot: true
     seccompProfile:
@@ -79,9 +92,9 @@ networkPolicy:
 config:
   serverController: ""
   ironCore:
-    name: ""
-    region: ""
-    types: ""
+    - name: ""
+      region: ""
+      types: ""
   netboxURL: ""
 
 credentials:

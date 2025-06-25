@@ -42,7 +42,8 @@ var (
 )
 
 const (
-	reconcileInterval = 50 * time.Millisecond
+	reconcileInterval        = 50 * time.Millisecond
+	reconcileIntervalDefault = 1 * time.Minute
 )
 
 func TestControllers(t *testing.T) {

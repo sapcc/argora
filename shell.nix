@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company
+# SPDX-FileCopyrightText: 2024 SAP SE
 # SPDX-License-Identifier: Apache-2.0
 
 { pkgs ? import <nixpkgs> { } }:

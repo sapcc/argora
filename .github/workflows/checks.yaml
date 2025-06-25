@@ -3,7 +3,7 @@
 # Edit Makefile.maker.yaml instead.                                            #
 ################################################################################
 
-# SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company
+# SPDX-FileCopyrightText: 2024 SAP SE
 # SPDX-License-Identifier: Apache-2.0
 
 name: Checks
@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: 1.24.4
+          go-version: 1.24.3
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:

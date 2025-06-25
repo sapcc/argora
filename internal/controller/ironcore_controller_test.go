@@ -6,12 +6,13 @@ package controller
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,7 +29,8 @@ var _ = Describe("Ironcore Controller", func() {
 	const (
 		resourceName      = "test-resource"
 		resourceNamespace = "default"
-		bmcName           = "device-name1"
+		bmcName1          = "device-name1"
+		bmcName2          = "device-name2"
 	)
 
 	fileReaderMock := &mock.FileReaderMock{
@@ -37,11 +39,11 @@ var _ = Describe("Ironcore Controller", func() {
 	}
 	fileReaderMock.FileContent["/etc/config/config.json"] = `{
 		"serverController": "ironcore",
-		"ironCore": {
+		"ironCore": [{
 			"name": "name1",
 			"region": "region1",
-			"types": "type1"
-		},
+			"type": "type1"
+		}],
 		"netboxUrl": "http://netbox"
 	}`
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
@@ -53,8 +55,12 @@ var _ = Describe("Ironcore Controller", func() {
 	Context("Reconcile", func() {
 		ctx := context.Background()
 
-		typeNamespacedBMCName := types.NamespacedName{
-			Name:      bmcName,
+		typeNamespacedBMCName1 := types.NamespacedName{
+			Name:      bmcName1,
+			Namespace: resourceNamespace,
+		}
+		typeNamespacedBMCName2 := types.NamespacedName{
+			Name:      bmcName2,
 			Namespace: resourceNamespace,
 		}
 
@@ -80,10 +86,10 @@ var _ = Describe("Ironcore Controller", func() {
 				}, nil
 			}
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
-				Expect(clusterID).To(Equal(1))
+				Expect(clusterID).To(BeElementOf(1, 2))
 				return []models.Device{
 					{
-						ID:     1,
+						ID:     clusterID,
 						Name:   "device-name1",
 						Status: models.DeviceStatus{Value: "active"},
 						Platform: models.NestedPlatform{
@@ -113,26 +119,27 @@ var _ = Describe("Ironcore Controller", func() {
 			return netBoxMock
 		}
 
-		expectLabels := func(labels map[string]string) {
+		expectLabels := func(labels map[string]string, bmcName string) {
+			bb, _ := strings.CutPrefix(bmcName, "device-")
 			Expect(labels).To(Equal(map[string]string{
 				"topology.kubernetes.io/region":      "region1",
 				"topology.kubernetes.io/zone":        "site1",
 				"kubernetes.metal.cloud.sap/cluster": "cluster1",
-				"kubernetes.metal.cloud.sap/name":    "device-name1",
-				"kubernetes.metal.cloud.sap/bb":      "name1",
+				"kubernetes.metal.cloud.sap/name":    bmcName,
+				"kubernetes.metal.cloud.sap/bb":      bb,
 				"kubernetes.metal.cloud.sap/type":    "type1",
 				"kubernetes.metal.cloud.sap/role":    "role1",
 			}))
 		}
 
-		expectBMCSecret := func(bmcSecret *metalv1alpha1.BMCSecret) {
-			Expect(bmcSecret.Name).To(Equal("device-name1"))
-			expectLabels(bmcSecret.Labels)
+		expectBMCSecret := func(bmcSecret *metalv1alpha1.BMCSecret, bmcName string) {
+			Expect(bmcSecret.Name).To(Equal(bmcName))
+			expectLabels(bmcSecret.Labels, bmcName)
 
 			Expect(bmcSecret.ObjectMeta.OwnerReferences).To(HaveLen(1))
 			Expect(bmcSecret.ObjectMeta.OwnerReferences[0].APIVersion).To(Equal("metal.ironcore.dev/v1alpha1"))
 			Expect(bmcSecret.ObjectMeta.OwnerReferences[0].Kind).To(Equal("BMC"))
-			Expect(bmcSecret.ObjectMeta.OwnerReferences[0].Name).To(Equal("device-name1"))
+			Expect(bmcSecret.ObjectMeta.OwnerReferences[0].Name).To(Equal(bmcName))
 			Expect(*bmcSecret.ObjectMeta.OwnerReferences[0].Controller).To(BeTrue())
 			Expect(*bmcSecret.ObjectMeta.OwnerReferences[0].BlockOwnerDeletion).To(BeTrue())
 
@@ -142,31 +149,63 @@ var _ = Describe("Ironcore Controller", func() {
 			}))
 		}
 
-		expectBMC := func(bmc *metalv1alpha1.BMC) {
-			Expect(bmc.Name).To(Equal("device-name1"))
-			expectLabels(bmc.Labels)
+		expectBMC := func(bmc *metalv1alpha1.BMC, bmcName string) {
+			Expect(bmc.Name).To(Equal(bmcName))
+			expectLabels(bmc.Labels, bmcName)
 			Expect(bmc.ObjectMeta.OwnerReferences).To(BeEmpty())
 
 			Expect(bmc.Spec.Endpoint.IP.String()).To(Equal("192.168.1.1"))
 			Expect(bmc.Spec.Protocol.Name).To(Equal(metalv1alpha1.ProtocolNameRedfish))
 			Expect(bmc.Spec.Protocol.Port).To(Equal(int32(443)))
-			Expect(bmc.Spec.BMCSecretRef.Name).To(Equal("device-name1"))
+			Expect(bmc.Spec.BMCSecretRef.Name).To(Equal(bmcName))
+		}
+
+		expectBMCResources := func() {
+			bmcSecretList := &metalv1alpha1.BMCSecretList{}
+			err := k8sClient.List(ctx, bmcSecretList)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(bmcSecretList.Items).To(HaveLen(1))
+
+			bmcSecret := &metalv1alpha1.BMCSecret{}
+			err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+			Expect(err).ToNot(HaveOccurred())
+			expectBMCSecret(bmcSecret, bmcName1)
+
+			bmcList := &metalv1alpha1.BMCList{}
+			err = k8sClient.List(ctx, bmcList)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(bmcList.Items).To(HaveLen(1))
+
+			bmc := &metalv1alpha1.BMC{}
+			err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmc)
+			Expect(err).ToNot(HaveOccurred())
+			expectBMC(bmc, bmcName1)
 		}
 
 		Context("Envtest", func() {
 			AfterEach(func() {
 				By("cleanup")
 				bmcSecret := &metalv1alpha1.BMCSecret{}
-				err := k8sClient.Get(ctx, typeNamespacedBMCName, bmcSecret)
+				err := k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
 				if err == nil {
-					By("delete BMC Secret")
+					By("delete BMC Secret 1")
+					Expect(k8sClient.Delete(ctx, bmcSecret)).To(Succeed())
+				}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName2, bmcSecret)
+				if err == nil {
+					By("delete BMC Secret 2")
 					Expect(k8sClient.Delete(ctx, bmcSecret)).To(Succeed())
 				}
 
 				bmc := &metalv1alpha1.BMC{}
-				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmc)
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmc)
 				if err == nil {
-					By("delete BMC")
+					By("delete BMC 1")
+					Expect(k8sClient.Delete(ctx, bmc)).To(Succeed())
+				}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName2, bmc)
+				if err == nil {
+					By("delete BMC 2")
 					Expect(k8sClient.Delete(ctx, bmc)).To(Succeed())
 				}
 			})
@@ -181,21 +220,13 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
-				bmcSecret := &metalv1alpha1.BMCSecret{}
-				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmcSecret)
-				Expect(err).ToNot(HaveOccurred())
-				expectBMCSecret(bmcSecret)
+				expectBMCResources()
 
-				bmc := &metalv1alpha1.BMC{}
-				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmc)
-				Expect(err).ToNot(HaveOccurred())
-				expectBMC(bmc)
-
-				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 2
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 2
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 2
+				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
 			})
 
 			It("should successfully reconcile if cluster selection is only by name", func() {
@@ -219,9 +250,9 @@ var _ = Describe("Ironcore Controller", func() {
 				}
 				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
 					"serverController": "ironcore",
-					"ironCore": {
+					"ironCore": [{
 						"name": "name1"
-					},
+					}],
 					"netboxUrl": "http://netbox"
 				}`
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
@@ -232,21 +263,13 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
-				bmcSecret := &metalv1alpha1.BMCSecret{}
-				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmcSecret)
-				Expect(err).ToNot(HaveOccurred())
-				expectBMCSecret(bmcSecret)
+				expectBMCResources()
 
-				bmc := &metalv1alpha1.BMC{}
-				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmc)
-				Expect(err).ToNot(HaveOccurred())
-				expectBMC(bmc)
-
-				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 2
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 2
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 2
+				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
 			})
 
 			It("should return an error if configuration reload fails", func() {
@@ -275,7 +298,7 @@ var _ = Describe("Ironcore Controller", func() {
 				}
 				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
 					"serverController": "metal3",
-					"ironCore": { },
+					"ironCore": [],
 					"netboxUrl": "http://netbox"
 				}`
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
@@ -286,19 +309,217 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
-				bmcSecret := &metalv1alpha1.BMCSecret{}
-				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmcSecret)
-				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(0))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(0))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(0))
+			})
 
-				bmc := &metalv1alpha1.BMC{}
-				err = k8sClient.Get(ctx, typeNamespacedBMCName, bmc)
-				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			It("should succeed if multiple clusters in configuration", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+					Expect(name).To(BeElementOf("name1", "name2"))
+					Expect(region).To(Equal(""))
+					Expect(clusterType).To(Equal(""))
 
-				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 0
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 0
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls = 0
+					return []models.Cluster{
+						{
+							ID:   1,
+							Name: "cluster1",
+						},
+					}, nil
+				}
+
+				fileReaderMockWithNameOnly := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: false,
+				}
+				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
+					"serverController": "ironcore",
+					"ironCore": [
+						{
+							"name": "name1"
+						},
+						{
+							"name": "name2"
+						}
+					],
+					"netboxUrl": "http://netbox"
+				}`
+				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				expectBMCResources()
+
+				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(2))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
+			})
+
+			It("should succeed if multiple clusters fetched from netbox", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+					Expect(name).To(Equal(""))
+					Expect(region).To(Equal(""))
+					Expect(clusterType).To(Equal("type1"))
+
+					return []models.Cluster{
+						{
+							ID:   1,
+							Name: "cluster1",
+						},
+						{
+							ID:   2,
+							Name: "cluster2",
+						},
+					}, nil
+				}
+
+				fileReaderMockWithNameOnly := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: false,
+				}
+				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
+					"serverController": "ironcore",
+					"ironCore": [
+						{
+							"type": "type1"
+						}
+					],
+					"netboxUrl": "http://netbox"
+				}`
+				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				expectBMCResources()
+
+				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
+			})
+
+			It("should succeed if multiple devices fetched from netbox", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+					Expect(name).To(Equal("cluster1"))
+					Expect(region).To(Equal(""))
+					Expect(clusterType).To(Equal(""))
+
+					return []models.Cluster{
+						{
+							ID:   1,
+							Name: "cluster1",
+						},
+					}, nil
+				}
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
+					Expect(clusterID).To(BeElementOf(1))
+					devices := []models.Device{}
+					for _, deviceName := range []string{"device-name1", "device-name2"} {
+						devices = append(devices, models.Device{
+							ID:     1,
+							Name:   deviceName,
+							Status: models.DeviceStatus{Value: "active"},
+							Platform: models.NestedPlatform{
+								ID: 1,
+							},
+							OOBIp: models.NestedIPAddress{
+								ID:      1,
+								Address: "192.168.1.1/24",
+							},
+							Site: models.NestedSite{
+								Slug: "site1",
+							},
+							DeviceType: models.NestedDeviceType{
+								Slug: "type1",
+							},
+							DeviceRole: models.NestedDeviceRole{
+								Slug: "role1",
+							},
+						})
+					}
+					return devices, nil
+				}
+
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceFunc = func(device *models.Device) (string, error) {
+					Expect(device.Name).To(BeElementOf("device-name1", "device-name2"))
+					return "region1", nil
+				}
+
+				fileReaderMockWithNameOnly := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: false,
+				}
+				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
+					"serverController": "ironcore",
+					"ironCore": [
+						{
+							"name": "cluster1"
+						}
+					],
+					"netboxUrl": "http://netbox"
+				}`
+				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				bmcSecretList := &metalv1alpha1.BMCSecretList{}
+				err = k8sClient.List(ctx, bmcSecretList)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecretList.Items).To(HaveLen(2))
+
+				bmcSecret1 := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret1)
+				Expect(err).ToNot(HaveOccurred())
+				expectBMCSecret(bmcSecret1, bmcName1)
+
+				bmcSecret2 := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName2, bmcSecret2)
+				Expect(err).ToNot(HaveOccurred())
+				expectBMCSecret(bmcSecret2, bmcName2)
+
+				bmcList := &metalv1alpha1.BMCList{}
+				err = k8sClient.List(ctx, bmcList)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcList.Items).To(HaveLen(2))
+
+				bmc1 := &metalv1alpha1.BMC{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmc1)
+				Expect(err).ToNot(HaveOccurred())
+				expectBMC(bmc1, bmcName1)
+
+				bmc2 := &metalv1alpha1.BMC{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName2, bmc2)
+				Expect(err).ToNot(HaveOccurred())
+				expectBMC(bmc2, bmcName2)
+
+				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
 			})
 
 			It("should return an error if netbox reload fails", func() {
@@ -332,38 +553,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to find clusters"))
-				Expect(res.Requeue).To(BeFalse())
-			})
-
-			It("should return an error if GetClustersByNameRegionType returns multiple clusters", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
-					Expect(name).To(Equal("name1"))
-					Expect(region).To(Equal("region1"))
-					Expect(clusterType).To(Equal("type1"))
-
-					return []models.Cluster{
-						{
-							ID:   1,
-							Name: "cluster1",
-						},
-						{
-							ID:   2,
-							Name: "cluster2",
-						},
-					}, nil
-				}
-
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
-
-				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("multiple clusters found"))
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 			})
 
 			It("should return an error if GetDevicesByClusterID fails", func() {
@@ -394,7 +584,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to find devices"))
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 			})
 
 			It("should skip the device when the device is not active", func() {
@@ -425,7 +615,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 			})
 
 			It("should return an error if GetRegionForDevice fails", func() {
@@ -443,7 +633,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to get region for device: unable to get region for device"))
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 			})
 
 			It("should skip the device when BMC custom resource already exists", func() {
@@ -471,7 +661,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 			})
 		})
 
@@ -491,7 +681,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to create bmc secret: intentionally failing client on client.Create for BMCSecret"))
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 			})
 
 			It("should return an error if createBmc fails", func() {
@@ -509,7 +699,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to create bmc: unable to create BMC: intentionally failing client on client.Create for BMC"))
-				Expect(res.Requeue).To(BeFalse())
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 			})
 		})
 	})
