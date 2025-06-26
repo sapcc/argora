@@ -253,10 +253,7 @@ var _ = Describe("Reload", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.ServerController).To(Equal(ControllerTypeIroncore))
-			Expect(cfg.IronCore).To(HaveLen(1))
-			Expect(cfg.IronCore[0].Name).To(Equal("name1"))
-			Expect(cfg.IronCore[0].Type).To(Equal("type1"))
-			Expect(cfg.IronCore[0].Region).To(Equal("region1"))
+			Expect(cfg.IronCore).To(ConsistOf(IronCore{Name: "name1", Region: "region1", Type: "type1"}))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 
 			Expect(cfg.BMCUser).To(Equal("user"))
