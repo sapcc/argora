@@ -103,8 +103,7 @@ func (c *Config) Validate() error {
 	}
 	if c.ServerController == ControllerTypeIroncore {
 		if len(c.IronCore) == 0 || (c.IronCore[0].Name == "" && c.IronCore[0].Region == "" && c.IronCore[0].Type == "") {
-			//return errors.New("ironcore configuration is required")
-			return fmt.Errorf("ironcore configuration is required, got: %v", c)
+			return errors.New("ironcore configuration is required")
 		}
 	}
 	if c.NetboxURL == "" {

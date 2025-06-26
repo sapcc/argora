@@ -44,12 +44,13 @@ var _ = Describe("ControllerType", func() {
 
 		It("should panic for an unimplemented ControllerType", func() {
 			// given
-			controllerType := ControllerType("unknown")
+			controllerType := ControllerType("_")
+
+			// when
+			result := controllerType.String()
 
 			// when/then
-			Expect(func() {
-				_ = controllerType.String()
-			}).To(Panic())
+			Expect(result).To(Equal("unsupported"))
 		})
 	})
 })
