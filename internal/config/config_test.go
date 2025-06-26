@@ -285,7 +285,7 @@ var _ = Describe("Reload", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.ServerController).To(Equal(ControllerTypeMetal3))
-			Expect(cfg.IronCore).To(HaveLen(0))
+			Expect(cfg.IronCore).To(BeEmpty())
 		})
 
 		It("should return an error if ironcore config is empty and serverController is ironcore", func() {
