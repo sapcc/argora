@@ -28,7 +28,7 @@ func (c ControllerType) String() string {
 	case ControllerTypeMetal3:
 		return "metal3"
 	}
-	panic(fmt.Errorf("%#v has unimplemented String() method", c))
+	return "unsupported"
 }
 
 type FileReader interface {
@@ -75,6 +75,10 @@ type IronCore struct {
 	Type   string `json:"type"`
 }
 
+func (i IronCore) String() string {
+	return fmt.Sprintf("name:%s,region:%s,type:%s", i.Name, i.Region, i.Type)
+}
+
 func NewDefaultConfiguration(k8sClient client.Client, configReader FileReader) *Config {
 	return &Config{
 		k8sClient:        k8sClient,
@@ -99,7 +103,8 @@ func (c *Config) Validate() error {
 	}
 	if c.ServerController == ControllerTypeIroncore {
 		if len(c.IronCore) == 0 || (c.IronCore[0].Name == "" && c.IronCore[0].Region == "" && c.IronCore[0].Type == "") {
-			return errors.New("ironcore configuration is required")
+			//return errors.New("ironcore configuration is required")
+			return fmt.Errorf("ironcore configuration is required, got: %v", c)
 		}
 	}
 	if c.NetboxURL == "" {

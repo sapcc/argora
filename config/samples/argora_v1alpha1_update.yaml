@@ -10,4 +10,4 @@ spec:
   clusters:
   - name: "cc-b0-qa-de-1"
     region: "qa-de-1"
-    type: "cc-kvm-compute,cc-kvm-admin"
+    type: "cc-kvm-compute"

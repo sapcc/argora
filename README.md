@@ -29,6 +29,7 @@ Helm is used to Template manifest of the operators. You need to provide addition
 ...
 controllerManager:
   container:
+    ...
     volumes:
     - name: secret-volume
       mountPath: /etc/credentials
@@ -47,8 +48,11 @@ config:
   serverController: "ironcore"
   ironCore:
     - name: ""
+      region: ""
+      type: "cc-kvm-compute"
+    - name: ""
       region: "qa-de-1"
-      types: "cc-kvm-compute"
+      type: ""
   netboxURL: "https://netbox.global.cloud.sap/"
 
 credentials:

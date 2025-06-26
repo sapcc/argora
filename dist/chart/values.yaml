@@ -34,19 +34,6 @@ controllerManager:
       capabilities:
         drop:
           - "ALL"
-    volumes:
-    - name: secret-volume
-      mountPath: /etc/credentials
-      readOnly: true
-      source:
-        secret:
-          secretName: argora-secret
-    - name: config-volume
-      mountPath: /etc/config
-      readOnly: true
-      source:
-        configMap:
-          name: argora-config
   securityContext:
     runAsNonRoot: true
     seccompProfile:
@@ -90,14 +77,17 @@ networkPolicy:
   enable: false
 
 config:
-  serverController: ""
+  serverController: "_"
   ironCore:
     - name: ""
       region: ""
-      types: ""
-  netboxURL: ""
+      type: "cc-kvm-compute"
+    - name: ""
+      region: "qa-de-1"
+      type: ""
+  netboxURL: "https://netbox-test.global.cloud.sap/"
 
 credentials:
-  bmcUser: ""
-  bmcPassword: ""
-  netboxToken: ""
+  bmcUser: "_"
+  bmcPassword: "_"
+  netboxToken: "xxx"
