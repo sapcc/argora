@@ -42,7 +42,7 @@ var _ = Describe("ControllerType", func() {
 			Expect(result).To(Equal("metal3"))
 		})
 
-		It("should panic for an unimplemented ControllerType", func() {
+		It("should return 'unsupported' for an unimplemented ControllerType", func() {
 			// given
 			controllerType := ControllerType("_")
 
