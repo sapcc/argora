@@ -79,10 +79,13 @@ func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
 		Complete(r)
 }
 
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -107,13 +110,8 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	clusterTypes := []string{""}
-	if r.cfg.IronCore.Types != "" {
-		clusterTypes = strings.Split(r.cfg.IronCore.Types, ",")
-	}
-
-	for _, clusterType := range clusterTypes {
-		err = r.reconcileCluster(ctx, clusterType)
+	for _, cluster := range r.cfg.IronCore {
+		err = r.reconcileCluster(ctx, &cluster)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -122,45 +120,35 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, clusterType string) error {
+func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, cluster *config.IronCore) error {
 	logger := log.FromContext(ctx)
 
-	clusterNames := []string{""}
-	if r.cfg.IronCore.Name != "" {
-		clusterNames = strings.Split(r.cfg.IronCore.Name, ",")
+	logger.Info("looking for cluster in netbox", "name", cluster.Name, "region", cluster.Region, "type", cluster.Type)
+
+	clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(cluster.Name, cluster.Region, cluster.Type)
+	if err != nil {
+		logger.Error(err, "unable to find cluster in netbox", "name", cluster.Name, "region", cluster.Region, "type", cluster.Type)
+		return err
 	}
 
-	for _, name := range clusterNames {
-		logger.Info("reconciling IronCore clusters", "name", name, "region", r.cfg.IronCore.Region, "type", clusterType)
+	for _, cluster := range clusters {
+		logger.Info("reconciling cluster", "cluster", cluster.Name, "ID", cluster.ID)
 
-		clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(name, r.cfg.IronCore.Region, clusterType)
+		devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 		if err != nil {
-			logger.Error(err, "unable to find cluster in netbox", "name", name, "region", r.cfg.IronCore.Region, "type", clusterType)
+			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
 			return err
 		}
 
-		if len(clusters) > 1 {
-			return errors.New("multiple clusters found")
-		}
-
-		for _, cluster := range clusters {
-			logger.Info("reconciling cluster", "cluster", cluster.Name, "ID", cluster.ID)
-
-			devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
+		for _, device := range devices {
+			err = r.reconcileDevice(ctx, r.netBox, cluster.Name, &device)
 			if err != nil {
-				logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
+				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
 				return err
-			}
-
-			for _, device := range devices {
-				err = r.reconcileDevice(ctx, r.netBox, cluster.Name, &device)
-				if err != nil {
-					logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
-					return err
-				}
 			}
 		}
 	}
+
 	return nil
 }
 

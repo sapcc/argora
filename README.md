@@ -23,23 +23,45 @@ Argora is a Kubernetes operator designed to manage Metal3 and IronCore resources
 
 #### Using Tilt
 
-Helm is used to Template manifest of the operators. You need to provide `helm` values under `dist/chart/values.yaml` in the following format:
+Helm is used to Template manifest of the operators. You need to provide additional `helm` values under `dist/chart/values.yaml` in the following format:
 
 ```yaml
 ...
+controllerManager:
+  container:
+    ...
+    volumes:
+    - name: secret-volume
+      mountPath: /etc/credentials
+      readOnly: true
+      source:
+        secret:
+          secretName: argora-secret
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+      source:
+        configMap:
+          name: argora-config
 
 config:
   serverController: "ironcore"
   ironCore:
-    name: ""
-    region: "qa-de-1"
-    types: "cc-kvm-compute"
+    - name: ""
+      region: ""
+      type: "cc-kvm-compute"
+    - name: ""
+      region: "qa-de-1"
+      type: ""
   netboxURL: "https://netbox.global.cloud.sap/"
 
 credentials:
   bmcUser: "<user>"
   bmcPassword: "<password>"
   netboxToken: "<token>"
+
+crd:
+  enable: true
 ```
 
 **Run on dev cluster**

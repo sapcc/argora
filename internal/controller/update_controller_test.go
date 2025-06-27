@@ -6,6 +6,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,11 +34,11 @@ var _ = Describe("Update Controller", func() {
 	}
 	fileReaderMock.FileContent["/etc/config/config.json"] = `{
 		"serverController": "ironcore",
-		"ironCore": {
+		"ironCore": [{
 			"name": "name1",
 			"region": "region1",
-			"types": "type1"
-		},
+			"type": "type1"
+		}],
 		"netboxUrl": "http://netbox"
 	}`
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
@@ -199,12 +200,12 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 1
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls = 2
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls = 1
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls = 1
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls = 1
+			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2)) // called twice: once for the device and once for the remoteboard interface
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(1))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(1))
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -239,7 +240,7 @@ var _ = Describe("Update Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to reload netbox"))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 		})
 
 		It("should return an error if GetClustersByNameRegionType fails", func() {
@@ -264,7 +265,7 @@ var _ = Describe("Update Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to find clusters"))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile cluster: unable to find clusters")
 		})
@@ -300,7 +301,7 @@ var _ = Describe("Update Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to find devices"))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile devices on cluster cluster1 (1): unable to find devices")
 		})
@@ -336,12 +337,12 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
-			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls = 1
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls = 1
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls = 2
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls = 1
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls = 1
-			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls = 1
+			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2)) // called twice: once for the device and once for the remoteboard interface
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(1))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(1))
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -369,7 +370,7 @@ var _ = Describe("Update Controller", func() {
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -407,7 +408,7 @@ var _ = Describe("Update Controller", func() {
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateInterfaceCalls).To(Equal(1))
 
@@ -444,7 +445,7 @@ var _ = Describe("Update Controller", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateInterfaceCalls).To(Equal(1))
 
@@ -473,7 +474,7 @@ var _ = Describe("Update Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("unable to update device device1 data: remoteboard interface not found"))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(0))
 
@@ -509,7 +510,7 @@ var _ = Describe("Update Controller", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -545,7 +546,7 @@ var _ = Describe("Update Controller", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -576,7 +577,7 @@ var _ = Describe("Update Controller", func() {
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to update device device1 data: unable to update device")
 		})
@@ -626,7 +627,7 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(1))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 			expectStatus(argorav1alpha1.Ready, "")
 		})
@@ -675,7 +676,7 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(0))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to remove vmk interfaces and IPs for device device1: unable to delete IP address (192.168.0.1): failed to delete IP (2)")
 		})
@@ -725,7 +726,7 @@ var _ = Describe("Update Controller", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).DeleteInterfaceCalls).To(Equal(1))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to remove vmk interfaces and IPs for device device1: unable to delete vmk0 interface: failed to delete interface (2)")
 		})
@@ -755,7 +756,7 @@ var _ = Describe("Update Controller", func() {
 		// then
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("updates.argora.cloud.sap \"non-existent-resource\" not found"))
-		Expect(res.Requeue).To(BeFalse())
+		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 	})
 })
 

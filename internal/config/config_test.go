@@ -42,14 +42,15 @@ var _ = Describe("ControllerType", func() {
 			Expect(result).To(Equal("metal3"))
 		})
 
-		It("should panic for an unimplemented ControllerType", func() {
+		It("should return 'unsupported' for an unimplemented ControllerType", func() {
 			// given
-			controllerType := ControllerType("unknown")
+			controllerType := ControllerType("_")
+
+			// when
+			result := controllerType.String()
 
 			// when/then
-			Expect(func() {
-				_ = controllerType.String()
-			}).To(Panic())
+			Expect(result).To(Equal("unsupported"))
 		})
 	})
 })
@@ -62,9 +63,13 @@ var _ = Describe("Config", func() {
 		cfg = NewDefaultConfiguration(client, &ConfigReader{})
 
 		cfg.ServerController = "controller1"
-		cfg.IronCore.Name = "name1"
-		cfg.IronCore.Region = "region1"
-		cfg.IronCore.Types = "type1"
+		cfg.IronCore = []IronCore{
+			{
+				Name:   "name1",
+				Region: "region1",
+				Type:   "type1",
+			},
+		}
 		cfg.NetboxURL = "http://netbox"
 
 		cfg.BMCUser = "user"
@@ -101,9 +106,13 @@ var _ = Describe("Config", func() {
 			It("should return an error", func() {
 				// given
 				cfg.ServerController = ControllerTypeIroncore
-				cfg.IronCore.Name = ""
-				cfg.IronCore.Region = ""
-				cfg.IronCore.Types = ""
+				cfg.IronCore = []IronCore{
+					{
+						Name:   "",
+						Region: "",
+						Type:   "",
+					},
+				}
 
 				// when
 				err := cfg.Validate()
@@ -118,9 +127,13 @@ var _ = Describe("Config", func() {
 			It("should return an error", func() {
 				// given
 				cfg.ServerController = ControllerTypeMetal3
-				cfg.IronCore.Name = ""
-				cfg.IronCore.Region = ""
-				cfg.IronCore.Types = ""
+				cfg.IronCore = []IronCore{
+					{
+						Name:   "",
+						Region: "",
+						Type:   "",
+					},
+				}
 
 				// when
 				err := cfg.Validate()
@@ -218,11 +231,11 @@ var _ = Describe("Reload", func() {
 			// given
 			configJson := `{
 				"serverController": "ironcore",
-				"ironCore": {
+				"ironCore": [{
 				  "name": "name1",
 				  "region": "region1",
-					"types": "type1"
-				},
+					"type": "type1"
+				}],
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
@@ -240,9 +253,7 @@ var _ = Describe("Reload", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.ServerController).To(Equal(ControllerTypeIroncore))
-			Expect(cfg.IronCore.Name).To(Equal("name1"))
-			Expect(cfg.IronCore.Types).To(Equal("type1"))
-			Expect(cfg.IronCore.Region).To(Equal("region1"))
+			Expect(cfg.IronCore).To(ConsistOf(IronCore{Name: "name1", Region: "region1", Type: "type1"}))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 
 			Expect(cfg.BMCUser).To(Equal("user"))
@@ -254,7 +265,7 @@ var _ = Describe("Reload", func() {
 			// given
 			configJson := `{
 				"serverController": "metal3",
-				"ironCore": {},
+				"ironCore": [],
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `{
@@ -272,9 +283,59 @@ var _ = Describe("Reload", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.ServerController).To(Equal(ControllerTypeMetal3))
-			Expect(cfg.IronCore.Name).To(BeEmpty())
-			Expect(cfg.IronCore.Types).To(BeEmpty())
-			Expect(cfg.IronCore.Region).To(BeEmpty())
+			Expect(cfg.IronCore).To(BeEmpty())
+		})
+
+		It("should return an error if ironcore config is empty and serverController is ironcore", func() {
+			// given
+			configJson := `{
+				"serverController": "ironcore",
+				"ironCore": [],
+				"netboxUrl": "http://netbox"
+			}`
+			credentialsJson := `{
+				"bmcUser": "user",
+				"bmcPassword": "password",
+				"netboxToken": "token"
+			}`
+
+			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
+			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
+
+			// when
+			err := cfg.Reload()
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("ironcore configuration is required"))
+		})
+
+		It("should return an error if ironcore config has one entry with empty fields and serverController is ironcore", func() {
+			// given
+			configJson := `{
+				"serverController": "ironcore",
+				"ironCore": [{
+					"name": "",
+					"region": "",
+					"type": ""
+				}],
+				"netboxUrl": "http://netbox"
+			}`
+			credentialsJson := `{
+				"bmcUser": "user",
+				"bmcPassword": "password",
+				"netboxToken": "token"
+			}`
+
+			fileReaderMock.fileContent["/etc/config/config.json"] = configJson
+			fileReaderMock.fileContent["/etc/credentials/credentials.json"] = credentialsJson
+
+			// when
+			err := cfg.Reload()
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("ironcore configuration is required"))
 		})
 	})
 
@@ -303,11 +364,11 @@ var _ = Describe("Reload", func() {
 			// given
 			configJson := `{
 				"serverController": "controller1",
-				"ironCore": {
+				"ironCore": [{
 					"name": "name1",
 					"region": "region1",
-				  "types": "type1"
-				},
+				  "type": "type1"
+				}],
 				"netboxUrl": "http://netbox"
 			}`
 
@@ -349,11 +410,11 @@ var _ = Describe("Reload", func() {
 			// given
 			configJson := `{
 				"serverController": "controller1",
-				"ironCore": {
+				"ironCore": [{
 				  "name": "name1",
 				  "region": "region1",
-					"types": "type1"
-				},
+					"type": "type1"
+				}],
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJson := `b`
@@ -401,11 +462,11 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 			// given
 			configJsonContent := `{
 				"serverController": "ironcore",
-				"ironCore": {
+				"ironCore": [{
 				  "name": "name1",
 				  "region": "region1",
-					"types": "type1"
-				},
+					"type": "type1"
+				}],
 				"netboxUrl": "http://netbox"
 			}`
 			credentialsJsonContent := `{
@@ -422,9 +483,10 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.ServerController).To(Equal(ControllerTypeIroncore))
-			Expect(cfg.IronCore.Name).To(Equal("name1"))
-			Expect(cfg.IronCore.Region).To(Equal("region1"))
-			Expect(cfg.IronCore.Types).To(Equal("type1"))
+			Expect(cfg.IronCore).To(HaveLen(1))
+			Expect(cfg.IronCore[0].Name).To(Equal("name1"))
+			Expect(cfg.IronCore[0].Region).To(Equal("region1"))
+			Expect(cfg.IronCore[0].Type).To(Equal("type1"))
 			Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 
 			// when
@@ -442,7 +504,7 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 		// given
 		configJsonContent := `{
 			"serverController": "metal3",
-			"ironCore": {},
+			"ironCore": [],
 			"netboxUrl": "http://netbox"
 		}`
 		fileReaderMock.fileContent["/etc/config/config.json"] = configJsonContent
@@ -453,9 +515,33 @@ var _ = Describe("readJSONAndUnmarshal", func() {
 		// then
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.ServerController).To(Equal(ControllerTypeMetal3))
-		Expect(cfg.IronCore.Name).To(BeEmpty())
-		Expect(cfg.IronCore.Region).To(BeEmpty())
-		Expect(cfg.IronCore.Types).To(BeEmpty())
+		Expect(cfg.IronCore).To(BeEmpty())
+		Expect(cfg.NetboxURL).To(Equal("http://netbox"))
+	})
+
+	It("should unmarshal the config.json content when ironcore config is missing #2", func() {
+		// given
+		configJsonContent := `{
+			"serverController": "metal3",
+			"ironCore": [{
+				"name": "",
+				"region": "",
+				"type": ""
+			}],
+			"netboxUrl": "http://netbox"
+		}`
+		fileReaderMock.fileContent["/etc/config/config.json"] = configJsonContent
+
+		// when
+		err := cfg.readJSONAndUnmarshal("/etc/config/config.json")
+
+		// then
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.ServerController).To(Equal(ControllerTypeMetal3))
+		Expect(cfg.IronCore).To(HaveLen(1))
+		Expect(cfg.IronCore[0].Name).To(BeEmpty())
+		Expect(cfg.IronCore[0].Region).To(BeEmpty())
+		Expect(cfg.IronCore[0].Type).To(BeEmpty())
 		Expect(cfg.NetboxURL).To(Equal("http://netbox"))
 	})
 

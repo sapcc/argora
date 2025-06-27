@@ -28,7 +28,7 @@ func (c ControllerType) String() string {
 	case ControllerTypeMetal3:
 		return "metal3"
 	}
-	panic(fmt.Errorf("%#v has unimplemented String() method", c))
+	return "unsupported"
 }
 
 type FileReader interface {
@@ -60,7 +60,7 @@ type Config struct {
 
 	// /etc/config/config.json
 	ServerController ControllerType `json:"serverController"`
-	IronCore         IronCore       `json:"ironCore"`
+	IronCore         []IronCore     `json:"ironCore"`
 	NetboxURL        string         `json:"netboxURL"`
 
 	// /etc/credentials/credentials.json
@@ -72,7 +72,11 @@ type Config struct {
 type IronCore struct {
 	Name   string `json:"name"`
 	Region string `json:"region"`
-	Types  string `json:"types"`
+	Type   string `json:"type"`
+}
+
+func (i IronCore) String() string {
+	return fmt.Sprintf("name:%s,region:%s,type:%s", i.Name, i.Region, i.Type)
 }
 
 func NewDefaultConfiguration(k8sClient client.Client, configReader FileReader) *Config {
@@ -80,7 +84,7 @@ func NewDefaultConfiguration(k8sClient client.Client, configReader FileReader) *
 		k8sClient:        k8sClient,
 		reader:           configReader,
 		ServerController: "",
-		IronCore:         IronCore{},
+		IronCore:         []IronCore{},
 		NetboxURL:        "",
 		BMCUser:          "",
 		BMCPassword:      "",
@@ -89,7 +93,7 @@ func NewDefaultConfiguration(k8sClient client.Client, configReader FileReader) *
 }
 
 func (c *Config) String() string {
-	return fmt.Sprintf("ironCore.Name:%s,ironCore.Region:%s,ironCore.Types:%s,serverController:%s,netboxURL:%s", c.IronCore.Name, c.IronCore.Region, c.IronCore.Types, c.ServerController, c.NetboxURL)
+	return fmt.Sprintf("serverController:%s,ironCore:%s,netboxURL:%s", c.ServerController, c.IronCore, c.NetboxURL)
 }
 
 func (c *Config) Validate() error {
@@ -97,8 +101,10 @@ func (c *Config) Validate() error {
 	if c.ServerController == "" {
 		return errors.New("server controller name is required")
 	}
-	if c.ServerController == ControllerTypeIroncore && c.IronCore.Name == "" && c.IronCore.Region == "" && c.IronCore.Types == "" {
-		return errors.New("ironcore configuration is required")
+	if c.ServerController == ControllerTypeIroncore {
+		if len(c.IronCore) == 0 || (c.IronCore[0].Name == "" && c.IronCore[0].Region == "" && c.IronCore[0].Type == "") {
+			return errors.New("ironcore configuration is required")
+		}
 	}
 	if c.NetboxURL == "" {
 		return errors.New("netbox URL is required")

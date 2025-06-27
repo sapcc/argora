@@ -77,14 +77,17 @@ networkPolicy:
   enable: false
 
 config:
-  serverController: ""
+  serverController: "_"
   ironCore:
-    name: ""
-    region: ""
-    types: ""
-  netboxURL: ""
+    - name: ""
+      region: ""
+      type: "cc-kvm-compute"
+    - name: ""
+      region: "qa-de-1"
+      type: ""
+  netboxURL: "https://netbox-test.global.cloud.sap/"
 
 credentials:
-  bmcUser: ""
-  bmcPassword: ""
-  netboxToken: ""
+  bmcUser: "_"
+  bmcPassword: "_"
+  netboxToken: "xxx"
