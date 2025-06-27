@@ -156,7 +156,7 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("should return an error when BMCUser and BMCPassword are empty and serverController neither IronCore nor Metal3", func() {
+		Context("should not return an error when BMCUser and BMCPassword are empty and serverController neither IronCore nor Metal3", func() {
 			It("should return an error", func() {
 				// given
 				cfg.ServerController = ""
