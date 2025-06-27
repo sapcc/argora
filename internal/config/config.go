@@ -59,20 +59,20 @@ type Config struct {
 	reader    FileReader
 
 	// /etc/config/config.json
-	ServerController ControllerType `json:"serverController"`
-	IronCore         []IronCore     `json:"ironCore"`
-	NetboxURL        string         `json:"netboxURL"`
+	ServerController ControllerType `json:"serverController,omitempty"`
+	IronCore         []IronCore     `json:"ironCore,omitempty"`
+	NetboxURL        string         `json:"netboxURL,omitempty"`
 
 	// /etc/credentials/credentials.json
-	BMCUser     string `json:"bmcUser"`
-	BMCPassword string `json:"bmcPassword"`
-	NetboxToken string `json:"netboxToken"`
+	BMCUser     string `json:"bmcUser,omitempty"`
+	BMCPassword string `json:"bmcPassword,omitempty"`
+	NetboxToken string `json:"netboxToken,omitempty"`
 }
 
 type IronCore struct {
-	Name   string `json:"name"`
-	Region string `json:"region"`
-	Type   string `json:"type"`
+	Name   string `json:"name,omitempty"`
+	Region string `json:"region,omitempty"`
+	Type   string `json:"type,omitempty"`
 }
 
 func (i IronCore) String() string {
@@ -98,9 +98,6 @@ func (c *Config) String() string {
 
 func (c *Config) Validate() error {
 	// /etc/config/config.json
-	if c.ServerController == "" {
-		return errors.New("server controller name is required")
-	}
 	if c.ServerController == ControllerTypeIroncore {
 		if len(c.IronCore) == 0 || (c.IronCore[0].Name == "" && c.IronCore[0].Region == "" && c.IronCore[0].Type == "") {
 			return errors.New("ironcore configuration is required")
@@ -110,11 +107,13 @@ func (c *Config) Validate() error {
 		return errors.New("netbox URL is required")
 	}
 	// /etc/credentials/credentials.json
-	if c.BMCUser == "" {
-		return errors.New("bmc user is required")
-	}
-	if c.BMCPassword == "" {
-		return errors.New("bmc password is required")
+	if c.ServerController == ControllerTypeIroncore || c.ServerController == ControllerTypeMetal3 {
+		if c.BMCUser == "" {
+			return errors.New("bmc user is required")
+		}
+		if c.BMCPassword == "" {
+			return errors.New("bmc password is required")
+		}
 	}
 	if c.NetboxToken == "" {
 		return errors.New("netbox token is required")
