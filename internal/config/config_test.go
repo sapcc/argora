@@ -88,7 +88,7 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("should return an error when ServerController is empty", func() {
+		Context("should not return an error when ServerController is empty", func() {
 			It("should return an error", func() {
 				// given
 				cfg.ServerController = ""
@@ -97,8 +97,7 @@ var _ = Describe("Config", func() {
 				err := cfg.Validate()
 
 				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("server controller name is required"))
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
@@ -157,9 +156,25 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("should return an error when BMCUser is empty", func() {
+		Context("should not return an error when BMCUser and BMCPassword are empty and serverController neither IronCore nor Metal3", func() {
 			It("should return an error", func() {
 				// given
+				cfg.ServerController = ""
+				cfg.BMCUser = ""
+				cfg.BMCPassword = ""
+
+				// when
+				err := cfg.Validate()
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("should return an error when BMCUser is empty if serverController is IronCore", func() {
+			It("should return an error", func() {
+				// given
+				cfg.ServerController = ControllerTypeIroncore
 				cfg.BMCUser = ""
 
 				// when
@@ -171,9 +186,10 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("should return an error when BMCPassword is empty", func() {
+		Context("should return an error when BMCPassword is empty if serverController is Metal3", func() {
 			It("should return an error", func() {
 				// given
+				cfg.ServerController = ControllerTypeMetal3
 				cfg.BMCPassword = ""
 
 				// when
