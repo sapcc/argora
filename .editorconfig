@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: SAP SE
+# SPDX-FileCopyrightText: SAP SE or an SAP affiliate company
 # SPDX-License-Identifier: Apache-2.0
 
 root = true
@@ -12,7 +12,6 @@ indent_size = 2
 
 [{Makefile,go.mod,go.sum,*.go}]
 indent_style = tab
-indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
