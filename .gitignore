@@ -32,5 +32,3 @@ hack/deploy/cluster.yaml
 helm/
 build/
 dist/*.yaml
-dist/chart/templates/configmap.yaml
-dist/chart/templates/secret.yaml

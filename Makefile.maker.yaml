@@ -213,6 +213,8 @@ verbatim: |
   .PHONY: helm-chart
   helm-chart: kubebuilder kustomize manifests
     $(KUBEBUILDER) edit --plugins=helm/v1-alpha
+    kustomize build config/default | yq ea 'select(.kind == "ConfigMap")' > dist/chart/templates/configmap/configmap.yaml
+    kustomize build config/default | yq ea 'select(.kind == "Secret")' > dist/chart/templates/secret/secret.yaml
 
   .PHONY: helm-lint
   helm-lint: helm helm-chart
@@ -224,9 +226,7 @@ verbatim: |
     yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
 
   .PHONY: prepare-deploy
-  prepare-deploy:
-    kustomize build config/default | yq ea 'select(.kind == "ConfigMap")' > dist/chart/templates/configmap.yaml
-    kustomize build config/default | yq ea 'select(.kind == "Secret")' > dist/chart/templates/secret.yaml
+  prepare-deploy: helm-chart
     $(HELM) template -n argora-system dist/chart > dist/install.yaml
     kubectl create namespace argora-system || true
 

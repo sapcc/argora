@@ -51,30 +51,26 @@ spec:
           securityContext:
             {{- toYaml .Values.controllerManager.container.securityContext | nindent 12 }}
           volumeMounts:
-          {{- if and .Values.metrics.enable .Values.certmanager.enable }}
-          - name: metrics-certs
-            mountPath: /tmp/k8s-metrics-server/metrics-certs
-            readOnly: true
-          {{- end }}
-          {{- range $volume := .Values.controllerManager.container.volumes }}
-          - name: {{ $volume.name }}
-            mountPath: {{ $volume.mountPath }}
-            {{- if $volume.readOnly }}
-            readOnly: true
-            {{- end }}
-          {{- end }}
+            - mountPath: /etc/config
+              name: config-volume
+              readOnly: true
+            - mountPath: /etc/credentials
+              name: secret-volume
+              readOnly: true
       securityContext:
         {{- toYaml .Values.controllerManager.securityContext | nindent 8 }}
       serviceAccountName: {{ .Values.controllerManager.serviceAccountName }}
       terminationGracePeriodSeconds: {{ .Values.controllerManager.terminationGracePeriodSeconds }}
       volumes:
+        - configMap:
+            name: argora-config
+          name: config-volume
+        - name: secret-volume
+          secret:
+            secretName: argora-secret
       {{- if and .Values.certmanager.enable .Values.metrics.enable }}
-      - name: metrics-certs
-        secret:
-          secretName: metrics-server-cert
-      {{- end }}
-      {{- range $volume := .Values.controllerManager.container.volumes }}
-      - name: {{ $volume.name }}
-        {{- toYaml $volume.source | nindent 8 }}
+        - name: metrics-certs
+          secret:
+            secretName: metrics-server-cert
       {{- end }}
 {{- end }}
