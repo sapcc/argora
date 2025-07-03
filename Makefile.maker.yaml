@@ -226,15 +226,15 @@ verbatim: |
     yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
 
   .PHONY: prepare-deploy
-  prepare-deploy: helm-chart
+  prepare-deploy: helm-chart helm-lint
     $(HELM) template -n argora-system dist/chart > dist/install.yaml
     kubectl create namespace argora-system || true
 
   .PHONY: helm-build-local-image
-  helm-build-local-image: prepare-deploy helm-lint
+  helm-build-local-image: prepare-deploy
 
   .PHONY: helm-build
-  helm-build: set-image prepare-deploy helm-lint
+  helm-build: set-image prepare-deploy
 
   .PHONY: install-crd
   install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
