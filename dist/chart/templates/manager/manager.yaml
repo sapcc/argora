@@ -57,13 +57,13 @@ spec:
             - mountPath: /etc/credentials
               name: secret-volume
               readOnly: true
-          {{- range $volume := .Values.controllerManager.container.volumes }}
+            {{- range $volume := .Values.controllerManager.container.volumes }}
             - name: {{ $volume.name }}
               mountPath: {{ $volume.mountPath }}
               {{- if $volume.readOnly }}
               readOnly: true
               {{- end }}
-          {{- end }}
+            {{- end }}
       securityContext:
         {{- toYaml .Values.controllerManager.securityContext | nindent 8 }}
       serviceAccountName: {{ .Values.controllerManager.serviceAccountName }}
@@ -75,13 +75,13 @@ spec:
         - name: secret-volume
           secret:
             secretName: argora-secret
-      {{- if and .Values.certmanager.enable .Values.metrics.enable }}
+        {{- if and .Values.certmanager.enable .Values.metrics.enable }}
         - name: metrics-certs
           secret:
             secretName: metrics-server-cert
-      {{- end }}
-      {{- range $volume := .Values.controllerManager.container.volumes }}
+        {{- end }}
+        {{- range $volume := .Values.controllerManager.container.volumes }}
         - name: {{ $volume.name }}
-          {{- toYaml $volume.source | nindent 8 }}
-      {{- end }}
+          {{- toYaml $volume.source | nindent 10 }}
+        {{- end }}
 {{- end }}
