@@ -173,7 +173,9 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 helm-chart: kubebuilder kustomize manifests
 	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
 	kustomize build config/default | yq ea 'select(.kind == "ConfigMap")' > dist/chart/templates/configmap/configmap.yaml
+	yq -i '.metadata.namespace="{{ .Release.Namespace }}"' dist/chart/templates/configmap/configmap.yaml
 	kustomize build config/default | yq ea 'select(.kind == "Secret")' > dist/chart/templates/secret/secret.yaml
+	yq -i '.metadata.namespace="{{ .Release.Namespace }}"' dist/chart/templates/secret/secret.yaml
 
 .PHONY: helm-lint
 helm-lint: helm helm-chart
@@ -181,8 +183,8 @@ helm-lint: helm helm-chart
 
 .PHONY: set-image
 set-image:
-	yq -i '.controllerManager.container.image.repository = "$(IMG_REPO)"' dist/chart/values.yaml
-	yq -i '.controllerManager.container.image.tag = "$(IMG_TAG)"' dist/chart/values.yaml
+	yq -i '.controllerManager.container.image.repository="$(IMG_REPO)"' dist/chart/values.yaml
+	yq -i '.controllerManager.container.image.tag="$(IMG_TAG)"' dist/chart/values.yaml
 
 .PHONY: prepare-deploy
 prepare-deploy: helm-chart helm-lint
