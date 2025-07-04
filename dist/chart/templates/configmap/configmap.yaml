@@ -9,4 +9,4 @@ metadata:
     app.kubernetes.io/name: argora
     app.kubernetes.io/part-of: argora-operator
   name: argora-config
-  namespace: argora-system
+  namespace: '{{ .Release.Namespace }}'
