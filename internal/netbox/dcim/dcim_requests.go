@@ -50,6 +50,7 @@ func DeviceWithClusterID(clusterID int) ListDevicesRequestOption {
 
 func (r *ListDevicesRequest) BuildRequest() models.ListDevicesRequest {
 	listDevicesRequest := models.ListDevicesRequest{}
+	listDevicesRequest.Limit = 1000
 	if r.name != "" {
 		listDevicesRequest.Name = r.name
 	}
