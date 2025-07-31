@@ -133,6 +133,7 @@ var _ = Describe("Ironcore Controller", func() {
 				"kubernetes.metal.cloud.sap/bb":           bb,
 				"kubernetes.metal.cloud.sap/type":         "type1",
 				"kubernetes.metal.cloud.sap/role":         "role1",
+				"kubernetes.metal.cloud.sap/platform":     "platform1",
 			}))
 		}
 
@@ -443,7 +444,8 @@ var _ = Describe("Ironcore Controller", func() {
 							Name:   deviceName,
 							Status: models.DeviceStatus{Value: "active"},
 							Platform: models.NestedPlatform{
-								ID: 1,
+								ID:   1,
+								Slug: "platform1",
 							},
 							OOBIp: models.NestedIPAddress{
 								ID:      1,

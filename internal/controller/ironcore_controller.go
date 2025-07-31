@@ -191,6 +191,7 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		"kubernetes.metal.cloud.sap/bb":           deviceNameParts[1],
 		"kubernetes.metal.cloud.sap/type":         device.DeviceType.Slug,
 		"kubernetes.metal.cloud.sap/role":         device.DeviceRole.Slug,
+		"kubernetes.metal.cloud.sap/platform":     device.Platform.Slug,
 	}
 
 	bmcSecret, err := r.createBmcSecret(ctx, device, commonLabels)
