@@ -76,12 +76,15 @@ var _ = Describe("Ironcore Controller", func() {
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
 				Expect(name).To(Equal("name1"))
 				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(BeElementOf("type1", "type2"))
+				Expect(clusterType).To(Equal("type1"))
 
 				return []models.Cluster{
 					{
 						ID:   1,
 						Name: "cluster1",
+						Type: models.NestedClusterType{
+							Slug: clusterType,
+						},
 					},
 				}, nil
 			}
@@ -121,14 +124,15 @@ var _ = Describe("Ironcore Controller", func() {
 
 		expectLabels := func(labels map[string]string, bmcName string) {
 			bb, _ := strings.CutPrefix(bmcName, "device-")
-			Expect(labels).To(Equal(map[string]string{
-				"topology.kubernetes.io/region":      "region1",
-				"topology.kubernetes.io/zone":        "site1",
-				"kubernetes.metal.cloud.sap/cluster": "cluster1",
-				"kubernetes.metal.cloud.sap/name":    bmcName,
-				"kubernetes.metal.cloud.sap/bb":      bb,
-				"kubernetes.metal.cloud.sap/type":    "type1",
-				"kubernetes.metal.cloud.sap/role":    "role1",
+			Expect(labels).To(ConsistOf(map[string]string{
+				"topology.kubernetes.io/region":           "region1",
+				"topology.kubernetes.io/zone":             "site1",
+				"kubernetes.metal.cloud.sap/cluster":      "cluster1",
+				"kubernetes.metal.cloud.sap/cluster-type": "type1",
+				"kubernetes.metal.cloud.sap/name":         bmcName,
+				"kubernetes.metal.cloud.sap/bb":           bb,
+				"kubernetes.metal.cloud.sap/type":         "type1",
+				"kubernetes.metal.cloud.sap/role":         "role1",
 			}))
 		}
 
