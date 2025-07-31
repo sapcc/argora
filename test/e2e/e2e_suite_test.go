@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,7 +49,7 @@ var _ = BeforeSuite(func() {
 	_ = utils.UncommentCode("config/default/kustomization.yaml", "#- ../prometheus", "#")
 
 	By("building the manager(Operator) image")
-	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
+	cmd := exec.CommandContext(context.Background(), "make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).ToNot(HaveOccurred(), "Failed to build the manager(Operator) image")
 
