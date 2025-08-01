@@ -141,7 +141,7 @@ func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, cluster *conf
 		}
 
 		for _, device := range devices {
-			err = r.reconcileDevice(ctx, r.netBox, cluster.Name, &device)
+			err = r.reconcileDevice(ctx, r.netBox, &cluster, &device)
 			if err != nil {
 				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
 				return err
@@ -152,7 +152,7 @@ func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, cluster *conf
 	return nil
 }
 
-func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster string, device *models.Device) error {
+func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster *models.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
@@ -183,13 +183,15 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 	}
 
 	commonLabels := map[string]string{
-		"topology.kubernetes.io/region":      region,
-		"topology.kubernetes.io/zone":        device.Site.Slug,
-		"kubernetes.metal.cloud.sap/cluster": cluster,
-		"kubernetes.metal.cloud.sap/name":    device.Name,
-		"kubernetes.metal.cloud.sap/bb":      deviceNameParts[1],
-		"kubernetes.metal.cloud.sap/type":    device.DeviceType.Slug,
-		"kubernetes.metal.cloud.sap/role":    device.DeviceRole.Slug,
+		"topology.kubernetes.io/region":           region,
+		"topology.kubernetes.io/zone":             device.Site.Slug,
+		"kubernetes.metal.cloud.sap/cluster":      cluster.Name,
+		"kubernetes.metal.cloud.sap/cluster-type": cluster.Type.Slug,
+		"kubernetes.metal.cloud.sap/name":         device.Name,
+		"kubernetes.metal.cloud.sap/bb":           deviceNameParts[1],
+		"kubernetes.metal.cloud.sap/type":         device.DeviceType.Slug,
+		"kubernetes.metal.cloud.sap/role":         device.DeviceRole.Slug,
+		"kubernetes.metal.cloud.sap/platform":     device.Platform.Slug,
 	}
 
 	bmcSecret, err := r.createBmcSecret(ctx, device, commonLabels)

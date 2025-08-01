@@ -31,6 +31,8 @@ var _ = Describe("Ironcore Controller", func() {
 		resourceNamespace = "default"
 		bmcName1          = "device-name1"
 		bmcName2          = "device-name2"
+		clusterType1      = "type1"
+		clusterType2      = "type2"
 	)
 
 	fileReaderMock := &mock.FileReaderMock{
@@ -76,12 +78,15 @@ var _ = Describe("Ironcore Controller", func() {
 			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
 				Expect(name).To(Equal("name1"))
 				Expect(region).To(Equal("region1"))
-				Expect(clusterType).To(BeElementOf("type1", "type2"))
+				Expect(clusterType).To(Equal("type1"))
 
 				return []models.Cluster{
 					{
 						ID:   1,
 						Name: "cluster1",
+						Type: models.NestedClusterType{
+							Slug: clusterType1,
+						},
 					},
 				}, nil
 			}
@@ -93,7 +98,8 @@ var _ = Describe("Ironcore Controller", func() {
 						Name:   "device-name1",
 						Status: models.DeviceStatus{Value: "active"},
 						Platform: models.NestedPlatform{
-							ID: 1,
+							ID:   1,
+							Slug: "platform1",
 						},
 						OOBIp: models.NestedIPAddress{
 							ID:      1,
@@ -121,15 +127,17 @@ var _ = Describe("Ironcore Controller", func() {
 
 		expectLabels := func(labels map[string]string, bmcName string) {
 			bb, _ := strings.CutPrefix(bmcName, "device-")
-			Expect(labels).To(Equal(map[string]string{
-				"topology.kubernetes.io/region":      "region1",
-				"topology.kubernetes.io/zone":        "site1",
-				"kubernetes.metal.cloud.sap/cluster": "cluster1",
-				"kubernetes.metal.cloud.sap/name":    bmcName,
-				"kubernetes.metal.cloud.sap/bb":      bb,
-				"kubernetes.metal.cloud.sap/type":    "type1",
-				"kubernetes.metal.cloud.sap/role":    "role1",
-			}))
+			Expect(labels).To(SatisfyAll(
+				HaveKeyWithValue("topology.kubernetes.io/region", "region1"),
+				HaveKeyWithValue("topology.kubernetes.io/zone", "site1"),
+				HaveKeyWithValue("kubernetes.metal.cloud.sap/cluster", "cluster1"),
+				HaveKeyWithValue("kubernetes.metal.cloud.sap/cluster-type", clusterType1),
+				HaveKeyWithValue("kubernetes.metal.cloud.sap/name", bmcName),
+				HaveKeyWithValue("kubernetes.metal.cloud.sap/bb", bb),
+				HaveKeyWithValue("kubernetes.metal.cloud.sap/type", "type1"),
+				HaveKeyWithValue("kubernetes.metal.cloud.sap/role", "role1"),
+				HaveKeyWithValue("kubernetes.metal.cloud.sap/platform", "platform1"),
+			))
 		}
 
 		expectBMCSecret := func(bmcSecret *metalv1alpha1.BMCSecret, bmcName string) {
@@ -241,6 +249,9 @@ var _ = Describe("Ironcore Controller", func() {
 						{
 							ID:   1,
 							Name: "cluster1",
+							Type: models.NestedClusterType{
+								Slug: clusterType1,
+							},
 						},
 					}, nil
 				}
@@ -328,6 +339,9 @@ var _ = Describe("Ironcore Controller", func() {
 						{
 							ID:   1,
 							Name: "cluster1",
+							Type: models.NestedClusterType{
+								Slug: clusterType1,
+							},
 						},
 					}, nil
 				}
@@ -377,10 +391,16 @@ var _ = Describe("Ironcore Controller", func() {
 						{
 							ID:   1,
 							Name: "cluster1",
+							Type: models.NestedClusterType{
+								Slug: clusterType1,
+							},
 						},
 						{
 							ID:   2,
 							Name: "cluster2",
+							Type: models.NestedClusterType{
+								Slug: clusterType2,
+							},
 						},
 					}, nil
 				}
@@ -427,6 +447,9 @@ var _ = Describe("Ironcore Controller", func() {
 						{
 							ID:   1,
 							Name: "cluster1",
+							Type: models.NestedClusterType{
+								Slug: clusterType1,
+							},
 						},
 					}, nil
 				}
@@ -439,7 +462,8 @@ var _ = Describe("Ironcore Controller", func() {
 							Name:   deviceName,
 							Status: models.DeviceStatus{Value: "active"},
 							Platform: models.NestedPlatform{
-								ID: 1,
+								ID:   1,
+								Slug: "platform1",
 							},
 							OOBIp: models.NestedIPAddress{
 								ID:      1,
@@ -568,6 +592,9 @@ var _ = Describe("Ironcore Controller", func() {
 						{
 							ID:   1,
 							Name: "cluster1",
+							Type: models.NestedClusterType{
+								Slug: clusterType1,
+							},
 						},
 					}, nil
 				}
@@ -595,6 +622,9 @@ var _ = Describe("Ironcore Controller", func() {
 						{
 							ID:   1,
 							Name: "cluster1",
+							Type: models.NestedClusterType{
+								Slug: clusterType1,
+							},
 						},
 					}, nil
 				}
