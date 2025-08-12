@@ -20,7 +20,7 @@ The **Irconcore** controller is responsible for managing [Metal API](https://git
 ---
 
 ### 2. Metal3 Controller
-The **Metal3** controller focuses on bare-metal provisioning and management based of a Cluster API Resources on the Kubernetes cluster (Cluster CRs). It integrates with the Metal3 project to provide:
+The **Metal3** controller focuses on bare-metal provisioning and management based of a Cluster API Resources on the Kubernetes cluster (Cluster CRs). It integrates with the [Metal3](https://github.com/metal3-io/baremetal-operator) project to provide:
 - Bare-metal host discovery and registration using `BareMetalHost` and a `Secret`
 - Lifecycle management for bare-metal resources handled by Metal3 operators.
 
