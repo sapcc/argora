@@ -10,7 +10,7 @@ The Argora Operator is a Kubernetes operator handling Metal API resources based 
 ## Components
 
 ### 1. Irconcore Controller
-The **Irconcore** controller is responsible for managing Metal API resources (`BMC` and `BMCSecret`) directly from Netbox based on some selection critereas defined in the ConfigMap `argora-config`. It ensures that the desired state of the cluster is maintained by:
+The **Irconcore** controller is responsible for managing [Metal API](https://github.com/ironcore-dev/metal-operator) resources (`BMC` and `BMCSecret`) directly from Netbox based on some selection criterea defined in the ConfigMap `argora-config`. It ensures that the desired state of the cluster is maintained by:
 - Monitoring `argora-config` ConfigMap for updates on each reconcile cycle. ConfigMap is mounted on the file system and always up-to-date.
 - Creates/updates `BMC` and `BMCSecret` based on the selection critereas in the configuration.
 
