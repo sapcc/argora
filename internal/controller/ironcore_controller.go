@@ -190,11 +190,11 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 
 	bmcObj := &metalv1alpha1.BMC{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name}, bmcObj); err == nil {
-		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
-
 		if err := r.patchBMCLabels(ctx, bmcObj, commonLabels); err != nil {
 			return fmt.Errorf("unable to patch BMC labels: %w", err)
 		}
+
+		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
 		return nil
 	}
 
