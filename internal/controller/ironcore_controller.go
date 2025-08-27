@@ -1,4 +1,4 @@
-// Copyright 2024 SAP SE
+// SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company
 // SPDX-License-Identifier: Apache-2.0
 
 // Package controller contains Argora operator controllers
@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"strings"
 	"time"
@@ -34,7 +35,6 @@ import (
 const (
 	bmcProtocolRedfish = "Redfish"
 	bmcPort            = 443
-	defaultNamespace   = "default"
 )
 
 type IronCoreReconciler struct {
@@ -161,12 +161,6 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		return nil
 	}
 
-	bmcObj := &metalv1alpha1.BMC{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: defaultNamespace}, bmcObj); err == nil {
-		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
-		return nil
-	}
-
 	deviceNameParts := strings.Split(device.Name, "-")
 	if len(deviceNameParts) != 2 {
 		return fmt.Errorf("unable to split in two device name: %s", device.Name)
@@ -194,6 +188,16 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		"kubernetes.metal.cloud.sap/platform":     device.Platform.Slug,
 	}
 
+	bmcObj := &metalv1alpha1.BMC{}
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name}, bmcObj); err == nil {
+		if err := r.patchBMCLabels(ctx, bmcObj, commonLabels); err != nil {
+			return fmt.Errorf("unable to patch BMC labels: %w", err)
+		}
+
+		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
+		return nil
+	}
+
 	bmcSecret, err := r.createBmcSecret(ctx, device, commonLabels)
 	if err != nil {
 		return fmt.Errorf("unable to create bmc secret: %w", err)
@@ -208,7 +212,7 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 
 	logger.Info("created BMC CR", "name", bmc.Name)
 
-	if err := r.setOwnerReferenceAndPatch(ctx, bmc, bmcSecret); err != nil {
+	if err := r.patchOwnerReference(ctx, bmc, bmcSecret); err != nil {
 		return err
 	}
 	return nil
@@ -292,7 +296,7 @@ func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Devic
 	return bmc, nil
 }
 
-func (r *IronCoreReconciler) setOwnerReferenceAndPatch(ctx context.Context, bmc *metalv1alpha1.BMC, bmcSecret *metalv1alpha1.BMCSecret) error {
+func (r *IronCoreReconciler) patchOwnerReference(ctx context.Context, bmc *metalv1alpha1.BMC, bmcSecret *metalv1alpha1.BMCSecret) error {
 	bmcSecretBase := bmcSecret.DeepCopy()
 	if err := controllerutil.SetControllerReference(bmc, bmcSecret, r.scheme); err != nil {
 		return fmt.Errorf("unable to set owner reference: %w", err)
@@ -314,4 +318,42 @@ func getOobIP(device *models.Device) (string, error) {
 	}
 
 	return ip.String(), nil
+}
+
+func (r *IronCoreReconciler) patchBMCLabels(ctx context.Context, bmc *metalv1alpha1.BMC, labels map[string]string) error {
+	logger := log.FromContext(ctx)
+	logger.Info("patching BMC labels", "bmc", bmc.Name)
+
+	bmcBase := bmc.DeepCopy()
+	if bmc.Labels == nil {
+		bmc.Labels = make(map[string]string)
+	}
+	maps.Copy(bmc.Labels, labels)
+
+	if err := r.k8sClient.Patch(ctx, bmc, client.MergeFrom(bmcBase)); err != nil {
+		logger.Error(err, "failed to patch BMC labels")
+		return err
+	}
+
+	if bmc.Spec.BMCSecretRef.Name != "" {
+		bmcSecret := &metalv1alpha1.BMCSecret{}
+
+		if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: bmc.Spec.BMCSecretRef.Name}, bmcSecret); err != nil {
+			logger.Error(err, "failed to get BMC secret")
+			return err
+		}
+
+		bmcSecretBase := bmcSecret.DeepCopy()
+		if bmcSecret.Labels == nil {
+			bmcSecret.Labels = make(map[string]string)
+		}
+		maps.Copy(bmcSecret.Labels, labels)
+
+		if err := r.k8sClient.Patch(ctx, bmcSecret, client.MergeFrom(bmcSecretBase)); err != nil {
+			logger.Error(err, "failed to patch BMC secret labels")
+			return err
+		}
+	}
+
+	return nil
 }
