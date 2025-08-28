@@ -76,11 +76,11 @@ help-ext: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: gen
 gen: controller-gen
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -171,7 +171,7 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 
 .PHONY: helm-chart
 helm-chart: kubebuilder kustomize manifests
-	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
+	"$(KUBEBUILDER)" edit --plugins=helm/v1-alpha
 	kustomize build config/default | yq ea 'select(.kind == "ConfigMap")' > dist/chart/templates/configmap/configmap.yaml
 	yq -i '.metadata.namespace="{{ .Release.Namespace }}"' dist/chart/templates/configmap/configmap.yaml
 	kustomize build config/default | yq ea 'select(.kind == "Secret")' > dist/chart/templates/secret/secret.yaml
@@ -179,7 +179,7 @@ helm-chart: kubebuilder kustomize manifests
 
 .PHONY: helm-lint
 helm-lint: helm helm-chart
-	$(HELM) lint dist/chart
+	"$(HELM)" lint dist/chart
 
 .PHONY: set-image
 set-image:
@@ -188,7 +188,7 @@ set-image:
 
 .PHONY: prepare-deploy
 prepare-deploy: helm-chart helm-lint
-	$(HELM) template -n argora-system dist/chart > dist/install.yaml
+	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
 	kubectl create namespace argora-system || true
 
 .PHONY: helm-build-local-image
@@ -199,26 +199,26 @@ helm-build: set-image prepare-deploy
 
 .PHONY: install-crd
 install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
+	"$(KUSTOMIZE)" build config/crd | "$(KUBECTL)" apply -f -
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=false -f -
+	"$(KUSTOMIZE)" build config/crd | "$(KUBECTL)" delete --ignore-not-found=false -f -
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=false -f -
+	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=false -f -
 
 ##@ Dependencies
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
-	mkdir -p $(LOCALBIN)
+	mkdir -p "$(LOCALBIN)"
 
 ## Tool Binaries
 KUBECTL ?= kubectl
@@ -287,13 +287,12 @@ define go-install-tool
 set -e; \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\
-rm -f $(1) || true ;\
-GOBIN=$(LOCALBIN) go install $${package} ;\
-mv $(1) $(1)-$(3) ;\
+rm -f "$(1)" || true ;\
+GOBIN="$(LOCALBIN)" go install $${package} ;\
+mv "$(1)" "$(1)-$(3)" ;\
 } ;\
-ln -sf $(1)-$(3) $(1)
+ln -sf "$(1)-$(3)" "$(1)"
 endef
-
 install-goimports: FORCE
 	@if ! hash goimports 2>/dev/null; then printf "\e[1;36m>> Installing goimports (this may take a while)...\e[0m\n"; go install golang.org/x/tools/cmd/goimports@latest; fi
 
