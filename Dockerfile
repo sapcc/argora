@@ -31,6 +31,28 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
   --mount=type=cache,target=/go/pkg \
   CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags "-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=manager -X github.com/sapcc/go-api-declarations/bininfo.version=${BININFO_VERSION} -X github.com/sapcc/go-api-declarations/bininfo.commit=${BININFO_COMMIT_HASH} -X github.com/sapcc/go-api-declarations/bininfo.buildDate=${BININFO_BUILD_DATE}" -a -o manager cmd/manager/main.go
 
+
+# Debug image (with Delve, non-distroless)
+FROM --platform=$BUILDPLATFORM golang:1.24.4 AS debug
+ARG BININFO_BUILD_DATE BININFO_COMMIT_HASH BININFO_VERSION
+LABEL source_repository="https://github.com/sapcc/argora" \
+  org.opencontainers.image.url="https://github.com/sapcc/argora" \
+  org.opencontainers.image.created=${BININFO_BUILD_DATE} \
+  org.opencontainers.image.revision=${BININFO_COMMIT_HASH} \
+  org.opencontainers.image.version=${BININFO_VERSION}
+ARG TARGETOS TARGETARCH
+ARG BININFO_BUILD_DATE BININFO_COMMIT_HASH BININFO_VERSION
+WORKDIR /
+
+COPY --from=builder /workspace .
+RUN GOBIN=/go/bin go install github.com/go-delve/delve/cmd/dlv@latest
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+  --mount=type=cache,target=/go/pkg \
+  CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags "-X github.com/sapcc/go-api-declarations/bininfo.binName=manager -X github.com/sapcc/go-api-declarations/bininfo.version=${BININFO_VERSION} -X github.com/sapcc/go-api-declarations/bininfo.commit=${BININFO_COMMIT_HASH} -X github.com/sapcc/go-api-declarations/bininfo.buildDate=${BININFO_BUILD_DATE}" -gcflags "-N -l" -o manager cmd/manager/main.go
+USER 65532:65532
+ENTRYPOINT ["dlv", "exec", "/manager", "--headless", "--listen=:3000", "--accept-multiclient", "--continue", "--"]
+
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot AS manager
