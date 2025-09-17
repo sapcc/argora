@@ -157,11 +157,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	credentials := credentials.NewDefaultCredentials(&credentials.Reader{})
+	creds := credentials.NewDefaultCredentials(&credentials.Reader{})
 	setupLog.Info("argora", "version", bininfo.Version())
 
 	if flagVar.ironcore {
-		if err = controller.NewIronCoreReconciler(mgr, credentials, netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+		if err = controller.NewIronCoreReconciler(mgr, creds, netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ironCore")
 			os.Exit(1)
 		}
@@ -177,13 +177,13 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), credentials, netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+		if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), creds, netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "metal3")
 			os.Exit(1)
 		}
 	}
 
-	if err = controller.NewUpdateReconciler(mgr, credentials, status.NewStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+	if err = controller.NewUpdateReconciler(mgr, creds, status.NewStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "update")
 		os.Exit(1)
 	}

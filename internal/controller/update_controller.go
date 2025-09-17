@@ -45,11 +45,11 @@ type UpdateReconciler struct {
 	reconcileInterval time.Duration
 }
 
-func NewUpdateReconciler(mgr ctrl.Manager, credentials *credentials.Credentials, statusHandler status.Status, netBox netbox.Netbox, reconcileInterval time.Duration) *UpdateReconciler {
+func NewUpdateReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.Status, netBox netbox.Netbox, reconcileInterval time.Duration) *UpdateReconciler {
 	return &UpdateReconciler{
 		k8sClient:         mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
-		credentials:       credentials,
+		credentials:       creds,
 		statusHandler:     statusHandler,
 		netBox:            netBox,
 		reconcileInterval: reconcileInterval,

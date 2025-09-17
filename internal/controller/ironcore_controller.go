@@ -46,11 +46,11 @@ type IronCoreReconciler struct {
 	reconcileInterval time.Duration
 }
 
-func NewIronCoreReconciler(mgr ctrl.Manager, credentials *credentials.Credentials, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
+func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
 	return &IronCoreReconciler{
 		k8sClient:         mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
-		credentials:       credentials,
+		credentials:       creds,
 		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
 	}
