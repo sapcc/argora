@@ -17,13 +17,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/sapcc/go-netbox-go/models"
 
-	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/credentials"
 )
 
 var _ = Describe("Ironcore Controller", func() {
@@ -855,14 +854,13 @@ var _ = Describe("Ironcore Controller", func() {
 	})
 })
 
-func createIronCoreReconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock config.FileReader) *IronCoreReconciler {
+func createIronCoreReconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock credentials.FileReader) *IronCoreReconciler {
 	return &IronCoreReconciler{
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
-		cfg:               config.NewDefaultConfiguration(k8sClient, fileReaderMock),
+		credentials:       credentials.NewDefaultCredentials(fileReaderMock),
 		netBox:            netBoxMock,
 		reconcileInterval: reconcileInterval,
-		eventChannel:      make(chan event.GenericEvent),
 	}
 }
 

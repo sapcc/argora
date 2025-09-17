@@ -74,7 +74,7 @@ type NetBoxMock struct {
 	ExtrasMock         extras.Extras
 }
 
-func (n *NetBoxMock) Reload(_, _ string, _ logr.Logger) error {
+func (n *NetBoxMock) Reload(_ string, _ logr.Logger) error {
 	if n.ReturnError {
 		return errors.New("unable to reload netbox")
 	}

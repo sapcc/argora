@@ -18,7 +18,7 @@ import (
 	"github.com/sapcc/argora/internal/netbox/dcim"
 )
 
-func TestConfig(t *testing.T) {
+func TestDCIM(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "DCIM Suite")
 }

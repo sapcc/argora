@@ -17,8 +17,8 @@ import (
 	"github.com/sapcc/go-netbox-go/models"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
-	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/status"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,15 +32,7 @@ var _ = Describe("Update Controller", func() {
 		FileContent: make(map[string]string),
 		ReturnError: false,
 	}
-	fileReaderMock.FileContent["/etc/config/config.json"] = `{
-		"serverController": "ironcore",
-		"ironCore": [{
-			"name": "name1",
-			"region": "region1",
-			"type": "type1"
-		}],
-		"netboxUrl": "http://netbox"
-	}`
+
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
 		"bmcUser": "user",
 		"bmcPassword": "password",
@@ -164,7 +156,7 @@ var _ = Describe("Update Controller", func() {
 						Namespace: resourceNamespace,
 					},
 					Spec: argorav1alpha1.UpdateSpec{
-						Clusters: []*argorav1alpha1.Clusters{
+						Clusters: []*argorav1alpha1.ClusterSelector{
 							{
 								Name:   "",
 								Region: "region1",
@@ -210,7 +202,7 @@ var _ = Describe("Update Controller", func() {
 			expectStatus(argorav1alpha1.Ready, "")
 		})
 
-		It("should return an error if configuration reload fails", func() {
+		It("should return an error if credentials reload fails", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			fileReaderMockToError := &mock.FileReaderMock{
@@ -224,7 +216,7 @@ var _ = Describe("Update Controller", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unable to read config.json: error"))
+			Expect(err).To(MatchError("unable to read credentials.json: error"))
 		})
 
 		It("should return an error if netbox reload fails", func() {
@@ -760,13 +752,13 @@ var _ = Describe("Update Controller", func() {
 	})
 })
 
-func createUpdateReconciler(netBoxMock *mock.NetBoxMock, fileReaderMock config.FileReader) *UpdateReconciler {
+func createUpdateReconciler(netBoxMock *mock.NetBoxMock, fileReaderMock credentials.FileReader) *UpdateReconciler {
 	return &UpdateReconciler{
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
 		statusHandler:     status.NewStatusHandler(k8sClient),
 		netBox:            netBoxMock,
-		cfg:               config.NewDefaultConfiguration(k8sClient, fileReaderMock),
+		credentials:       credentials.NewDefaultCredentials(fileReaderMock),
 		reconcileInterval: reconcileInterval,
 	}
 }

@@ -13,23 +13,24 @@ import (
 	"strings"
 	"time"
 
+	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
+	"github.com/sapcc/argora/internal/credentials"
+	"github.com/sapcc/argora/internal/netbox"
+
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/go-netbox-go/models"
+
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"github.com/sapcc/argora/internal/config"
-	"github.com/sapcc/argora/internal/controller/periodic"
-	"github.com/sapcc/argora/internal/netbox"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const (
@@ -40,78 +41,72 @@ const (
 type IronCoreReconciler struct {
 	k8sClient         client.Client
 	scheme            *runtime.Scheme
-	cfg               *config.Config
+	credentials       *credentials.Credentials
 	netBox            netbox.Netbox
 	reconcileInterval time.Duration
-	eventChannel      chan event.GenericEvent
 }
 
-func NewIronCoreReconciler(k8sClient client.Client, scheme *runtime.Scheme, cfg *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
+func NewIronCoreReconciler(mgr ctrl.Manager, credentials *credentials.Credentials, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
 	return &IronCoreReconciler{
-		k8sClient:         k8sClient,
-		scheme:            scheme,
-		cfg:               cfg,
+		k8sClient:         mgr.GetClient(),
+		scheme:            mgr.GetScheme(),
+		credentials:       credentials,
 		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
-		eventChannel:      make(chan event.GenericEvent),
 	}
 }
 
-func (r *IronCoreReconciler) SetupWithManager(mgr manager.Manager) error {
-	src := source.Channel(r.eventChannel, &handler.EnqueueRequestForObject{})
-	runner, err := periodic.NewRunner(
-		periodic.WithClient(mgr.GetClient()),
-		periodic.WithInterval(r.reconcileInterval),
-		periodic.WithEventChannel(r.eventChannel),
-	)
-
-	if err != nil {
-		return fmt.Errorf("unable to create periodic runner: %w", err)
-	}
-
-	if err := mgr.Add(runner); err != nil {
-		return fmt.Errorf("unable to add periodic runner: %w", err)
-	}
-
+func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter RateLimiter) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		For(&argorav1alpha1.IronCore{}).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
+		WithOptions(controller.Options{
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](rateLimiter.BaseDelay,
+					rateLimiter.FailureMaxDelay),
+				&workqueue.TypedBucketRateLimiter[ctrl.Request]{
+					Limiter: rate.NewLimiter(rate.Limit(rateLimiter.Frequency), rateLimiter.Burst),
+				},
+			),
+		}).
 		Named("ironCore").
-		WatchesRawSource(src).
 		Complete(r)
 }
 
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
 
-func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling ironcore")
 
-	err := r.cfg.Reload()
+	err := r.credentials.Reload()
 	if err != nil {
-		logger.Error(err, "unable to reload configuration")
+		logger.Error(err, "unable to reload credentials")
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("configuration reloaded", "config", r.cfg)
+	logger.Info("credentials reloaded", "credentials", r.credentials)
 
-	if r.cfg.ServerController != config.ControllerTypeIroncore {
-		logger.Info("ironcore controller not enabled")
-		return ctrl.Result{}, nil
-	}
-
-	err = r.netBox.Reload(r.cfg.NetboxURL, r.cfg.NetboxToken, logger)
+	err = r.netBox.Reload(r.credentials.NetboxToken, logger)
 	if err != nil {
 		logger.Error(err, "unable to reload netbox")
 		return ctrl.Result{}, err
 	}
 
-	for _, cluster := range r.cfg.IronCore {
-		err = r.reconcileCluster(ctx, &cluster)
+	ironCoreCR := &argorav1alpha1.IronCore{}
+	err = r.k8sClient.Get(ctx, req.NamespacedName, ironCoreCR)
+	if err != nil {
+		logger.Error(err, "unable to get IronCore CR")
+		return ctrl.Result{}, err
+	}
+
+	for _, clusterSelector := range ironCoreCR.Spec.Clusters {
+		err = r.reconcileCluster(ctx, clusterSelector)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -120,14 +115,13 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, cluster *config.IronCore) error {
+func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, clusterSelector *argorav1alpha1.ClusterSelector) error {
 	logger := log.FromContext(ctx)
+	logger.Info("fetching clusters data", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 
-	logger.Info("looking for cluster in netbox", "name", cluster.Name, "region", cluster.Region, "type", cluster.Type)
-
-	clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(cluster.Name, cluster.Region, cluster.Type)
+	clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(clusterSelector.Name, clusterSelector.Region, clusterSelector.Type)
 	if err != nil {
-		logger.Error(err, "unable to find cluster in netbox", "name", cluster.Name, "region", cluster.Region, "type", cluster.Type)
+		logger.Error(err, "unable to find clusters in netbox", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 		return err
 	}
 
@@ -221,8 +215,8 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 func (r *IronCoreReconciler) createBmcSecret(ctx context.Context, device *models.Device, labels map[string]string) (*metalv1alpha1.BMCSecret, error) {
 	logger := log.FromContext(ctx)
 
-	user := r.cfg.BMCUser
-	password := r.cfg.BMCPassword
+	user := r.credentials.BMCUser
+	password := r.credentials.BMCPassword
 
 	if user == "" || password == "" {
 		return nil, errors.New("bmc user or password not set")

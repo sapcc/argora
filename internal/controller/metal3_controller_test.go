@@ -24,8 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/networkdata"
 )
 
@@ -41,15 +41,7 @@ var _ = Describe("Metal3 Controller", func() {
 		FileContent: make(map[string]string),
 		ReturnError: false,
 	}
-	fileReaderMock.FileContent["/etc/config/config.json"] = `{
-		"serverController": "metal3",
-		"ironCore": [{
-			"name": "name1",
-			"region": "region1",
-			"type": "type1"
-		}],
-		"netboxUrl": "http://netbox"
-	}`
+
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
 		"bmcUser": "user",
 		"bmcPassword": "password",
@@ -342,7 +334,7 @@ var _ = Describe("Metal3 Controller", func() {
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
 		})
 
-		It("should return an error if configuration reload fails", func() {
+		It("should return an error if credentials reload fails", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			fileReaderMockToError := &mock.FileReaderMock{
@@ -356,50 +348,7 @@ var _ = Describe("Metal3 Controller", func() {
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unable to read config.json: error"))
-		})
-
-		It("should not reconcile if server controller is not set to metal3", func() {
-			// given
-			netBoxMock := prepareNetboxMock()
-			fileReaderMockWithNameOnly := &mock.FileReaderMock{
-				FileContent: make(map[string]string),
-				ReturnError: false,
-			}
-			fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
-				"serverController": "ironcore",
-				"ironCore": [{
-					"name": "name1",
-					"region": "region1",
-					"type": "type1"
-				}],
-				"netboxUrl": "http://netbox"
-			}`
-			fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
-			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
-
-			// when
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
-
-			// then
-			Expect(err).ToNot(HaveOccurred())
-			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
-
-			bmcSecret := &corev1.Secret{}
-			err = k8sClient.Get(ctx, typeNamespacedSecretName, bmcSecret)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-
-			bmh := &v1alpha1.BareMetalHost{}
-			err = k8sClient.Get(ctx, typeNamespacedBareMetalHostName, bmh)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-
-			ndSecret := &corev1.Secret{}
-			err = k8sClient.Get(ctx, typeNamespacedNDSecretName, ndSecret)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-
-			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(0))
-			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(0))
-			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(0))
+			Expect(err).To(MatchError("unable to read credentials.json: error"))
 		})
 
 		It("should return an error if netbox reload fails", func() {
@@ -597,11 +546,11 @@ var _ = Describe("Metal3 Controller", func() {
 	})
 })
 
-func createMetal3Reconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock config.FileReader) *Metal3Reconciler {
+func createMetal3Reconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock credentials.FileReader) *Metal3Reconciler {
 	return &Metal3Reconciler{
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
-		cfg:               config.NewDefaultConfiguration(k8sClient, fileReaderMock),
+		credentials:       credentials.NewDefaultCredentials(fileReaderMock),
 		netBox:            netBoxMock,
 		reconcileInterval: time.Minute,
 	}
