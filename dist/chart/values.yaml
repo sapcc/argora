@@ -76,17 +76,6 @@ certmanager:
 networkPolicy:
   enable: false
 
-config:
-  serverController: "_"
-  ironCore:
-    - name: ""
-      region: ""
-      type: "cc-kvm-compute"
-    - name: ""
-      region: "qa-de-1"
-      type: ""
-  netboxURL: "https://netbox-test.global.cloud.sap/"
-
 credentials:
   bmcUser: "_"
   bmcPassword: "_"

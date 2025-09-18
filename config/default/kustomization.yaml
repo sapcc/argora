@@ -33,10 +33,6 @@ patches:
 - path: manager_metrics_patch.yaml
   target:
     kind: Deployment
-# Mount the configmap to the controller manager
-- path: configmap_mount_patch.yaml
-  target:
-    kind: Deployment
 # Mount the secret to the controller manager
 - path: secret_mount_patch.yaml
   target:
