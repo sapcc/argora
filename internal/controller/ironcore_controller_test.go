@@ -828,12 +828,18 @@ var _ = Describe("Ironcore Controller", func() {
 		})
 
 		Context("Fake Client", func() {
-			ironCore.Spec = argorav1alpha1.IronCoreSpec{
-				Clusters: []*argorav1alpha1.ClusterSelector{
-					{
-						Name:   "name1",
-						Region: "region1",
-						Type:   "type1",
+			ironCoreCR := &argorav1alpha1.IronCore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: resourceNamespace,
+				},
+				Spec: argorav1alpha1.IronCoreSpec{
+					Clusters: []*argorav1alpha1.ClusterSelector{
+						{
+							Name:   "name1",
+							Region: "region1",
+							Type:   "type1",
+						},
 					},
 				},
 			}
@@ -842,7 +848,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 
-				fakeClient := createFakeClient(ironCore)
+				fakeClient := createFakeClient(ironCoreCR)
 				failClient := &shouldFailClient{fakeClient, "BMCSecret"}
 
 				controllerReconciler := createIronCoreReconciler(failClient, netBoxMock, fileReaderMock)
@@ -860,7 +866,7 @@ var _ = Describe("Ironcore Controller", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 
-				fakeClient := createFakeClient(ironCore)
+				fakeClient := createFakeClient(ironCoreCR)
 				failClient := &shouldFailClient{fakeClient, "BMC"}
 
 				controllerReconciler := createIronCoreReconciler(failClient, netBoxMock, fileReaderMock)
