@@ -1,6 +1,10 @@
 config.define_string("BININFO_BUILD_DATE")
 config.define_string("BININFO_VERSION")
 config.define_string("BININFO_COMMIT_HASH")
+config.define_string("TARGET")
+
+cfg = config.parse()
+target = cfg.get("TARGET", "manager")
 
 def deploy_cert_manager():
     version = "v1.14.4"
@@ -32,7 +36,27 @@ def deploy_metal_crd():
     local(cmd_bmc, quiet=False)
     local(cmd, quiet=False)
 
-docker_build('controller:latest', '.', build_args={"BININFO_BUILD_DATE": config.parse()['BININFO_BUILD_DATE'], "BININFO_VERSION": config.parse()['BININFO_VERSION'], "BININFO_COMMIT_HASH": config.parse()['BININFO_COMMIT_HASH']})
+
+build_args = {
+    "BININFO_BUILD_DATE": cfg.get('BININFO_BUILD_DATE'),
+    "BININFO_VERSION": cfg.get('BININFO_VERSION'),
+    "BININFO_COMMIT_HASH": cfg.get('BININFO_COMMIT_HASH')
+}
+
+if target == 'debug':
+    docker_build(
+        'controller:latest',
+        '.',
+        target=target,
+        entrypoint='dlv exec /manager --headless --listen=:3000 --accept-multiclient --continue --',
+        build_args=build_args
+    )
+else:
+    docker_build(
+        'controller:latest',
+        '.',
+        build_args=build_args
+    )
 
 deploy_cert_manager()
 # deploy_capi_crd()
@@ -43,3 +67,6 @@ k8s_yaml('hack/deploy/cluster-api-components.yaml')
 k8s_yaml('hack/deploy/cluster.yaml')
 k8s_yaml('dist/install.yaml')
 k8s_yaml('config/samples/argora_v1alpha1_update.yaml')
+
+if target == 'debug':
+    k8s_resource('argora-controller-manager', port_forwards=3000)
