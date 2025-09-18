@@ -22,7 +22,6 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
-- ../configmap
 - ../secret
 # [METRICS] Expose the controller manager metrics service.
 - metrics_service.yaml
