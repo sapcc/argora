@@ -2,13 +2,11 @@ module github.com/sapcc/argora
 
 go 1.25
 
-toolchain go1.24.7
-
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.9.1
-	github.com/sapcc/go-api-declarations v1.17.3
-	github.com/sapcc/go-netbox-go v0.0.0-20250821190119-f632236d94ad
+	github.com/sapcc/go-api-declarations v1.17.4
+	github.com/sapcc/go-netbox-go v0.0.0-20250911190512-e70ec0dc2efd
 	k8s.io/api v0.33.3
 	sigs.k8s.io/cluster-api v1.9.6
 	sigs.k8s.io/controller-runtime v0.21.0
