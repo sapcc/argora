@@ -18,7 +18,7 @@ import (
 )
 
 type Netbox interface {
-	Reload(url, token string, logger logr.Logger) error
+	Reload(token string, logger logr.Logger) error
 
 	Virtualization() _virtualization.Virtualization
 	DCIM() _dcim.DCIM
@@ -27,14 +27,16 @@ type Netbox interface {
 }
 
 type NetboxService struct {
+	netboxURL      string
 	virtualization _virtualization.Virtualization
 	dcim           _dcim.DCIM
 	ipam           _ipam.IPAM
 	extras         _extras.Extras
 }
 
-func NewNetbox() Netbox {
+func NewNetbox(netboxURL string) Netbox {
 	return &NetboxService{
+		netboxURL:      netboxURL,
 		virtualization: nil,
 		dcim:           nil,
 		ipam:           nil,
@@ -42,20 +44,20 @@ func NewNetbox() Netbox {
 	}
 }
 
-func (n *NetboxService) Reload(url, token string, logger logr.Logger) error {
-	virtClient, err := virtualization.NewClient(url, token, false)
+func (n *NetboxService) Reload(token string, logger logr.Logger) error {
+	virtClient, err := virtualization.NewClient(n.netboxURL, token, false)
 	if err != nil {
 		return err
 	}
-	dcimClient, err := dcim.NewClient(url, token, false)
+	dcimClient, err := dcim.NewClient(n.netboxURL, token, false)
 	if err != nil {
 		return err
 	}
-	ipamClient, err := ipam.NewClient(url, token, false)
+	ipamClient, err := ipam.NewClient(n.netboxURL, token, false)
 	if err != nil {
 		return err
 	}
-	extrasClient, err := extras.NewClient(url, token, false)
+	extrasClient, err := extras.NewClient(n.netboxURL, token, false)
 	if err != nil {
 		return err
 	}

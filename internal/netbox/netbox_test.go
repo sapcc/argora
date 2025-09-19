@@ -12,7 +12,7 @@ import (
 	"github.com/sapcc/go-netbox-go/models"
 )
 
-func TestConfig(t *testing.T) {
+func TestNetbox(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Netbox Suite")
 }
@@ -121,7 +121,7 @@ var _ = Describe("NetboxService", func() {
 		mockIPAM = &MockIPAM{}
 		mockExtras = &MockExtras{}
 
-		netboxService = &NetboxService{mockVirtualization, mockDCIM, mockIPAM, mockExtras}
+		netboxService = &NetboxService{"", mockVirtualization, mockDCIM, mockIPAM, mockExtras}
 	})
 
 	Describe("Virtualization", func() {
@@ -149,11 +149,10 @@ var _ = Describe("NetboxService", func() {
 	})
 
 	Describe("Reload", func() {
-		It("should reload the services with new configurations", func() {
-			url := "http://example.com"
+		It("should reload the services with new token", func() {
 			token := "test-token"
 
-			err := netboxService.Reload(url, token, logr.Discard())
+			err := netboxService.Reload(token, logr.Discard())
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(netboxService.Virtualization()).ToNot(BeNil())

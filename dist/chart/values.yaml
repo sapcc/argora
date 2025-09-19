@@ -10,6 +10,9 @@ controllerManager:
       - "--leader-elect"
       - "--metrics-bind-address=:8443"
       - "--health-probe-bind-address=:8081"
+      #- "--enable-ironcore=false"
+      #- "--netbox-url=https://netbox.global.cloud.sap"
+      #- --zap-log-level=debug
     resources:
       limits:
         cpu: 500m
@@ -75,17 +78,6 @@ certmanager:
 # [NETWORK POLICIES]: To enable NetworkPolicies set true
 networkPolicy:
   enable: false
-
-config:
-  serverController: "_"
-  ironCore:
-    - name: ""
-      region: ""
-      type: "cc-kvm-compute"
-    - name: ""
-      region: "qa-de-1"
-      type: ""
-  netboxURL: "https://netbox-test.global.cloud.sap/"
 
 credentials:
   bmcUser: "_"

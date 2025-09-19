@@ -30,7 +30,7 @@ import (
 	"github.com/sapcc/go-netbox-go/models"
 	"gopkg.in/yaml.v3"
 
-	"github.com/sapcc/argora/internal/config"
+	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/networkdata"
 )
@@ -68,16 +68,16 @@ var (
 type Metal3Reconciler struct {
 	k8sClient         client.Client
 	scheme            *runtime.Scheme
-	cfg               *config.Config
+	credentials       *credentials.Credentials
 	netBox            netbox.Netbox
 	reconcileInterval time.Duration
 }
 
-func NewMetal3Reconciler(k8sClient client.Client, scheme *runtime.Scheme, cfg *config.Config, netBox netbox.Netbox, reconcileInterval time.Duration) *Metal3Reconciler {
+func NewMetal3Reconciler(k8sClient client.Client, scheme *runtime.Scheme, creds *credentials.Credentials, netBox netbox.Netbox, reconcileInterval time.Duration) *Metal3Reconciler {
 	return &Metal3Reconciler{
 		k8sClient:         k8sClient,
 		scheme:            scheme,
-		cfg:               cfg,
+		credentials:       creds,
 		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
 	}
@@ -109,20 +109,15 @@ func (r *Metal3Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling metal3")
 
-	err := r.cfg.Reload()
+	err := r.credentials.Reload()
 	if err != nil {
-		logger.Error(err, "unable to reload configuration")
+		logger.Error(err, "unable to reload credentials")
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("configuration reloaded", "config", r.cfg)
+	logger.Info("credentials reloaded", "credentials", r.credentials)
 
-	if r.cfg.ServerController != config.ControllerTypeMetal3 {
-		logger.Info("metal3 controller not enabled")
-		return ctrl.Result{}, nil
-	}
-
-	err = r.netBox.Reload(r.cfg.NetboxURL, r.cfg.NetboxToken, logger)
+	err = r.netBox.Reload(r.credentials.NetboxToken, logger)
 	if err != nil {
 		logger.Error(err, "unable to reload netbox")
 		return ctrl.Result{}, err
@@ -360,8 +355,8 @@ func (r *Metal3Reconciler) createNetworkDataSecret(ctx context.Context, bareMeta
 }
 
 func (r *Metal3Reconciler) createBmcSecret(cluster *clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
-	user := r.cfg.BMCUser
-	password := r.cfg.BMCPassword
+	user := r.credentials.BMCUser
+	password := r.credentials.BMCPassword
 
 	if user == "" || password == "" {
 		return nil, errors.New("bmc user or password not set")

@@ -18,7 +18,7 @@ import (
 	"github.com/sapcc/argora/internal/netbox/virtualization"
 )
 
-func TestConfig(t *testing.T) {
+func TestVirtualization(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Virtualization Suite")
 }

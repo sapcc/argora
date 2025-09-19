@@ -5,19 +5,15 @@
 package mock
 
 import (
-	"context"
 	"errors"
 
 	"github.com/go-logr/logr"
 	"github.com/sapcc/go-netbox-go/models"
 
-	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
-
 	"github.com/sapcc/argora/internal/netbox/dcim"
 	"github.com/sapcc/argora/internal/netbox/extras"
 	"github.com/sapcc/argora/internal/netbox/ipam"
 	"github.com/sapcc/argora/internal/netbox/virtualization"
-	"github.com/sapcc/argora/internal/status"
 )
 
 type FileReaderMock struct {
@@ -32,40 +28,6 @@ func (f *FileReaderMock) ReadFile(fileName string) ([]byte, error) {
 	return []byte(f.FileContent[fileName]), nil
 }
 
-type statusHandlerMock struct {
-	statusHandler *status.StatusHandler
-	returnError   bool
-}
-
-func NewStatusHandlerMock(returnError bool) status.Status {
-	return &statusHandlerMock{
-		statusHandler: &status.StatusHandler{},
-		returnError:   returnError,
-	}
-}
-
-func (s *statusHandlerMock) UpdateToReady(ctx context.Context, updateCR *argorav1alpha1.Update) error {
-	if s.returnError {
-		return errors.New("unable to update status to ready")
-	}
-	updateCR.Status.State = argorav1alpha1.Ready
-	updateCR.Status.Description = ""
-	return nil
-}
-
-func (s *statusHandlerMock) UpdateToError(ctx context.Context, updateCR *argorav1alpha1.Update, err error) error {
-	if s.returnError {
-		return errors.New("unable to update status to error")
-	}
-	updateCR.Status.State = argorav1alpha1.Error
-	updateCR.Status.Description = err.Error()
-	return nil
-}
-
-func (s *statusHandlerMock) SetCondition(updateCR *argorav1alpha1.Update, reason argorav1alpha1.ReasonWithMessage) {
-	s.statusHandler.SetCondition(updateCR, reason)
-}
-
 type NetBoxMock struct {
 	ReturnError        bool
 	VirtualizationMock virtualization.Virtualization
@@ -74,7 +36,7 @@ type NetBoxMock struct {
 	ExtrasMock         extras.Extras
 }
 
-func (n *NetBoxMock) Reload(_, _ string, _ logr.Logger) error {
+func (n *NetBoxMock) Reload(_ string, _ logr.Logger) error {
 	if n.ReturnError {
 		return errors.New("unable to reload netbox")
 	}

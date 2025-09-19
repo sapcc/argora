@@ -57,19 +57,6 @@ The `values.yaml` file allows you to configure various aspects of the Argora Ope
 | `controllerManager.nodeSelector`                  | Node selector for the manager pod                               | `{kubernetes.io/os: linux, kubernetes.io/arch: arm64}`                                        |
 | `controllerManager.tolerations`                   | Tolerations for the manager pod                                 | `[{key: node-role.kubernetes.io/control-plane, effect: NoSchedule}]`                          |
 
-- **config**: Configuration which will result in a ConfigMap named `argora-config`.
-
-### Config
-
-| Key                         | Description                                                                                                        |
-|-----------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `config.serverController`   | Enables respective controllers with values: `ironcore`, `metal3`, if different value both controllers are disabled |
-| `config.ironCore`           | Configuration for Ironcore controller                                                                              |
-| `config.ironCore.name`      | Name of the cluster to reoncile                                                                                    |
-| `config.ironCore.region`    | Region of the cluster to reoncile                                                                                  |
-| `config.ironCore.types`     | Types of clusters to reoncile (comma-separated)                                                                    |
-| `config.netboxURL`          | NetBox URL                                                                                                         |
-
 - **credentials**: Credentials which will result in a Secret named `argora-secret`.
 
 ### Credentials

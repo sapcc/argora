@@ -7,13 +7,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// UpdateSpec defines the desired state of Update.
-type UpdateSpec struct {
+// IronCoreSpec defines the desired state of IronCore.
+type IronCoreSpec struct {
 	Clusters []*ClusterSelector `json:"clusters,omitempty"`
 }
 
-// UpdateStatus defines the observed state of Update.
-type UpdateStatus struct {
+// IronCoreStatus defines the observed state of IronCore.
+type IronCoreStatus struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Ready;Error
 	State       State               `json:"state"`
@@ -25,24 +25,24 @@ type UpdateStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=".status.state",name="State",type="string"
 
-// Update is the Schema for the updates API.
-type Update struct {
+// IronCore is the Schema for the IronCores API.
+type IronCore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   UpdateSpec   `json:"spec,omitempty"`
-	Status UpdateStatus `json:"status,omitempty"`
+	Spec   IronCoreSpec   `json:"spec,omitempty"`
+	Status IronCoreStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// UpdateList contains a list of Update.
-type UpdateList struct {
+// IronCoreList contains a list of IronCore.
+type IronCoreList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Update `json:"items"`
+	Items           []IronCore `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Update{}, &UpdateList{})
+	SchemeBuilder.Register(&IronCore{}, &IronCoreList{})
 }

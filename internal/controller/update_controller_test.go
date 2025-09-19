@@ -17,8 +17,8 @@ import (
 	"github.com/sapcc/go-netbox-go/models"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
-	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/status"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,15 +32,7 @@ var _ = Describe("Update Controller", func() {
 		FileContent: make(map[string]string),
 		ReturnError: false,
 	}
-	fileReaderMock.FileContent["/etc/config/config.json"] = `{
-		"serverController": "ironcore",
-		"ironCore": [{
-			"name": "name1",
-			"region": "region1",
-			"type": "type1"
-		}],
-		"netboxUrl": "http://netbox"
-	}`
+
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
 		"bmcUser": "user",
 		"bmcPassword": "password",
@@ -164,7 +156,7 @@ var _ = Describe("Update Controller", func() {
 						Namespace: resourceNamespace,
 					},
 					Spec: argorav1alpha1.UpdateSpec{
-						Clusters: []*argorav1alpha1.Clusters{
+						Clusters: []*argorav1alpha1.ClusterSelector{
 							{
 								Name:   "",
 								Region: "region1",
@@ -192,9 +184,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -210,7 +200,100 @@ var _ = Describe("Update Controller", func() {
 			expectStatus(argorav1alpha1.Ready, "")
 		})
 
-		It("should return an error if configuration reload fails", func() {
+		It("should successfully reconcile if cluster selection is only by name", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+				Expect(name).To((Equal("name1")))
+				Expect(region).To(BeEmpty())
+				Expect(clusterType).To(BeEmpty())
+
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
+				}, nil
+			}
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			err := k8sClient.Get(ctx, typeNamespacedUpdateName, update)
+			Expect(err).ToNot(HaveOccurred())
+
+			update.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				{
+					Name: "name1",
+				},
+			}
+			Expect(k8sClient.Update(ctx, update)).To(Succeed())
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2)) // called twice: once for the device and once for the remoteboard interface
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(1))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(1))
+
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should successfully reconcile if multiple clusters in the CR", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+				Expect(name).To(BeElementOf("name1", "name2"))
+				Expect(region).To(BeEmpty())
+				Expect(clusterType).To(BeEmpty())
+
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
+				}, nil
+			}
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			err := k8sClient.Get(ctx, typeNamespacedUpdateName, update)
+			Expect(err).ToNot(HaveOccurred())
+
+			update.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				{
+					Name: "name1",
+				},
+				{
+					Name: "name2",
+				},
+			}
+			Expect(k8sClient.Update(ctx, update)).To(Succeed())
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(2))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(4)) // called twice: once for the device and once for the remoteboard interface
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(2))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(2))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(2))
+
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should return an error if credentials reload fails", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			fileReaderMockToError := &mock.FileReaderMock{
@@ -220,11 +303,15 @@ var _ = Describe("Update Controller", func() {
 			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMockToError)
 
 			// when
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unable to read config.json: error"))
+			Expect(err).To(MatchError("unable to read credentials.json: error"))
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+			expectStatus(argorav1alpha1.Error, "unable to read credentials.json: error")
 		})
 
 		It("should return an error if netbox reload fails", func() {
@@ -233,14 +320,14 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to reload netbox"))
 			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+			expectStatus(argorav1alpha1.Error, "unable to reload netbox")
 		})
 
 		It("should return an error if GetClustersByNameRegionType fails", func() {
@@ -258,9 +345,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -294,9 +379,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -329,9 +412,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -364,9 +445,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -402,9 +481,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -439,9 +516,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -467,9 +542,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -503,9 +576,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -539,9 +610,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -570,9 +639,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -619,9 +686,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -668,9 +733,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -718,9 +781,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -760,13 +821,13 @@ var _ = Describe("Update Controller", func() {
 	})
 })
 
-func createUpdateReconciler(netBoxMock *mock.NetBoxMock, fileReaderMock config.FileReader) *UpdateReconciler {
+func createUpdateReconciler(netBoxMock *mock.NetBoxMock, fileReaderMock credentials.FileReader) *UpdateReconciler {
 	return &UpdateReconciler{
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
-		statusHandler:     status.NewStatusHandler(k8sClient),
+		statusHandler:     status.NewUpdateStatusHandler(k8sClient),
 		netBox:            netBoxMock,
-		cfg:               config.NewDefaultConfiguration(k8sClient, fileReaderMock),
+		credentials:       credentials.NewDefaultCredentials(fileReaderMock),
 		reconcileInterval: reconcileInterval,
 	}
 }

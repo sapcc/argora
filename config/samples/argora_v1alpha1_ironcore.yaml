@@ -1,0 +1,13 @@
+apiVersion: argora.cloud.sap/v1alpha1
+kind: IronCore
+metadata:
+  labels:
+    app.kubernetes.io/name: argora
+    app.kubernetes.io/managed-by: kustomize
+  name: ironcore-sample
+  namespace: argora-system
+spec:
+  clusters:
+  - name: "cc-b0-qa-de-1"
+    region: "qa-de-1"
+    type: "cc-kvm-compute"
