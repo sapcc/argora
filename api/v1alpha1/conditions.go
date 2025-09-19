@@ -19,7 +19,20 @@ const (
 	ConditionReasonUpdateSucceededMessage                 = "Update succeeded"
 	ConditionReasonUpdateFailed           ConditionReason = "UpdateFailed"
 	ConditionReasonUpdateFailedMessage                    = "Update failed"
+
+	ConditionReasonIronCoreSucceeded        ConditionReason = "IronCoreSucceeded"
+	ConditionReasonIronCoreSucceededMessage                 = "IronCore succeeded"
+	ConditionReasonIronCoreFailed           ConditionReason = "IronCoreFailed"
+	ConditionReasonIronCoreFailedMessage                    = "IronCore failed"
 )
+
+var conditionReasons = map[ConditionReason]conditionMeta{
+	ConditionReasonUpdateSucceeded: {Type: ConditionTypeReady, Status: metav1.ConditionTrue, Message: ConditionReasonUpdateSucceededMessage},
+	ConditionReasonUpdateFailed:    {Type: ConditionTypeReady, Status: metav1.ConditionFalse, Message: ConditionReasonUpdateFailedMessage},
+
+	ConditionReasonIronCoreSucceeded: {Type: ConditionTypeReady, Status: metav1.ConditionTrue, Message: ConditionReasonIronCoreSucceededMessage},
+	ConditionReasonIronCoreFailed:    {Type: ConditionTypeReady, Status: metav1.ConditionFalse, Message: ConditionReasonIronCoreFailedMessage},
+}
 
 type ReasonWithMessage struct {
 	Reason  ConditionReason
@@ -41,11 +54,6 @@ func ConditionFromReason(reason ReasonWithMessage) *metav1.Condition {
 		}
 	}
 	return nil
-}
-
-var conditionReasons = map[ConditionReason]conditionMeta{
-	ConditionReasonUpdateSucceeded: {Type: ConditionTypeReady, Status: metav1.ConditionTrue, Message: ConditionReasonUpdateSucceededMessage},
-	ConditionReasonUpdateFailed:    {Type: ConditionTypeReady, Status: metav1.ConditionFalse, Message: ConditionReasonUpdateFailedMessage},
 }
 
 type conditionMeta struct {

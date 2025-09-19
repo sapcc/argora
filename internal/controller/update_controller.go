@@ -40,12 +40,12 @@ type UpdateReconciler struct {
 	k8sClient         client.Client
 	scheme            *runtime.Scheme
 	credentials       *credentials.Credentials
-	statusHandler     status.Status
+	statusHandler     status.UpdateStatus
 	netBox            netbox.Netbox
 	reconcileInterval time.Duration
 }
 
-func NewUpdateReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.Status, netBox netbox.Netbox, reconcileInterval time.Duration) *UpdateReconciler {
+func NewUpdateReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.UpdateStatus, netBox netbox.Netbox, reconcileInterval time.Duration) *UpdateReconciler {
 	return &UpdateReconciler{
 		k8sClient:         mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
@@ -82,9 +82,22 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling update")
 
-	err := r.credentials.Reload()
+	updateCR := &argorav1alpha1.Update{}
+	err := r.k8sClient.Get(ctx, req.NamespacedName, updateCR)
+	if err != nil {
+		logger.Error(err, "unable to get Update CR")
+		return ctrl.Result{}, err
+	}
+
+	err = r.credentials.Reload()
 	if err != nil {
 		logger.Error(err, "unable to reload credentials")
+
+		r.statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
+		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, updateCR, err); errUpdateStatus != nil {
+			return ctrl.Result{}, errUpdateStatus
+		}
+
 		return ctrl.Result{}, err
 	}
 
@@ -93,18 +106,17 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	err = r.netBox.Reload(r.credentials.NetboxToken, logger)
 	if err != nil {
 		logger.Error(err, "unable to reload netbox")
-		return ctrl.Result{}, err
-	}
 
-	updateCR := &argorav1alpha1.Update{}
-	err = r.k8sClient.Get(ctx, req.NamespacedName, updateCR)
-	if err != nil {
-		logger.Error(err, "unable to get Update CR")
+		r.statusHandler.SetCondition(updateCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateFailed))
+		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, updateCR, err); errUpdateStatus != nil {
+			return ctrl.Result{}, errUpdateStatus
+		}
+
 		return ctrl.Result{}, err
 	}
 
 	for _, clusterSelector := range updateCR.Spec.Clusters {
-		err = r.reconcileCluster(ctx, updateCR, clusterSelector)
+		err = r.reconcileClusterSelection(ctx, updateCR, clusterSelector)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -118,7 +130,7 @@ func (r *UpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
-func (r *UpdateReconciler) reconcileCluster(ctx context.Context, updateCR *argorav1alpha1.Update, clusterSelector *argorav1alpha1.ClusterSelector) error {
+func (r *UpdateReconciler) reconcileClusterSelection(ctx context.Context, updateCR *argorav1alpha1.Update, clusterSelector *argorav1alpha1.ClusterSelector) error {
 	logger := log.FromContext(ctx)
 	logger.Info("fetching clusters data", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 

@@ -26,6 +26,7 @@ import (
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/controller/mock"
 	"github.com/sapcc/argora/internal/credentials"
+	"github.com/sapcc/argora/internal/status"
 )
 
 var _ = Describe("Ironcore Controller", func() {
@@ -69,6 +70,26 @@ var _ = Describe("Ironcore Controller", func() {
 				Name:      resourceName,
 				Namespace: resourceNamespace,
 			},
+		}
+
+		expectStatus := func(state argorav1alpha1.State, description string) {
+			err := k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ironCore.Status.State).To(Equal(state))
+			Expect(ironCore.Status.Description).To(Equal(description))
+			Expect(ironCore.Status.Conditions).ToNot(BeNil())
+			Expect((*ironCore.Status.Conditions)).To(HaveLen(1))
+			if state == argorav1alpha1.Ready {
+				Expect((*ironCore.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
+				Expect((*ironCore.Status.Conditions)[0].Status).To(Equal(metav1.ConditionTrue))
+				Expect((*ironCore.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonIronCoreSucceeded)))
+				Expect((*ironCore.Status.Conditions)[0].Message).To(Equal(argorav1alpha1.ConditionReasonIronCoreSucceededMessage))
+			} else {
+				Expect((*ironCore.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
+				Expect((*ironCore.Status.Conditions)[0].Status).To(Equal(metav1.ConditionFalse))
+				Expect((*ironCore.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonIronCoreFailed)))
+				Expect((*ironCore.Status.Conditions)[0].Message).To(Equal(argorav1alpha1.ConditionReasonIronCoreFailedMessage))
+			}
 		}
 
 		prepareNetboxMock := func() *mock.NetBoxMock {
@@ -283,6 +304,8 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should successfully reconcile if cluster selection is only by name", func() {
@@ -332,6 +355,8 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should successfully reconcile if multiple clusters in the CR", func() {
@@ -385,6 +410,8 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(2))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should succeed if multiple clusters fetched from netbox", func() {
@@ -442,6 +469,8 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should update labels if device change cluster", func() {
@@ -575,6 +604,8 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(2))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(4))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should succeed if multiple devices fetched from netbox", func() {
@@ -659,6 +690,8 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should return an error if credentials reload fails", func() {
@@ -676,6 +709,8 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to read credentials.json: error"))
+
+				expectStatus(argorav1alpha1.Error, "unable to read credentials.json: error")
 			})
 
 			It("should return an error if netbox reload fails", func() {
@@ -688,6 +723,8 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to reload netbox"))
+
+				expectStatus(argorav1alpha1.Error, "unable to reload netbox")
 			})
 
 			It("should return an error if GetClustersByNameRegionType fails", func() {
@@ -710,6 +747,8 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to find clusters"))
 				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				expectStatus(argorav1alpha1.Error, "unable to reconcile cluster: unable to find clusters")
 			})
 
 			It("should return an error if GetDevicesByClusterID fails", func() {
@@ -744,6 +783,28 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to find devices"))
 				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				expectStatus(argorav1alpha1.Error, "unable to reconcile devices on cluster cluster1 (1): unable to find devices")
+			})
+
+			It("should return an error if GetRegionForDevice fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceFunc = func(device *models.Device) (string, error) {
+					return "", errors.New("unable to get region for device")
+				}
+
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("unable to get region for device: unable to get region for device"))
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				expectStatus(argorav1alpha1.Error, "unable to reconcile device device-name1 (1) on cluster cluster1 (1): unable to get region for device: unable to get region for device")
 			})
 
 			It("should skip the device when the device is not active", func() {
@@ -778,24 +839,8 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
-			})
 
-			It("should return an error if GetRegionForDevice fails", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceFunc = func(device *models.Device) (string, error) {
-					return "", errors.New("unable to get region for device")
-				}
-
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
-
-				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("unable to get region for device: unable to get region for device"))
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should skip the device when BMC custom resource already exists", func() {
@@ -824,6 +869,8 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 		})
 
@@ -888,6 +935,7 @@ func createIronCoreReconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMo
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
 		credentials:       credentials.NewDefaultCredentials(fileReaderMock),
+		statusHandler:     status.NewIronCoreStatusHandler(k8sClient),
 		netBox:            netBoxMock,
 		reconcileInterval: reconcileInterval,
 	}

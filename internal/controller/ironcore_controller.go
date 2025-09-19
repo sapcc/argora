@@ -16,6 +16,7 @@ import (
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
+	"github.com/sapcc/argora/internal/status"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/go-netbox-go/models"
@@ -42,15 +43,17 @@ type IronCoreReconciler struct {
 	k8sClient         client.Client
 	scheme            *runtime.Scheme
 	credentials       *credentials.Credentials
+	statusHandler     status.IronCoreStatus
 	netBox            netbox.Netbox
 	reconcileInterval time.Duration
 }
 
-func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
+func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.IronCoreStatus, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
 	return &IronCoreReconciler{
 		k8sClient:         mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
 		credentials:       creds,
+		statusHandler:     statusHandler,
 		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
 	}
@@ -87,9 +90,22 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling ironcore")
 
-	err := r.credentials.Reload()
+	ironCoreCR := &argorav1alpha1.IronCore{}
+	err := r.k8sClient.Get(ctx, req.NamespacedName, ironCoreCR)
+	if err != nil {
+		logger.Error(err, "unable to get IronCore CR")
+		return ctrl.Result{}, err
+	}
+
+	err = r.credentials.Reload()
 	if err != nil {
 		logger.Error(err, "unable to reload credentials")
+
+		r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
+		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, err); errUpdateStatus != nil {
+			return ctrl.Result{}, errUpdateStatus
+		}
+
 		return ctrl.Result{}, err
 	}
 
@@ -98,33 +114,43 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	err = r.netBox.Reload(r.credentials.NetboxToken, logger)
 	if err != nil {
 		logger.Error(err, "unable to reload netbox")
-		return ctrl.Result{}, err
-	}
 
-	ironCoreCR := &argorav1alpha1.IronCore{}
-	err = r.k8sClient.Get(ctx, req.NamespacedName, ironCoreCR)
-	if err != nil {
-		logger.Error(err, "unable to get IronCore CR")
+		r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
+		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, err); errUpdateStatus != nil {
+			return ctrl.Result{}, errUpdateStatus
+		}
+
 		return ctrl.Result{}, err
 	}
 
 	for _, clusterSelector := range ironCoreCR.Spec.Clusters {
-		err = r.reconcileCluster(ctx, clusterSelector)
+		err = r.reconcileClusterSelection(ctx, ironCoreCR, clusterSelector)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
+	r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreSucceeded))
+	if errUpdateStatus := r.statusHandler.UpdateToReady(ctx, ironCoreCR); errUpdateStatus != nil {
+		return ctrl.Result{}, errUpdateStatus
+	}
+
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
-func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, clusterSelector *argorav1alpha1.ClusterSelector) error {
+func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, ironCoreCR *argorav1alpha1.IronCore, clusterSelector *argorav1alpha1.ClusterSelector) error {
 	logger := log.FromContext(ctx)
 	logger.Info("fetching clusters data", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 
 	clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(clusterSelector.Name, clusterSelector.Region, clusterSelector.Type)
 	if err != nil {
 		logger.Error(err, "unable to find clusters in netbox", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
+
+		r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
+		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, fmt.Errorf("unable to reconcile cluster: %w", err)); errUpdateStatus != nil {
+			return errUpdateStatus
+		}
+
 		return err
 	}
 
@@ -134,6 +160,12 @@ func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, clusterSelect
 		devices, err := r.netBox.DCIM().GetDevicesByClusterID(cluster.ID)
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
+
+			r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
+			if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, fmt.Errorf("unable to reconcile devices on cluster %s (%d): %w", cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
+				return errUpdateStatus
+			}
+
 			return err
 		}
 
@@ -141,6 +173,12 @@ func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, clusterSelect
 			err = r.reconcileDevice(ctx, r.netBox, &cluster, &device)
 			if err != nil {
 				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+
+				r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
+				if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
+					return errUpdateStatus
+				}
+
 				return err
 			}
 		}

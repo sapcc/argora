@@ -184,9 +184,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -231,9 +229,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -281,9 +277,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -309,11 +303,15 @@ var _ = Describe("Update Controller", func() {
 			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMockToError)
 
 			// when
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to read credentials.json: error"))
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+			expectStatus(argorav1alpha1.Error, "unable to read credentials.json: error")
 		})
 
 		It("should return an error if netbox reload fails", func() {
@@ -322,14 +320,14 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to reload netbox"))
 			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+			expectStatus(argorav1alpha1.Error, "unable to reload netbox")
 		})
 
 		It("should return an error if GetClustersByNameRegionType fails", func() {
@@ -347,9 +345,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -383,9 +379,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -418,9 +412,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -453,9 +445,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -491,9 +481,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -528,9 +516,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -556,9 +542,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -592,9 +576,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -628,9 +610,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -659,9 +639,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -708,9 +686,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
@@ -757,9 +733,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -807,9 +781,7 @@ var _ = Describe("Update Controller", func() {
 
 			// when
 			By("reconciling Update CR")
-			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
 			Expect(err).To(HaveOccurred())
@@ -853,7 +825,7 @@ func createUpdateReconciler(netBoxMock *mock.NetBoxMock, fileReaderMock credenti
 	return &UpdateReconciler{
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
-		statusHandler:     status.NewStatusHandler(k8sClient),
+		statusHandler:     status.NewUpdateStatusHandler(k8sClient),
 		netBox:            netBoxMock,
 		credentials:       credentials.NewDefaultCredentials(fileReaderMock),
 		reconcileInterval: reconcileInterval,
