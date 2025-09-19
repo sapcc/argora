@@ -73,6 +73,7 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 		Complete(r)
 }
 
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=argora.cloud.sap,resources=ironcores,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=argora.cloud.sap,resources=ironcores/status,verbs=get;update;patch
