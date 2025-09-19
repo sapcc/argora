@@ -202,6 +202,103 @@ var _ = Describe("Update Controller", func() {
 			expectStatus(argorav1alpha1.Ready, "")
 		})
 
+		It("should successfully reconcile if cluster selection is only by name", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+				Expect(name).To((Equal("name1")))
+				Expect(region).To(BeEmpty())
+				Expect(clusterType).To(BeEmpty())
+
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
+				}, nil
+			}
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			err := k8sClient.Get(ctx, typeNamespacedUpdateName, update)
+			Expect(err).ToNot(HaveOccurred())
+
+			update.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				{
+					Name: "name1",
+				},
+			}
+			Expect(k8sClient.Update(ctx, update)).To(Succeed())
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2)) // called twice: once for the device and once for the remoteboard interface
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(1))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(1))
+
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should successfully reconcile if multiple clusters in the CR", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+				Expect(name).To(BeElementOf("name1", "name2"))
+				Expect(region).To(BeEmpty())
+				Expect(clusterType).To(BeEmpty())
+
+				return []models.Cluster{
+					{
+						ID:   1,
+						Name: "cluster1",
+					},
+				}, nil
+			}
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			err := k8sClient.Get(ctx, typeNamespacedUpdateName, update)
+			Expect(err).ToNot(HaveOccurred())
+
+			update.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				{
+					Name: "name1",
+				},
+				{
+					Name: "name2",
+				},
+			}
+			Expect(k8sClient.Update(ctx, update)).To(Succeed())
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(2))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(4)) // called twice: once for the device and once for the remoteboard interface
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(2))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(2))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(2))
+
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
 		It("should return an error if credentials reload fails", func() {
 			// given
 			netBoxMock := prepareNetboxMock()

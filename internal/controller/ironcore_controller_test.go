@@ -334,24 +334,7 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
 			})
 
-			It("should return an error if configuration reload fails", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				fileReaderMockToError := &mock.FileReaderMock{
-					FileContent: make(map[string]string),
-					ReturnError: true,
-				}
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockToError)
-
-				// when
-				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("unable to read credentials.json: error"))
-			})
-
-			It("should succeed if multiple clusters in configuration", func() {
+			It("should successfully reconcile if multiple clusters in the CR", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
@@ -676,6 +659,23 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+			})
+
+			It("should return an error if credentials reload fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				fileReaderMockToError := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: true,
+				}
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockToError)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("unable to read credentials.json: error"))
 			})
 
 			It("should return an error if netbox reload fails", func() {
