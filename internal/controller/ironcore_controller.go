@@ -115,7 +115,7 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
 func (r *IronCoreReconciler) reconcileCluster(ctx context.Context, clusterSelector *argorav1alpha1.ClusterSelector) error {

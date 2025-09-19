@@ -276,7 +276,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1"})
 
@@ -325,7 +325,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1"})
 
@@ -395,7 +395,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1"})
 
@@ -452,7 +452,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1", "cluster2"})
 
@@ -539,7 +539,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1"})
 
@@ -585,7 +585,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster2"})
 
@@ -669,7 +669,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1", "cluster1"})
 
@@ -777,7 +777,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 			})
 
 			It("should return an error if GetRegionForDevice fails", func() {
@@ -823,7 +823,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 			})
 		})
 
