@@ -69,12 +69,14 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 				},
 			),
 		}).
-		Named("ironCore").
+		Named("ironcore").
 		Complete(r)
 }
 
-// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=ironcores,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=ironcores/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=ironcores/finalizers,verbs=update
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete

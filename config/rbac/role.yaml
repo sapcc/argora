@@ -32,6 +32,7 @@ rules:
 - apiGroups:
   - argora.cloud.sap
   resources:
+  - ironcores
   - updates
   verbs:
   - create
@@ -44,12 +45,14 @@ rules:
 - apiGroups:
   - argora.cloud.sap
   resources:
+  - ironcores/finalizers
   - updates/finalizers
   verbs:
   - update
 - apiGroups:
   - argora.cloud.sap
   resources:
+  - ironcores/status
   - updates/status
   verbs:
   - get
