@@ -67,7 +67,7 @@ type FlagVariables struct {
 	enableLeaderElection bool
 	secureMetrics        bool
 	enableHTTP2          bool
-	ironcore             bool
+	enableIronCore       bool
 
 	failureBaseDelay     time.Duration
 	failureMaxDelay      time.Duration
@@ -160,7 +160,7 @@ func main() {
 	creds := credentials.NewDefaultCredentials(&credentials.Reader{})
 	setupLog.Info("argora", "version", bininfo.Version())
 
-	if flagVar.ironcore {
+	if flagVar.enableIronCore {
 		if err = controller.NewIronCoreReconciler(mgr, creds, netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ironcore")
 			os.Exit(1)
@@ -214,9 +214,9 @@ func getFlagVariables() *FlagVariables {
 	flag.StringVar(&flagVariables.netboxURL, "netbox-url", "https://netbox-test.global.cloud.sap", "The URL of the NetBox instance to connect to. If not set, the default value will be used.")
 
 	flag.BoolVar(&flagVariables.enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If true, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.BoolVar(&flagVariables.enableHTTP2, "enable-http2", false, "If true, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.BoolVar(&flagVariables.ironcore, "ironcore", true, "If true, the IronCore controller will be enabled, otherwise Metal3 controller will be enabled.")
+	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If true (default), the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
+	flag.BoolVar(&flagVariables.enableHTTP2, "enable-http2", false, "If true (default is false), HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&flagVariables.enableIronCore, "enable-ironcore", true, "If true (default), the IronCore controller will be enabled, otherwise Metal3 controller will be enabled.")
 
 	flag.IntVar(&flagVariables.rateLimiterBurst, "rate-limiter-burst", rateLimiterBurstDefault, "Indicates the burst value for the bucket rate limiter.")
 	flag.IntVar(&flagVariables.rateLimiterFrequency, "rate-limiter-frequency", rateLimiterFrequencyDefault, "Indicates the bucket rate limiter frequency, signifying no. of events per second.")
