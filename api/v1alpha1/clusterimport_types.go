@@ -7,13 +7,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// UpdateSpec defines the desired state of Update.
-type UpdateSpec struct {
+// ClusterImportSpec defines the desired state of ClusterImport.
+type ClusterImportSpec struct {
 	Clusters []*ClusterSelector `json:"clusters,omitempty"`
 }
 
-// UpdateStatus defines the observed state of Update.
-type UpdateStatus struct {
+// ClusterImportStatus defines the observed state of ClusterImport.
+type ClusterImportStatus struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Ready;Error
 	State       State               `json:"state"`
@@ -25,24 +25,24 @@ type UpdateStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=".status.state",name="State",type="string"
 
-// Update is the Schema for the updates API.
-type Update struct {
+// ClusterImport is the Schema for the ClusterImports API.
+type ClusterImport struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   UpdateSpec   `json:"spec,omitempty"`
-	Status UpdateStatus `json:"status,omitempty"`
+	Spec   ClusterImportSpec   `json:"spec,omitempty"`
+	Status ClusterImportStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// UpdateList contains a list of Update.
-type UpdateList struct {
+// ClusterImportList contains a list of ClusterImport.
+type ClusterImportList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Update `json:"items"`
+	Items           []ClusterImport `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Update{}, &UpdateList{})
+	SchemeBuilder.Register(&ClusterImport{}, &ClusterImportList{})
 }

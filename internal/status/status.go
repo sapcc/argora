@@ -17,23 +17,37 @@ import (
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 )
 
-type Status interface {
+type UpdateStatus interface {
 	UpdateToReady(ctx context.Context, updateCR *argorav1alpha1.Update) error
 	UpdateToError(ctx context.Context, updateCR *argorav1alpha1.Update, err error) error
+
 	SetCondition(updateCR *argorav1alpha1.Update, reason argorav1alpha1.ReasonWithMessage)
 }
 
-func NewStatusHandler(k8sClient client.Client) Status {
-	return StatusHandler{
+type ClusterImportStatus interface {
+	UpdateToReady(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport) error
+	UpdateToError(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, err error) error
+
+	SetCondition(clusterImportCR *argorav1alpha1.ClusterImport, reason argorav1alpha1.ReasonWithMessage)
+}
+
+func NewUpdateStatusHandler(k8sClient client.Client) UpdateStatus {
+	return UpdateStatusHandler{
 		k8sClient: k8sClient,
 	}
 }
 
-type StatusHandler struct {
+func NewClusterImportStatusHandler(k8sClient client.Client) ClusterImportStatus {
+	return ClusterImportStatusHandler{
+		k8sClient: k8sClient,
+	}
+}
+
+type UpdateStatusHandler struct {
 	k8sClient client.Client
 }
 
-func (d StatusHandler) update(ctx context.Context, updateCR *argorav1alpha1.Update) error {
+func (d UpdateStatusHandler) update(ctx context.Context, updateCR *argorav1alpha1.Update) error {
 	newStatus := updateCR.Status
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if getErr := d.k8sClient.Get(ctx, client.ObjectKeyFromObject(updateCR), updateCR); getErr != nil {
@@ -47,26 +61,67 @@ func (d StatusHandler) update(ctx context.Context, updateCR *argorav1alpha1.Upda
 	})
 }
 
-func (d StatusHandler) UpdateToReady(ctx context.Context, updateCR *argorav1alpha1.Update) error {
+func (d UpdateStatusHandler) UpdateToReady(ctx context.Context, updateCR *argorav1alpha1.Update) error {
 	updateCR.Status.State = argorav1alpha1.Ready
 	updateCR.Status.Description = ""
 	return d.update(ctx, updateCR)
 }
 
-func (d StatusHandler) UpdateToError(ctx context.Context, updateCR *argorav1alpha1.Update, err error) error {
+func (d UpdateStatusHandler) UpdateToError(ctx context.Context, updateCR *argorav1alpha1.Update, err error) error {
 	updateCR.Status.State = argorav1alpha1.Error
 	updateCR.Status.Description = err.Error()
 	return d.update(ctx, updateCR)
 }
 
-func (d StatusHandler) SetCondition(updateCR *argorav1alpha1.Update, reason argorav1alpha1.ReasonWithMessage) {
+func (d UpdateStatusHandler) SetCondition(updateCR *argorav1alpha1.Update, reason argorav1alpha1.ReasonWithMessage) {
 	if updateCR.Status.Conditions == nil {
 		updateCR.Status.Conditions = &[]metav1.Condition{}
 	}
+	setCondition(updateCR.Status.Conditions, reason)
+}
+
+type ClusterImportStatusHandler struct {
+	k8sClient client.Client
+}
+
+func (d ClusterImportStatusHandler) update(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport) error {
+	newStatus := clusterImportCR.Status
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if getErr := d.k8sClient.Get(ctx, client.ObjectKeyFromObject(clusterImportCR), clusterImportCR); getErr != nil {
+			return getErr
+		}
+		clusterImportCR.Status = newStatus
+		if updateErr := d.k8sClient.Status().Update(ctx, clusterImportCR); updateErr != nil {
+			return updateErr
+		}
+		return nil
+	})
+}
+
+func (d ClusterImportStatusHandler) UpdateToReady(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport) error {
+	clusterImportCR.Status.State = argorav1alpha1.Ready
+	clusterImportCR.Status.Description = ""
+	return d.update(ctx, clusterImportCR)
+}
+
+func (d ClusterImportStatusHandler) UpdateToError(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, err error) error {
+	clusterImportCR.Status.State = argorav1alpha1.Error
+	clusterImportCR.Status.Description = err.Error()
+	return d.update(ctx, clusterImportCR)
+}
+
+func (d ClusterImportStatusHandler) SetCondition(clusterImportCR *argorav1alpha1.ClusterImport, reason argorav1alpha1.ReasonWithMessage) {
+	if clusterImportCR.Status.Conditions == nil {
+		clusterImportCR.Status.Conditions = &[]metav1.Condition{}
+	}
+	setCondition(clusterImportCR.Status.Conditions, reason)
+}
+
+func setCondition(conditions *[]metav1.Condition, reason argorav1alpha1.ReasonWithMessage) {
 	condition := argorav1alpha1.ConditionFromReason(reason)
 	if condition != nil {
-		meta.SetStatusCondition(updateCR.Status.Conditions, *condition)
+		meta.SetStatusCondition(conditions, *condition)
 	} else {
-		ctrl.Log.Error(errors.New("condition not found"), "Unable to find condition from reason", "reason", reason)
+		ctrl.Log.Error(errors.New("condition not found"), "unable to find condition from reason", "reason", reason)
 	}
 }

@@ -19,7 +19,7 @@ import (
 	"github.com/sapcc/argora/internal/netbox/extras"
 )
 
-func TestConfig(t *testing.T) {
+func TestExtras(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Extras Suite")
 }

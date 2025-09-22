@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"flag"
 	"os"
 	"time"
@@ -37,8 +38,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	"github.com/sapcc/argora/internal/config"
 	"github.com/sapcc/argora/internal/controller"
+	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/status"
 	// +kubebuilder:scaffold:imports
@@ -61,9 +62,12 @@ type FlagVariables struct {
 	metricsAddr             string
 	probeAddr               string
 	leaderElectionNamespace string
-	enableLeaderElection    bool
-	secureMetrics           bool
-	enableHTTP2             bool
+	netboxURL               string
+
+	enableLeaderElection bool
+	secureMetrics        bool
+	enableHTTP2          bool
+	enableIronCore       bool
 
 	failureBaseDelay     time.Duration
 	failureMaxDelay      time.Duration
@@ -153,31 +157,33 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg := config.NewDefaultConfiguration(mgr.GetClient(), &config.ConfigReader{})
+	creds := credentials.NewDefaultCredentials(&credentials.Reader{})
 	setupLog.Info("argora", "version", bininfo.Version())
 
-	capiCRDExists, err := capiCRDExists(mgr.GetClient())
-	if err != nil {
-		setupLog.Error(err, "unable to check if CAPI CRD exists")
-		os.Exit(1)
-	}
-
-	if capiCRDExists {
-		setupLog.Info("enabling Metal3 controller, CAPI CRD exists")
-		if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "metal3")
+	if flagVar.enableIronCore {
+		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ironcore")
 			os.Exit(1)
 		}
 	} else {
-		setupLog.Info("disabled Metal3 controller, CAPI CRD does not exists")
+		capiCRDExists, err := capiCRDExists(mgr.GetClient())
+		if err != nil {
+			setupLog.Error(err, "unable to check if CAPI CRD exists")
+			os.Exit(1)
+		}
+
+		if !capiCRDExists {
+			setupLog.Error(errors.New("CAPI CRD not found"), "unable to start Metal3 controller as CAPI CRD is missing")
+			os.Exit(1)
+		}
+
+		if err = controller.NewMetal3Reconciler(mgr.GetClient(), mgr.GetScheme(), creds, netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "metal3")
+			os.Exit(1)
+		}
 	}
 
-	if err = controller.NewIronCoreReconciler(mgr.GetClient(), mgr.GetScheme(), cfg, netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ironCore")
-		os.Exit(1)
-	}
-
-	if err = controller.NewUpdateReconciler(mgr, cfg, status.NewStatusHandler(mgr.GetClient()), netbox.NewNetbox(), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+	if err = controller.NewUpdateReconciler(mgr, creds, status.NewUpdateStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "update")
 		os.Exit(1)
 	}
@@ -204,10 +210,13 @@ func getFlagVariables() *FlagVariables {
 
 	flag.StringVar(&flagVariables.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&flagVariables.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&flagVariables.enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&flagVariables.leaderElectionNamespace, "leader-elect-ns", "kube-system", "The namespace in which the leader election resource will be created. This is only used if --leader-elect is set to true. Defaults to kube-system.")
-	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.BoolVar(&flagVariables.enableHTTP2, "enable-http2", false, "If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&flagVariables.netboxURL, "netbox-url", "https://netbox-test.global.cloud.sap", "The URL of the NetBox instance to connect to. If not set, the default value will be used.")
+
+	flag.BoolVar(&flagVariables.enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If true (default), the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
+	flag.BoolVar(&flagVariables.enableHTTP2, "enable-http2", false, "If true (default is false), HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&flagVariables.enableIronCore, "enable-ironcore", true, "If true (default), the IronCore controller will be enabled, otherwise Metal3 controller will be enabled.")
 
 	flag.IntVar(&flagVariables.rateLimiterBurst, "rate-limiter-burst", rateLimiterBurstDefault, "Indicates the burst value for the bucket rate limiter.")
 	flag.IntVar(&flagVariables.rateLimiterFrequency, "rate-limiter-frequency", rateLimiterFrequencyDefault, "Indicates the bucket rate limiter frequency, signifying no. of events per second.")

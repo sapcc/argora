@@ -14,16 +14,19 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/sapcc/go-netbox-go/models"
 
-	"github.com/sapcc/argora/internal/config"
+	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/credentials"
+	"github.com/sapcc/argora/internal/status"
 )
 
 var _ = Describe("Ironcore Controller", func() {
@@ -40,15 +43,6 @@ var _ = Describe("Ironcore Controller", func() {
 		FileContent: make(map[string]string),
 		ReturnError: false,
 	}
-	fileReaderMock.FileContent["/etc/config/config.json"] = `{
-		"serverController": "ironcore",
-		"ironCore": [{
-			"name": "name1",
-			"region": "region1",
-			"type": "type1"
-		}],
-		"netboxUrl": "http://netbox"
-	}`
 	fileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
 		"bmcUser": "user",
 		"bmcPassword": "password",
@@ -58,6 +52,10 @@ var _ = Describe("Ironcore Controller", func() {
 	Context("Reconcile", func() {
 		ctx := context.Background()
 
+		typeNamespacedClusterImportName := types.NamespacedName{
+			Name:      resourceName,
+			Namespace: resourceNamespace,
+		}
 		typeNamespacedBMCName1 := types.NamespacedName{
 			Name:      bmcName1,
 			Namespace: resourceNamespace,
@@ -65,6 +63,33 @@ var _ = Describe("Ironcore Controller", func() {
 		typeNamespacedBMCName2 := types.NamespacedName{
 			Name:      bmcName2,
 			Namespace: resourceNamespace,
+		}
+
+		clusterImport := &argorav1alpha1.ClusterImport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: resourceNamespace,
+			},
+		}
+
+		expectStatus := func(state argorav1alpha1.State, description string) {
+			err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(clusterImport.Status.State).To(Equal(state))
+			Expect(clusterImport.Status.Description).To(Equal(description))
+			Expect(clusterImport.Status.Conditions).ToNot(BeNil())
+			Expect((*clusterImport.Status.Conditions)).To(HaveLen(1))
+			if state == argorav1alpha1.Ready {
+				Expect((*clusterImport.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
+				Expect((*clusterImport.Status.Conditions)[0].Status).To(Equal(metav1.ConditionTrue))
+				Expect((*clusterImport.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonClusterImportSucceeded)))
+				Expect((*clusterImport.Status.Conditions)[0].Message).To(Equal(argorav1alpha1.ConditionReasonClusterImportSucceededMessage))
+			} else {
+				Expect((*clusterImport.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
+				Expect((*clusterImport.Status.Conditions)[0].Status).To(Equal(metav1.ConditionFalse))
+				Expect((*clusterImport.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonClusterImportFailed)))
+				Expect((*clusterImport.Status.Conditions)[0].Message).To(Equal(argorav1alpha1.ConditionReasonClusterImportFailedMessage))
+			}
 		}
 
 		prepareNetboxMock := func() *mock.NetBoxMock {
@@ -128,7 +153,6 @@ var _ = Describe("Ironcore Controller", func() {
 
 		expectLabels := func(labels map[string]string, bmcName string, clusterName string) {
 			bb, _ := strings.CutPrefix(bmcName, "device-")
-			fmt.Printf("tuka: %s\n", bb)
 			Expect(labels).To(SatisfyAll(
 				HaveKeyWithValue("topology.kubernetes.io/region", "region1"),
 				HaveKeyWithValue("topology.kubernetes.io/zone", "site1"),
@@ -207,6 +231,29 @@ var _ = Describe("Ironcore Controller", func() {
 		}
 
 		Context("Envtest", func() {
+			BeforeEach(func() {
+				By("create ClusterImport CR")
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				if err != nil && apierrors.IsNotFound(err) {
+					resource := &argorav1alpha1.ClusterImport{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      resourceName,
+							Namespace: resourceNamespace,
+						},
+						Spec: argorav1alpha1.ClusterImportSpec{
+							Clusters: []*argorav1alpha1.ClusterSelector{
+								{
+									Name:   "name1",
+									Region: "region1",
+									Type:   "type1",
+								},
+							},
+						},
+					}
+					Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+				}
+			})
+
 			AfterEach(func() {
 				By("cleanup")
 				bmcSecret := &metalv1alpha1.BMCSecret{}
@@ -232,6 +279,12 @@ var _ = Describe("Ironcore Controller", func() {
 					By("delete BMC 2")
 					Expect(k8sClient.Delete(ctx, bmc)).To(Succeed())
 				}
+
+				err = k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("delete Update CR")
+				Expect(k8sClient.Delete(ctx, clusterImport)).To(Succeed())
 			})
 
 			It("should successfully reconcile", func() {
@@ -240,17 +293,19 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1"})
 
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should successfully reconcile if cluster selection is only by name", func() {
@@ -275,75 +330,36 @@ var _ = Describe("Ironcore Controller", func() {
 					FileContent: make(map[string]string),
 					ReturnError: false,
 				}
-				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
-					"serverController": "ironcore",
-					"ironCore": [{
-						"name": "name1"
-					}],
-					"netboxUrl": "http://netbox"
-				}`
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+					{
+						Name: "name1",
+					},
+				}
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
+
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1"})
 
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(1))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
-			It("should return an error if configuration reload fails", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				fileReaderMockToError := &mock.FileReaderMock{
-					FileContent: make(map[string]string),
-					ReturnError: true,
-				}
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockToError)
-
-				// when
-				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("unable to read config.json: error"))
-			})
-
-			It("should not reconcile if server controller is not set to ironcore", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				fileReaderMockWithNameOnly := &mock.FileReaderMock{
-					FileContent: make(map[string]string),
-					ReturnError: false,
-				}
-				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
-					"serverController": "metal3",
-					"ironCore": [],
-					"netboxUrl": "http://netbox"
-				}`
-				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
-
-				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
-
-				// then
-				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
-
-				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(0))
-				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(0))
-				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(0))
-			})
-
-			It("should succeed if multiple clusters in configuration", func() {
+			It("should successfully reconcile if multiple clusters in the CR", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
@@ -366,33 +382,36 @@ var _ = Describe("Ironcore Controller", func() {
 					FileContent: make(map[string]string),
 					ReturnError: false,
 				}
-				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
-					"serverController": "ironcore",
-					"ironCore": [
-						{
-							"name": "name1"
-						},
-						{
-							"name": "name2"
-						}
-					],
-					"netboxUrl": "http://netbox"
-				}`
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+					{
+						Name: "name1",
+					},
+					{
+						Name: "name2",
+					},
+				}
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
+
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1"})
 
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(2))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should succeed if multiple clusters fetched from netbox", func() {
@@ -425,30 +444,33 @@ var _ = Describe("Ironcore Controller", func() {
 					FileContent: make(map[string]string),
 					ReturnError: false,
 				}
-				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
-					"serverController": "ironcore",
-					"ironCore": [
-						{
-							"type": "type1"
-						}
-					],
-					"netboxUrl": "http://netbox"
-				}`
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+					{
+						Type: "type1",
+					},
+				}
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
+
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1", "cluster2"})
 
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should update labels if device change cluster", func() {
@@ -511,24 +533,25 @@ var _ = Describe("Ironcore Controller", func() {
 					FileContent: make(map[string]string),
 					ReturnError: false,
 				}
-				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
-					"serverController": "ironcore",
-					"ironCore": [
-						{
-							"type": "type1"
-						}
-					],
-					"netboxUrl": "http://netbox"
-				}`
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+					{
+						Type: "type1",
+					},
+				}
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
+
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1"})
 
@@ -570,17 +593,19 @@ var _ = Describe("Ironcore Controller", func() {
 					}
 				}
 
-				res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster2"})
 
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(2))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(4))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should succeed if multiple devices fetched from netbox", func() {
@@ -640,30 +665,52 @@ var _ = Describe("Ironcore Controller", func() {
 					FileContent: make(map[string]string),
 					ReturnError: false,
 				}
-				fileReaderMockWithNameOnly.FileContent["/etc/config/config.json"] = `{
-					"serverController": "ironcore",
-					"ironCore": [
-						{
-							"name": "cluster1"
-						}
-					],
-					"netboxUrl": "http://netbox"
-				}`
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+					{
+						Name: "cluster1",
+					},
+				}
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
+
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
 				expectBMCResources([]string{"cluster1", "cluster1"})
 
 				Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceCalls).To(Equal(2))
+
+				expectStatus(argorav1alpha1.Ready, "")
+			})
+
+			It("should return an error if credentials reload fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				fileReaderMockToError := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: true,
+				}
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockToError)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("unable to read credentials.json: error"))
+
+				expectStatus(argorav1alpha1.Error, "unable to read credentials.json: error")
 			})
 
 			It("should return an error if netbox reload fails", func() {
@@ -671,11 +718,13 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, &mock.NetBoxMock{ReturnError: true}, fileReaderMock)
 
 				// when
-				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to reload netbox"))
+
+				expectStatus(argorav1alpha1.Error, "unable to reload netbox")
 			})
 
 			It("should return an error if GetClustersByNameRegionType fails", func() {
@@ -692,12 +741,14 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to find clusters"))
 				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				expectStatus(argorav1alpha1.Error, "unable to reconcile cluster: unable to find clusters")
 			})
 
 			It("should return an error if GetDevicesByClusterID fails", func() {
@@ -726,12 +777,34 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to find devices"))
 				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				expectStatus(argorav1alpha1.Error, "unable to reconcile devices on cluster cluster1 (1): unable to find devices")
+			})
+
+			It("should return an error if GetRegionForDevice fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceFunc = func(device *models.Device) (string, error) {
+					return "", errors.New("unable to get region for device")
+				}
+
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("unable to get region for device: unable to get region for device"))
+				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+				expectStatus(argorav1alpha1.Error, "unable to reconcile device device-name1 (1) on cluster cluster1 (1): unable to get region for device: unable to get region for device")
 			})
 
 			It("should skip the device when the device is not active", func() {
@@ -761,29 +834,13 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
-			})
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
 
-			It("should return an error if GetRegionForDevice fails", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				netBoxMock.DCIMMock.(*mock.DCIMMock).GetRegionForDeviceFunc = func(device *models.Device) (string, error) {
-					return "", errors.New("unable to get region for device")
-				}
-
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
-
-				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("unable to get region for device: unable to get region for device"))
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 
 			It("should skip the device when BMC custom resource already exists", func() {
@@ -807,26 +864,44 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				expectStatus(argorav1alpha1.Ready, "")
 			})
 		})
 
 		Context("Fake Client", func() {
+			clusterImportCR := &argorav1alpha1.ClusterImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: resourceNamespace,
+				},
+				Spec: argorav1alpha1.ClusterImportSpec{
+					Clusters: []*argorav1alpha1.ClusterSelector{
+						{
+							Name:   "name1",
+							Region: "region1",
+							Type:   "type1",
+						},
+					},
+				},
+			}
+
 			It("should return an error if createBmcSecret fails", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 
-				fakeClient := createFakeClient()
+				fakeClient := createFakeClient(clusterImportCR)
 				failClient := &shouldFailClient{fakeClient, "BMCSecret"}
 
 				controllerReconciler := createIronCoreReconciler(failClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -838,13 +913,13 @@ var _ = Describe("Ironcore Controller", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 
-				fakeClient := createFakeClient()
+				fakeClient := createFakeClient(clusterImportCR)
 				failClient := &shouldFailClient{fakeClient, "BMC"}
 
 				controllerReconciler := createIronCoreReconciler(failClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -855,14 +930,14 @@ var _ = Describe("Ironcore Controller", func() {
 	})
 })
 
-func createIronCoreReconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock config.FileReader) *IronCoreReconciler {
+func createIronCoreReconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock credentials.FileReader) *IronCoreReconciler {
 	return &IronCoreReconciler{
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
-		cfg:               config.NewDefaultConfiguration(k8sClient, fileReaderMock),
+		credentials:       credentials.NewDefaultCredentials(fileReaderMock),
+		statusHandler:     status.NewClusterImportStatusHandler(k8sClient),
 		netBox:            netBoxMock,
 		reconcileInterval: reconcileInterval,
-		eventChannel:      make(chan event.GenericEvent),
 	}
 }
 

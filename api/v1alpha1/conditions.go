@@ -5,6 +5,40 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+type State string
+type ConditionType string
+type ConditionReason string
+
+const (
+	Ready State = "Ready"
+	Error State = "Error"
+
+	ConditionTypeReady ConditionType = "Ready"
+
+	ConditionReasonUpdateSucceeded        ConditionReason = "UpdateSucceeded"
+	ConditionReasonUpdateSucceededMessage                 = "Update succeeded"
+	ConditionReasonUpdateFailed           ConditionReason = "UpdateFailed"
+	ConditionReasonUpdateFailedMessage                    = "Update failed"
+
+	ConditionReasonClusterImportSucceeded        ConditionReason = "ClusterImportSucceeded"
+	ConditionReasonClusterImportSucceededMessage                 = "ClusterImport succeeded"
+	ConditionReasonClusterImportFailed           ConditionReason = "ClusterImportFailed"
+	ConditionReasonClusterImportFailedMessage                    = "ClusterImport failed"
+)
+
+var conditionReasons = map[ConditionReason]conditionMeta{
+	ConditionReasonUpdateSucceeded: {Type: ConditionTypeReady, Status: metav1.ConditionTrue, Message: ConditionReasonUpdateSucceededMessage},
+	ConditionReasonUpdateFailed:    {Type: ConditionTypeReady, Status: metav1.ConditionFalse, Message: ConditionReasonUpdateFailedMessage},
+
+	ConditionReasonClusterImportSucceeded: {Type: ConditionTypeReady, Status: metav1.ConditionTrue, Message: ConditionReasonClusterImportSucceededMessage},
+	ConditionReasonClusterImportFailed:    {Type: ConditionTypeReady, Status: metav1.ConditionFalse, Message: ConditionReasonClusterImportFailedMessage},
+}
+
+type ReasonWithMessage struct {
+	Reason  ConditionReason
+	Message string
+}
+
 func ConditionFromReason(reason ReasonWithMessage) *metav1.Condition {
 	condition, found := conditionReasons[reason.Reason]
 	if found {
@@ -20,11 +54,6 @@ func ConditionFromReason(reason ReasonWithMessage) *metav1.Condition {
 		}
 	}
 	return nil
-}
-
-var conditionReasons = map[ConditionReason]conditionMeta{
-	ConditionReasonUpdateSucceeded: {Type: ConditionTypeReady, Status: metav1.ConditionTrue, Message: ConditionReasonUpdateSucceededMessage},
-	ConditionReasonUpdateFailed:    {Type: ConditionTypeReady, Status: metav1.ConditionFalse, Message: ConditionReasonUpdateFailedMessage},
 }
 
 type conditionMeta struct {

@@ -18,7 +18,7 @@ import (
 	"github.com/sapcc/argora/internal/netbox/ipam"
 )
 
-func TestConfig(t *testing.T) {
+func TestIPAM(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "IPAM Suite")
 }

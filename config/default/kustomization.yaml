@@ -22,7 +22,6 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
-- ../configmap
 - ../secret
 # [METRICS] Expose the controller manager metrics service.
 - metrics_service.yaml
@@ -32,10 +31,6 @@ patches:
 # [METRICS] The following patch will enable the metrics endpoint using HTTPS and the port :8443.
 # More info: https://book.kubebuilder.io/reference/metrics
 - path: manager_metrics_patch.yaml
-  target:
-    kind: Deployment
-# Mount the configmap to the controller manager
-- path: configmap_mount_patch.yaml
   target:
     kind: Deployment
 # Mount the secret to the controller manager

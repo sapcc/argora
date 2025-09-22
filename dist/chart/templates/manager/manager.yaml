@@ -51,9 +51,6 @@ spec:
           securityContext:
             {{- toYaml .Values.controllerManager.container.securityContext | nindent 12 }}
           volumeMounts:
-            - mountPath: /etc/config
-              name: config-volume
-              readOnly: true
             - mountPath: /etc/credentials
               name: secret-volume
               readOnly: true
@@ -69,9 +66,6 @@ spec:
       serviceAccountName: {{ .Values.controllerManager.serviceAccountName }}
       terminationGracePeriodSeconds: {{ .Values.controllerManager.terminationGracePeriodSeconds }}
       volumes:
-        - configMap:
-            name: argora-config
-          name: config-volume
         - name: secret-volume
           secret:
             secretName: argora-secret
