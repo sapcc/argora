@@ -120,15 +120,15 @@ var _ = Describe("UpdateStatus", func() {
 	})
 })
 
-var _ = Describe("IronCoreStatus", func() {
+var _ = Describe("ClusterImportStatus", func() {
 	Describe("UpdateToReady", func() {
-		It("should update IronCore CR status to ready", func() {
+		It("should update ClusterImport CR status to ready", func() {
 			// given
-			cr := argorav1alpha1.IronCore{
+			cr := argorav1alpha1.ClusterImport{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 			}
 			k8sClient := createFakeClient(&cr)
-			handler := NewIronCoreStatusHandler(k8sClient)
+			handler := NewClusterImportStatusHandler(k8sClient)
 
 			// when
 			err := handler.UpdateToReady(context.TODO(), &cr)
@@ -145,16 +145,16 @@ var _ = Describe("IronCoreStatus", func() {
 
 		It("should reset existing status description to empty on update to Ready", func() {
 			// given
-			cr := argorav1alpha1.IronCore{
+			cr := argorav1alpha1.ClusterImport{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-				Status: argorav1alpha1.IronCoreStatus{
+				Status: argorav1alpha1.ClusterImportStatus{
 					State:       argorav1alpha1.Error,
 					Description: "error description",
 				},
 			}
 
 			k8sClient := createFakeClient(&cr)
-			handler := NewIronCoreStatusHandler(k8sClient)
+			handler := NewClusterImportStatusHandler(k8sClient)
 
 			// when
 			err := handler.UpdateToReady(context.TODO(), &cr)
@@ -170,13 +170,13 @@ var _ = Describe("IronCoreStatus", func() {
 	})
 
 	Describe("UpdateToError", func() {
-		It("should update IronCore CR status to error with description without condition", func() {
+		It("should update ClusterImport CR status to error with description without condition", func() {
 			// given
-			cr := argorav1alpha1.IronCore{
+			cr := argorav1alpha1.ClusterImport{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 			}
 			k8sClient := createFakeClient(&cr)
-			handler := NewIronCoreStatusHandler(k8sClient)
+			handler := NewClusterImportStatusHandler(k8sClient)
 
 			// when
 			err := handler.UpdateToError(context.TODO(), &cr, errors.New("some error"))
@@ -194,13 +194,13 @@ var _ = Describe("IronCoreStatus", func() {
 	})
 
 	Describe("SetUpdateCondition", func() {
-		It("should set IronCore CR status conditions", func() {
+		It("should set ClusterImport CR status conditions", func() {
 			// given
-			cr := argorav1alpha1.IronCore{
+			cr := argorav1alpha1.ClusterImport{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 			}
 			k8sClient := createFakeClient(&cr)
-			handler := NewIronCoreStatusHandler(k8sClient)
+			handler := NewClusterImportStatusHandler(k8sClient)
 
 			// when
 			handler.SetCondition(&cr, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonUpdateSucceeded))

@@ -32,7 +32,7 @@ rules:
 - apiGroups:
   - argora.cloud.sap
   resources:
-  - ironcores
+  - clusterimports
   - updates
   verbs:
   - create
@@ -45,14 +45,14 @@ rules:
 - apiGroups:
   - argora.cloud.sap
   resources:
-  - ironcores/finalizers
+  - clusterimports/finalizers
   - updates/finalizers
   verbs:
   - update
 - apiGroups:
   - argora.cloud.sap
   resources:
-  - ironcores/status
+  - clusterimports/status
   - updates/status
   verbs:
   - get

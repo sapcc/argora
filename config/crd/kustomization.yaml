@@ -3,4 +3,4 @@
 # It should be run by config/default
 resources:
 - bases/argora.cloud.sap_updates.yaml
-- bases/argora.cloud.sap_ironcores.yaml
+- bases/argora.cloud.sap_clusterimports.yaml

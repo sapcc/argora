@@ -24,11 +24,11 @@ type UpdateStatus interface {
 	SetCondition(updateCR *argorav1alpha1.Update, reason argorav1alpha1.ReasonWithMessage)
 }
 
-type IronCoreStatus interface {
-	UpdateToReady(ctx context.Context, ironCoreCR *argorav1alpha1.IronCore) error
-	UpdateToError(ctx context.Context, ironCoreCR *argorav1alpha1.IronCore, err error) error
+type ClusterImportStatus interface {
+	UpdateToReady(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport) error
+	UpdateToError(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, err error) error
 
-	SetCondition(ironCoreCR *argorav1alpha1.IronCore, reason argorav1alpha1.ReasonWithMessage)
+	SetCondition(clusterImportCR *argorav1alpha1.ClusterImport, reason argorav1alpha1.ReasonWithMessage)
 }
 
 func NewUpdateStatusHandler(k8sClient client.Client) UpdateStatus {
@@ -37,8 +37,8 @@ func NewUpdateStatusHandler(k8sClient client.Client) UpdateStatus {
 	}
 }
 
-func NewIronCoreStatusHandler(k8sClient client.Client) IronCoreStatus {
-	return IronCoreStatusHandler{
+func NewClusterImportStatusHandler(k8sClient client.Client) ClusterImportStatus {
+	return ClusterImportStatusHandler{
 		k8sClient: k8sClient,
 	}
 }
@@ -80,41 +80,41 @@ func (d UpdateStatusHandler) SetCondition(updateCR *argorav1alpha1.Update, reaso
 	setCondition(updateCR.Status.Conditions, reason)
 }
 
-type IronCoreStatusHandler struct {
+type ClusterImportStatusHandler struct {
 	k8sClient client.Client
 }
 
-func (d IronCoreStatusHandler) update(ctx context.Context, ironCoreCR *argorav1alpha1.IronCore) error {
-	newStatus := ironCoreCR.Status
+func (d ClusterImportStatusHandler) update(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport) error {
+	newStatus := clusterImportCR.Status
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if getErr := d.k8sClient.Get(ctx, client.ObjectKeyFromObject(ironCoreCR), ironCoreCR); getErr != nil {
+		if getErr := d.k8sClient.Get(ctx, client.ObjectKeyFromObject(clusterImportCR), clusterImportCR); getErr != nil {
 			return getErr
 		}
-		ironCoreCR.Status = newStatus
-		if updateErr := d.k8sClient.Status().Update(ctx, ironCoreCR); updateErr != nil {
+		clusterImportCR.Status = newStatus
+		if updateErr := d.k8sClient.Status().Update(ctx, clusterImportCR); updateErr != nil {
 			return updateErr
 		}
 		return nil
 	})
 }
 
-func (d IronCoreStatusHandler) UpdateToReady(ctx context.Context, ironCoreCR *argorav1alpha1.IronCore) error {
-	ironCoreCR.Status.State = argorav1alpha1.Ready
-	ironCoreCR.Status.Description = ""
-	return d.update(ctx, ironCoreCR)
+func (d ClusterImportStatusHandler) UpdateToReady(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport) error {
+	clusterImportCR.Status.State = argorav1alpha1.Ready
+	clusterImportCR.Status.Description = ""
+	return d.update(ctx, clusterImportCR)
 }
 
-func (d IronCoreStatusHandler) UpdateToError(ctx context.Context, ironCoreCR *argorav1alpha1.IronCore, err error) error {
-	ironCoreCR.Status.State = argorav1alpha1.Error
-	ironCoreCR.Status.Description = err.Error()
-	return d.update(ctx, ironCoreCR)
+func (d ClusterImportStatusHandler) UpdateToError(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, err error) error {
+	clusterImportCR.Status.State = argorav1alpha1.Error
+	clusterImportCR.Status.Description = err.Error()
+	return d.update(ctx, clusterImportCR)
 }
 
-func (d IronCoreStatusHandler) SetCondition(ironCoreCR *argorav1alpha1.IronCore, reason argorav1alpha1.ReasonWithMessage) {
-	if ironCoreCR.Status.Conditions == nil {
-		ironCoreCR.Status.Conditions = &[]metav1.Condition{}
+func (d ClusterImportStatusHandler) SetCondition(clusterImportCR *argorav1alpha1.ClusterImport, reason argorav1alpha1.ReasonWithMessage) {
+	if clusterImportCR.Status.Conditions == nil {
+		clusterImportCR.Status.Conditions = &[]metav1.Condition{}
 	}
-	setCondition(ironCoreCR.Status.Conditions, reason)
+	setCondition(clusterImportCR.Status.Conditions, reason)
 }
 
 func setCondition(conditions *[]metav1.Condition, reason argorav1alpha1.ReasonWithMessage) {

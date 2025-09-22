@@ -7,13 +7,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// IronCoreSpec defines the desired state of IronCore.
-type IronCoreSpec struct {
+// ClusterImportSpec defines the desired state of ClusterImport.
+type ClusterImportSpec struct {
 	Clusters []*ClusterSelector `json:"clusters,omitempty"`
 }
 
-// IronCoreStatus defines the observed state of IronCore.
-type IronCoreStatus struct {
+// ClusterImportStatus defines the observed state of ClusterImport.
+type ClusterImportStatus struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Ready;Error
 	State       State               `json:"state"`
@@ -25,24 +25,24 @@ type IronCoreStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=".status.state",name="State",type="string"
 
-// IronCore is the Schema for the IronCores API.
-type IronCore struct {
+// ClusterImport is the Schema for the ClusterImports API.
+type ClusterImport struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   IronCoreSpec   `json:"spec,omitempty"`
-	Status IronCoreStatus `json:"status,omitempty"`
+	Spec   ClusterImportSpec   `json:"spec,omitempty"`
+	Status ClusterImportStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// IronCoreList contains a list of IronCore.
-type IronCoreList struct {
+// ClusterImportList contains a list of ClusterImport.
+type ClusterImportList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []IronCore `json:"items"`
+	Items           []ClusterImport `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&IronCore{}, &IronCoreList{})
+	SchemeBuilder.Register(&ClusterImport{}, &ClusterImportList{})
 }

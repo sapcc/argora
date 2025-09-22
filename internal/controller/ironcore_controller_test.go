@@ -52,7 +52,7 @@ var _ = Describe("Ironcore Controller", func() {
 	Context("Reconcile", func() {
 		ctx := context.Background()
 
-		typeNamespacedIronCoreName := types.NamespacedName{
+		typeNamespacedClusterImportName := types.NamespacedName{
 			Name:      resourceName,
 			Namespace: resourceNamespace,
 		}
@@ -65,7 +65,7 @@ var _ = Describe("Ironcore Controller", func() {
 			Namespace: resourceNamespace,
 		}
 
-		ironCore := &argorav1alpha1.IronCore{
+		clusterImport := &argorav1alpha1.ClusterImport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceName,
 				Namespace: resourceNamespace,
@@ -73,22 +73,22 @@ var _ = Describe("Ironcore Controller", func() {
 		}
 
 		expectStatus := func(state argorav1alpha1.State, description string) {
-			err := k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+			err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(ironCore.Status.State).To(Equal(state))
-			Expect(ironCore.Status.Description).To(Equal(description))
-			Expect(ironCore.Status.Conditions).ToNot(BeNil())
-			Expect((*ironCore.Status.Conditions)).To(HaveLen(1))
+			Expect(clusterImport.Status.State).To(Equal(state))
+			Expect(clusterImport.Status.Description).To(Equal(description))
+			Expect(clusterImport.Status.Conditions).ToNot(BeNil())
+			Expect((*clusterImport.Status.Conditions)).To(HaveLen(1))
 			if state == argorav1alpha1.Ready {
-				Expect((*ironCore.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
-				Expect((*ironCore.Status.Conditions)[0].Status).To(Equal(metav1.ConditionTrue))
-				Expect((*ironCore.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonIronCoreSucceeded)))
-				Expect((*ironCore.Status.Conditions)[0].Message).To(Equal(argorav1alpha1.ConditionReasonIronCoreSucceededMessage))
+				Expect((*clusterImport.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
+				Expect((*clusterImport.Status.Conditions)[0].Status).To(Equal(metav1.ConditionTrue))
+				Expect((*clusterImport.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonClusterImportSucceeded)))
+				Expect((*clusterImport.Status.Conditions)[0].Message).To(Equal(argorav1alpha1.ConditionReasonClusterImportSucceededMessage))
 			} else {
-				Expect((*ironCore.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
-				Expect((*ironCore.Status.Conditions)[0].Status).To(Equal(metav1.ConditionFalse))
-				Expect((*ironCore.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonIronCoreFailed)))
-				Expect((*ironCore.Status.Conditions)[0].Message).To(Equal(argorav1alpha1.ConditionReasonIronCoreFailedMessage))
+				Expect((*clusterImport.Status.Conditions)[0].Type).To(Equal(string(argorav1alpha1.ConditionTypeReady)))
+				Expect((*clusterImport.Status.Conditions)[0].Status).To(Equal(metav1.ConditionFalse))
+				Expect((*clusterImport.Status.Conditions)[0].Reason).To(Equal(string(argorav1alpha1.ConditionReasonClusterImportFailed)))
+				Expect((*clusterImport.Status.Conditions)[0].Message).To(Equal(argorav1alpha1.ConditionReasonClusterImportFailedMessage))
 			}
 		}
 
@@ -232,15 +232,15 @@ var _ = Describe("Ironcore Controller", func() {
 
 		Context("Envtest", func() {
 			BeforeEach(func() {
-				By("create IronCore CR")
-				err := k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+				By("create ClusterImport CR")
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
 				if err != nil && apierrors.IsNotFound(err) {
-					resource := &argorav1alpha1.IronCore{
+					resource := &argorav1alpha1.ClusterImport{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      resourceName,
 							Namespace: resourceNamespace,
 						},
-						Spec: argorav1alpha1.IronCoreSpec{
+						Spec: argorav1alpha1.ClusterImportSpec{
 							Clusters: []*argorav1alpha1.ClusterSelector{
 								{
 									Name:   "name1",
@@ -280,11 +280,11 @@ var _ = Describe("Ironcore Controller", func() {
 					Expect(k8sClient.Delete(ctx, bmc)).To(Succeed())
 				}
 
-				err = k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+				err = k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("delete Update CR")
-				Expect(k8sClient.Delete(ctx, ironCore)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, clusterImport)).To(Succeed())
 			})
 
 			It("should successfully reconcile", func() {
@@ -293,7 +293,7 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -333,18 +333,18 @@ var _ = Describe("Ironcore Controller", func() {
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
-				err := k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
 				Expect(err).ToNot(HaveOccurred())
 
-				ironCore.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
 					{
 						Name: "name1",
 					},
 				}
-				Expect(k8sClient.Update(ctx, ironCore)).To(Succeed())
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -385,10 +385,10 @@ var _ = Describe("Ironcore Controller", func() {
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
-				err := k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
 				Expect(err).ToNot(HaveOccurred())
 
-				ironCore.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
 					{
 						Name: "name1",
 					},
@@ -396,10 +396,10 @@ var _ = Describe("Ironcore Controller", func() {
 						Name: "name2",
 					},
 				}
-				Expect(k8sClient.Update(ctx, ironCore)).To(Succeed())
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -447,18 +447,18 @@ var _ = Describe("Ironcore Controller", func() {
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
-				err := k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
 				Expect(err).ToNot(HaveOccurred())
 
-				ironCore.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
 					{
 						Type: "type1",
 					},
 				}
-				Expect(k8sClient.Update(ctx, ironCore)).To(Succeed())
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -536,18 +536,18 @@ var _ = Describe("Ironcore Controller", func() {
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
-				err := k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
 				Expect(err).ToNot(HaveOccurred())
 
-				ironCore.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
 					{
 						Type: "type1",
 					},
 				}
-				Expect(k8sClient.Update(ctx, ironCore)).To(Succeed())
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -593,7 +593,7 @@ var _ = Describe("Ironcore Controller", func() {
 					}
 				}
 
-				res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -668,18 +668,18 @@ var _ = Describe("Ironcore Controller", func() {
 				fileReaderMockWithNameOnly.FileContent["/etc/credentials/credentials.json"] = fileReaderMock.FileContent["/etc/credentials/credentials.json"]
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockWithNameOnly)
 
-				err := k8sClient.Get(ctx, typeNamespacedIronCoreName, ironCore)
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
 				Expect(err).ToNot(HaveOccurred())
 
-				ironCore.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
 					{
 						Name: "cluster1",
 					},
 				}
-				Expect(k8sClient.Update(ctx, ironCore)).To(Succeed())
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -704,7 +704,7 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMockToError)
 
 				// when
-				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -718,7 +718,7 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, &mock.NetBoxMock{ReturnError: true}, fileReaderMock)
 
 				// when
-				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -741,7 +741,7 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -777,7 +777,7 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -797,7 +797,7 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -834,7 +834,7 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -864,7 +864,7 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).ToNot(HaveOccurred())
@@ -875,12 +875,12 @@ var _ = Describe("Ironcore Controller", func() {
 		})
 
 		Context("Fake Client", func() {
-			ironCoreCR := &argorav1alpha1.IronCore{
+			clusterImportCR := &argorav1alpha1.ClusterImport{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: resourceNamespace,
 				},
-				Spec: argorav1alpha1.IronCoreSpec{
+				Spec: argorav1alpha1.ClusterImportSpec{
 					Clusters: []*argorav1alpha1.ClusterSelector{
 						{
 							Name:   "name1",
@@ -895,13 +895,13 @@ var _ = Describe("Ironcore Controller", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 
-				fakeClient := createFakeClient(ironCoreCR)
+				fakeClient := createFakeClient(clusterImportCR)
 				failClient := &shouldFailClient{fakeClient, "BMCSecret"}
 
 				controllerReconciler := createIronCoreReconciler(failClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -913,13 +913,13 @@ var _ = Describe("Ironcore Controller", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 
-				fakeClient := createFakeClient(ironCoreCR)
+				fakeClient := createFakeClient(clusterImportCR)
 				failClient := &shouldFailClient{fakeClient, "BMC"}
 
 				controllerReconciler := createIronCoreReconciler(failClient, netBoxMock, fileReaderMock)
 
 				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIronCoreName})
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
 				Expect(err).To(HaveOccurred())
@@ -935,7 +935,7 @@ func createIronCoreReconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMo
 		k8sClient:         k8sClient,
 		scheme:            k8sClient.Scheme(),
 		credentials:       credentials.NewDefaultCredentials(fileReaderMock),
-		statusHandler:     status.NewIronCoreStatusHandler(k8sClient),
+		statusHandler:     status.NewClusterImportStatusHandler(k8sClient),
 		netBox:            netBoxMock,
 		reconcileInterval: reconcileInterval,
 	}

@@ -161,7 +161,7 @@ func main() {
 	setupLog.Info("argora", "version", bininfo.Version())
 
 	if flagVar.enableIronCore {
-		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewIronCoreStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ironcore")
 			os.Exit(1)
 		}

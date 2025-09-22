@@ -43,12 +43,12 @@ type IronCoreReconciler struct {
 	k8sClient         client.Client
 	scheme            *runtime.Scheme
 	credentials       *credentials.Credentials
-	statusHandler     status.IronCoreStatus
+	statusHandler     status.ClusterImportStatus
 	netBox            netbox.Netbox
 	reconcileInterval time.Duration
 }
 
-func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.IronCoreStatus, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
+func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
 	return &IronCoreReconciler{
 		k8sClient:         mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
@@ -61,7 +61,7 @@ func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, sta
 
 func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter RateLimiter) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&argorav1alpha1.IronCore{}).
+		For(&argorav1alpha1.ClusterImport{}).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		WithOptions(controller.Options{
 			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
@@ -78,9 +78,9 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=argora.cloud.sap,resources=ironcores,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=argora.cloud.sap,resources=ironcores/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=argora.cloud.sap,resources=ironcores/finalizers,verbs=update
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=clusterimports,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=clusterimports/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=argora.cloud.sap,resources=clusterimports/finalizers,verbs=update
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
@@ -88,12 +88,12 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 
 func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling ironcore")
+	logger.Info("reconciling cluster import")
 
-	ironCoreCR := &argorav1alpha1.IronCore{}
-	err := r.k8sClient.Get(ctx, req.NamespacedName, ironCoreCR)
+	clusterImportCR := &argorav1alpha1.ClusterImport{}
+	err := r.k8sClient.Get(ctx, req.NamespacedName, clusterImportCR)
 	if err != nil {
-		logger.Error(err, "unable to get IronCore CR")
+		logger.Error(err, "unable to get ClusterImport CR")
 		return ctrl.Result{}, err
 	}
 
@@ -101,8 +101,8 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		logger.Error(err, "unable to reload credentials")
 
-		r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
-		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, err); errUpdateStatus != nil {
+		r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
+		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, err); errUpdateStatus != nil {
 			return ctrl.Result{}, errUpdateStatus
 		}
 
@@ -115,30 +115,30 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		logger.Error(err, "unable to reload netbox")
 
-		r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
-		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, err); errUpdateStatus != nil {
+		r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
+		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, err); errUpdateStatus != nil {
 			return ctrl.Result{}, errUpdateStatus
 		}
 
 		return ctrl.Result{}, err
 	}
 
-	for _, clusterSelector := range ironCoreCR.Spec.Clusters {
-		err = r.reconcileClusterSelection(ctx, ironCoreCR, clusterSelector)
+	for _, clusterSelector := range clusterImportCR.Spec.Clusters {
+		err = r.reconcileClusterSelection(ctx, clusterImportCR, clusterSelector)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
-	r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreSucceeded))
-	if errUpdateStatus := r.statusHandler.UpdateToReady(ctx, ironCoreCR); errUpdateStatus != nil {
+	r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportSucceeded))
+	if errUpdateStatus := r.statusHandler.UpdateToReady(ctx, clusterImportCR); errUpdateStatus != nil {
 		return ctrl.Result{}, errUpdateStatus
 	}
 
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
-func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, ironCoreCR *argorav1alpha1.IronCore, clusterSelector *argorav1alpha1.ClusterSelector) error {
+func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, clusterSelector *argorav1alpha1.ClusterSelector) error {
 	logger := log.FromContext(ctx)
 	logger.Info("fetching clusters data", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 
@@ -146,8 +146,8 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, iron
 	if err != nil {
 		logger.Error(err, "unable to find clusters in netbox", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
 
-		r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
-		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, fmt.Errorf("unable to reconcile cluster: %w", err)); errUpdateStatus != nil {
+		r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
+		if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile cluster: %w", err)); errUpdateStatus != nil {
 			return errUpdateStatus
 		}
 
@@ -161,8 +161,8 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, iron
 		if err != nil {
 			logger.Error(err, "unable to find devices for cluster", "cluster", cluster.Name, "ID", cluster.ID)
 
-			r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
-			if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, fmt.Errorf("unable to reconcile devices on cluster %s (%d): %w", cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
+			r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
+			if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile devices on cluster %s (%d): %w", cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
 				return errUpdateStatus
 			}
 
@@ -174,8 +174,8 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, iron
 			if err != nil {
 				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
 
-				r.statusHandler.SetCondition(ironCoreCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIronCoreFailed))
-				if errUpdateStatus := r.statusHandler.UpdateToError(ctx, ironCoreCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
+				r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
+				if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
 					return errUpdateStatus
 				}
 
