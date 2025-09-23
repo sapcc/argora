@@ -211,7 +211,7 @@ func getFlagVariables() *FlagVariables {
 	flag.StringVar(&flagVariables.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&flagVariables.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&flagVariables.leaderElectionNamespace, "leader-elect-ns", "kube-system", "The namespace in which the leader election resource will be created. This is only used if --leader-elect is set to true. Defaults to kube-system.")
-	flag.StringVar(&flagVariables.netboxURL, "netbox-url", "https://netbox-test.global.cloud.sap", "The URL of the NetBox instance to connect to. If not set, the default value will be used.")
+	flag.StringVar(&flagVariables.netboxURL, "netbox-url", "netbox-url", "The URL of the NetBox instance to connect to. If not set, the default value will be used.")
 
 	flag.BoolVar(&flagVariables.enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If true (default), the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
