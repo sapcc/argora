@@ -79,6 +79,11 @@ certmanager:
 networkPolicy:
   enable: false
 
+ironcore:
+  enable: true
+
+netboxURL: "https://netbox-test.global.cloud.sap"
+
 credentials:
   bmcUser: "_"
   bmcPassword: "_"
