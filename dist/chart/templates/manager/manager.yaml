@@ -29,6 +29,8 @@ spec:
       containers:
         - name: manager
           args:
+            - --enable-ironcore={{ .Values.ironcore.enable }}
+            - --netbox-url={{ .Values.netboxURL }}
             {{- range .Values.controllerManager.container.args }}
             - {{ . }}
             {{- end }}

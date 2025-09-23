@@ -11,7 +11,7 @@ controllerManager:
       - "--metrics-bind-address=:8443"
       - "--health-probe-bind-address=:8081"
       #- "--enable-ironcore=false"
-      #- "--netbox-url=https://netbox.global.cloud.sap"
+      #- "--netbox-url=https://netbox-url"
       #- --zap-log-level=debug
     resources:
       limits:
@@ -78,6 +78,11 @@ certmanager:
 # [NETWORK POLICIES]: To enable NetworkPolicies set true
 networkPolicy:
   enable: false
+
+ironcore:
+  enable: true
+
+netboxURL: "https://netbox-url"
 
 credentials:
   bmcUser: "_"

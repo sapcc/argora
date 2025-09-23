@@ -44,7 +44,7 @@ spec:
           - --leader-elect
           - --health-probe-bind-address=:8081
           #- --enable-ironcore=false
-          #- --netbox-url=https://netbox-test.global.cloud.sap
+          #- --netbox-url=https://netbox-url
           #- --zap-log-level=debug
         image: controller:latest #"{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         name: manager
