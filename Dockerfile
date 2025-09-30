@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+ARG TARGET_GO_VERSION=1.25.1
+
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.25.1 AS builder
+FROM --platform=$BUILDPLATFORM golang:${TARGET_GO_VERSION} AS builder
 ARG TARGETOS TARGETARCH
 ARG BININFO_BUILD_DATE BININFO_COMMIT_HASH BININFO_VERSION
 
@@ -33,7 +35,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 
 # Debug image (with Delve, non-distroless)
-FROM --platform=$BUILDPLATFORM golang:1.24.4 AS debug
+FROM --platform=$BUILDPLATFORM golang:${TARGET_GO_VERSION} AS debug
 ARG BININFO_BUILD_DATE BININFO_COMMIT_HASH BININFO_VERSION
 LABEL source_repository="https://github.com/sapcc/argora" \
   org.opencontainers.image.url="https://github.com/sapcc/argora" \
