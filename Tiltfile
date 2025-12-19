@@ -48,7 +48,8 @@ if target == 'debug':
         'controller:latest',
         '.',
         target=target,
-        entrypoint='dlv exec /manager --headless --listen=:3000 --accept-multiclient --continue --',
+        # Forward all container args (including the first, which is $0 under sh -c) to the manager
+        entrypoint='set -- "$0" "$@"; exec dlv exec /manager --headless --listen=:3000 --accept-multiclient --continue -- "$@"',
         build_args=build_args
     )
 else:
