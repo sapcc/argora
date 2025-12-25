@@ -6,6 +6,7 @@ package controller
 import (
 	"context"
 	"errors"
+	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
 	"time"
 
 	"github.com/sapcc/go-netbox-go/models"
@@ -26,8 +27,18 @@ import (
 )
 
 var _ = Describe("IPPoolImport Controller", func() {
-	const resourceName = "test-resource"
-	const resourceNamespace = "default"
+	const (
+		resourceName      = "test-resource"
+		resourceNamespace = "default"
+		regionName        = "region1"
+		roleName          = "role1"
+		iPPoolName1       = "ippool-site-1a"
+		iPPoolPrefix1     = "10.10.10.0/24"
+		iPPoolPrefixMask1 = 24
+		iPPoolPrefixSite1 = "site-1a"
+		iPPoolPrefix2     = "10.10.20.0/24"
+		iPPoolPrefixSite2 = "site-2a"
+	)
 
 	fileReaderMock := &mock.FileReaderMock{
 		FileContent: make(map[string]string),
@@ -47,7 +58,10 @@ var _ = Describe("IPPoolImport Controller", func() {
 			Name:      resourceName,
 			Namespace: resourceNamespace,
 		}
-
+		typeNamespacedIPPoolName1 := types.NamespacedName{
+			Name:      iPPoolName1,
+			Namespace: resourceNamespace,
+		}
 		ipPoolImport := &argorav1alpha1.IPPoolImport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceName,
@@ -85,30 +99,38 @@ var _ = Describe("IPPoolImport Controller", func() {
 			}
 
 			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role string) ([]models.Prefix, error) {
-				Expect(region).To(Equal("region1"))
-				Expect(role).To(Equal("role1"))
+				Expect(region).To(Equal(regionName))
+				Expect(role).To(Equal(roleName))
 				return []models.Prefix{
 					{
 						ID:     1,
-						Prefix: "10.10.10.0/24",
+						Prefix: iPPoolPrefix1,
 						Site: models.Site{
 							ID:   1,
-							Name: "site-1a",
-							Slug: "site-1a",
+							Name: iPPoolPrefixSite1,
+							Slug: iPPoolPrefixSite1,
 						},
 					},
 					{
 						ID:     2,
-						Prefix: "10.10.20.0/24",
+						Prefix: iPPoolPrefix2,
 						Site: models.Site{
 							ID:   1,
-							Name: "site-2a",
-							Slug: "site-2a",
+							Name: iPPoolPrefixSite2,
+							Slug: iPPoolPrefixSite2,
 						},
 					},
 				}, nil
 			}
 			return netBoxMock
+		}
+
+		expectIPPool := func(pool *ipamv1alpha2.GlobalInClusterIPPool, ipPoolName string, prefix string, mask int) {
+			Expect(pool.Name).To(Equal(ipPoolName))
+			Expect(pool.ObjectMeta.OwnerReferences).To(BeEmpty())
+
+			Expect(pool.Spec.Addresses).To(Equal([]string{prefix}))
+			Expect(pool.Spec.Prefix).To(Equal(mask))
 		}
 
 		BeforeEach(func() {
@@ -124,8 +146,8 @@ var _ = Describe("IPPoolImport Controller", func() {
 						IPPools: []*argorav1alpha1.IPPoolSelector{
 							{
 								NamePrefix: "ippool",
-								Role:       "role1",
-								Region:     "region1",
+								Region:     regionName,
+								Role:       roleName,
 							},
 						},
 					},
@@ -157,6 +179,42 @@ var _ = Describe("IPPoolImport Controller", func() {
 
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleCalls).To(Equal(1))
 
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should successfully create a GlobalInClusterIPPool CR", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role string) ([]models.Prefix, error) {
+				Expect(region).To(Equal(regionName))
+				Expect(role).To(Equal(roleName))
+				return []models.Prefix{
+					{
+						ID:     1,
+						Prefix: iPPoolPrefix1,
+						Site: models.Site{
+							ID:   1,
+							Name: iPPoolPrefixSite1,
+							Slug: iPPoolPrefixSite1,
+						},
+					},
+				}, nil
+			}
+			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling IPPoolImport CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIPPoolImportName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			pool := &ipamv1alpha2.GlobalInClusterIPPool{}
+			err = k8sClient.Get(ctx, typeNamespacedIPPoolName1, pool)
+			Expect(err).ToNot(HaveOccurred())
+
+			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1)
 			expectStatus(argorav1alpha1.Ready, "")
 		})
 
