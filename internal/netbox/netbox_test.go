@@ -98,6 +98,10 @@ func (m *MockIPAM) GetPrefixesContaining(contains string) ([]models.Prefix, erro
 	return nil, nil
 }
 
+func (m *MockIPAM) GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error) {
+	return nil, nil
+}
+
 func (m *MockIPAM) DeleteIPAddress(id int) error {
 	return nil
 }

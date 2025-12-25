@@ -18,6 +18,7 @@ type IPAM interface {
 	GetIPAddressesForInterface(interfaceID int) ([]models.IPAddress, error)
 	GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error)
 	GetPrefixesContaining(contains string) ([]models.Prefix, error)
+	GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error)
 
 	DeleteIPAddress(id int) error
 }
@@ -96,6 +97,22 @@ func (i *IPAMService) GetPrefixesContaining(contains string) ([]models.Prefix, e
 	}
 	if len(res.Results) == 0 {
 		return nil, fmt.Errorf("prefixes containing %s not found", contains)
+	}
+	return res.Results, nil
+}
+
+func (i *IPAMService) GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error) {
+	ListPrefixesRequest := NewListPrefixesRequest(
+		PrefixWithRegion(region),
+		PrefixWithRole(role),
+	).BuildRequest()
+	i.logger.V(1).Info("list prefixes", "request", ListPrefixesRequest)
+	res, err := i.netboxAPI.ListPrefixes(ListPrefixesRequest)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list prefixes in region %s with role %s: %w", region, role, err)
+	}
+	if len(res.Results) == 0 {
+		return nil, fmt.Errorf("prefixes in region %s with role %s not found", region, role)
 	}
 	return res.Results, nil
 }
