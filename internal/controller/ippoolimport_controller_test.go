@@ -6,8 +6,9 @@ package controller
 import (
 	"context"
 	"errors"
-	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
 	"time"
+
+	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
 
 	"github.com/sapcc/go-netbox-go/models"
 
