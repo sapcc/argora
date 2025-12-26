@@ -153,7 +153,7 @@ func (r *IPPoolImportReconciler) reconcileIPPoolSelection(ctx context.Context, i
 			logger.Error(err, "unable to reconcile ippool", "ippool", ipPoolSelector.NamePrefix, "prefix", prefix.Prefix, "ID", prefix.ID)
 
 			r.statusHandler.SetCondition(importCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonIPPoolImportFailed))
-			if errUpdateStatus := r.statusHandler.UpdateToError(ctx, importCR, fmt.Errorf("unable to reconcile prefix %s (%d) on ippool %s: %w", prefix.Prefix, prefix.ID, ipPoolSelector.NamePrefix, err)); errUpdateStatus != nil {
+			if errUpdateStatus := r.statusHandler.UpdateToError(ctx, importCR, fmt.Errorf("unable to reconcile prefix %s on ippool %s: %w", prefix.Prefix, ipPoolSelector.NamePrefix, err)); errUpdateStatus != nil {
 				return errUpdateStatus
 			}
 
@@ -194,6 +194,9 @@ func (r *IPPoolImportReconciler) reconcileIPPool(ctx context.Context, ipPoolSele
 			},
 		}
 		if ipPoolSelector.ExcludeMask != nil {
+			if mask >= *ipPoolSelector.ExcludeMask {
+				return fmt.Errorf("excludeMask (%d) must be longer than prefix mask (%d) for prefix %s", *ipPoolSelector.ExcludeMask, mask, prefix.Prefix)
+			}
 			newIPPool.Spec.ExcludedAddresses = []string{fmt.Sprintf("%s/%d", net, *ipPoolSelector.ExcludeMask)}
 		}
 

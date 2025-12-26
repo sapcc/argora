@@ -303,6 +303,75 @@ var _ = Describe("IPPoolImport Controller", func() {
 			expectStatus(argorav1alpha1.Ready, types.NamespacedName{Name: transitPoolName, Namespace: resourceNamespace}, "")
 		})
 
+		It("should return an error if excluded address mask is larger than prefix mask", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+
+			transitPrefix := "10.10.50.0/24"
+			transitPrefixExcludeMask := 24
+			transitRole := "transit"
+			transitSite := "site-5a"
+			transitNamePrefix := "transit"
+			transitPoolName := "transit-site-5a"
+			excludeMask := transitPrefixExcludeMask
+
+			// Create a dedicated CR for this test
+			testCR := &argorav1alpha1.IPPoolImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      transitPoolName,
+					Namespace: resourceNamespace,
+				},
+				Spec: argorav1alpha1.IPPoolImportSpec{
+					IPPools: []*argorav1alpha1.IPPoolSelector{
+						{
+							NamePrefix:  transitNamePrefix,
+							ExcludeMask: &excludeMask,
+							Region:      regionName,
+							Role:        transitRole,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testCR)).To(Succeed())
+
+			// Clean up after test
+			defer func() {
+				Expect(k8sClient.Delete(ctx, testCR)).To(Succeed())
+			}()
+
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role string) ([]models.Prefix, error) {
+				Expect(region).To(Equal(regionName))
+				Expect(role).To(Equal(transitRole))
+				return []models.Prefix{
+					{
+						ID:     1,
+						Prefix: transitPrefix,
+						Site: models.Site{
+							ID:   1,
+							Name: transitSite,
+							Slug: transitSite,
+						},
+					},
+				}, nil
+			}
+			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling IPPoolImport CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: transitPoolName, Namespace: resourceNamespace}})
+
+			// then
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("excludeMask (24) must be longer than prefix mask (24) for prefix 10.10.50.0/24"))
+			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+			expectStatus(argorav1alpha1.Error, types.NamespacedName{
+				Name:      transitPoolName,
+				Namespace: resourceNamespace},
+				"unable to reconcile prefix 10.10.50.0/24 on ippool transit: excludeMask (24) must be longer than prefix mask (24) for prefix 10.10.50.0/24")
+		})
+
 		It("should successfully create a GlobalInClusterIPPool CR with Compute-Specific Name", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
