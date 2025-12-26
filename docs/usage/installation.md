@@ -64,7 +64,7 @@ The `values.yaml` file allows you to configure various aspects of the Argora Ope
 | Key                       | Description      |
 |---------------------------|------------------|
 | `credentials.bmcUser`     | BMC username     |
-| `credentials.bmcPassword` | BMC passowrd     |
+| `credentials.bmcPassword` | BMC password     |
 | `credentials.netboxToken` | NetBox API token |
 
 - **rbac**: Enable or disable RBAC.

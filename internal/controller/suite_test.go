@@ -15,6 +15,7 @@ import (
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
@@ -62,6 +63,8 @@ var _ = BeforeSuite(func() {
 	err = metalv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).ToNot(HaveOccurred())
 	err = clusterv1.AddToScheme(scheme.Scheme)
+	Expect(err).ToNot(HaveOccurred())
+	err = ipamv1alpha2.AddToScheme(scheme.Scheme)
 	Expect(err).ToNot(HaveOccurred())
 	err = bmov1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).ToNot(HaveOccurred())
@@ -127,6 +130,7 @@ func createFakeClient(objects ...client.Object) client.Client {
 
 	Expect(argorav1alpha1.AddToScheme(scheme)).Should(Succeed())
 	Expect(metalv1alpha1.AddToScheme(scheme)).Should(Succeed())
+	Expect(ipamv1alpha2.AddToScheme(scheme)).Should(Succeed())
 	Expect(clusterv1.AddToScheme(scheme)).Should(Succeed())
 	Expect(bmov1alpha1.AddToScheme(scheme)).Should(Succeed())
 

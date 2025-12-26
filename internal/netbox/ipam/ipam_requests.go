@@ -83,6 +83,8 @@ func (r *ListIPAddressesRequest) BuildRequest() models.ListIPAddressesRequest {
 
 type ListPrefixesRequest struct {
 	contains string
+	region   string
+	role     string
 }
 
 type ListPrefixesRequestOption func(c *ListPrefixesRequest)
@@ -104,10 +106,32 @@ func PrefixWithContains(contains string) ListPrefixesRequestOption {
 	return opt
 }
 
+func PrefixWithRegion(region string) ListPrefixesRequestOption {
+	opt := func(r *ListPrefixesRequest) {
+		r.region = region
+	}
+
+	return opt
+}
+
+func PrefixWithRole(role string) ListPrefixesRequestOption {
+	opt := func(r *ListPrefixesRequest) {
+		r.role = role
+	}
+
+	return opt
+}
+
 func (r *ListPrefixesRequest) BuildRequest() models.ListPrefixesRequest {
 	listPrefixesRequest := models.ListPrefixesRequest{}
 	if r.contains != "" {
 		listPrefixesRequest.Contains = r.contains
+	}
+	if r.region != "" {
+		listPrefixesRequest.Region = r.region
+	}
+	if r.role != "" {
+		listPrefixesRequest.Role = r.role
 	}
 	return listPrefixesRequest
 }

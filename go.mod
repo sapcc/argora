@@ -10,7 +10,7 @@ require (
 	github.com/sapcc/go-api-declarations v1.17.4
 	github.com/sapcc/go-netbox-go v0.0.0-20250911190512-e70ec0dc2efd
 	k8s.io/api v0.33.3
-	sigs.k8s.io/cluster-api v1.9.6
+	sigs.k8s.io/cluster-api v1.10.4
 	sigs.k8s.io/controller-runtime v0.21.0
 )
 
@@ -26,6 +26,7 @@ require (
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.3
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
+	sigs.k8s.io/cluster-api-ipam-provider-in-cluster v1.0.3
 )
 
 require (

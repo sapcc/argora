@@ -33,6 +33,7 @@ rules:
   - argora.cloud.sap
   resources:
   - clusterimports
+  - ippoolimports
   - updates
   verbs:
   - create
@@ -46,6 +47,7 @@ rules:
   - argora.cloud.sap
   resources:
   - clusterimports/finalizers
+  - ippoolimports/finalizers
   - updates/finalizers
   verbs:
   - update
@@ -53,6 +55,7 @@ rules:
   - argora.cloud.sap
   resources:
   - clusterimports/status
+  - ippoolimports/status
   - updates/status
   verbs:
   - get

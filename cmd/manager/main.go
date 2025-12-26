@@ -11,6 +11,8 @@ import (
 	"os"
 	"time"
 
+	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 
@@ -82,6 +84,7 @@ func init() {
 
 	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(ipamv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ironcorev1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
@@ -185,6 +188,10 @@ func main() {
 
 	if err = controller.NewUpdateReconciler(mgr, creds, status.NewUpdateStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "update")
+		os.Exit(1)
+	}
+	if err = controller.NewIPPoolImportReconciler(mgr, creds, status.NewIPPoolImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "IPPoolImport")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

@@ -19,4 +19,13 @@ resources:
   kind: Update
   path: https:/github.com/sapcc/argora/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: cloud.sap
+  group: argora
+  kind: IPPoolImport
+  path: https:/github.com/sapcc/argora/api/v1alpha1
+  version: v1alpha1
 version: "3"

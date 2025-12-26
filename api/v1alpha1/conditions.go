@@ -24,6 +24,11 @@ const (
 	ConditionReasonClusterImportSucceededMessage                 = "ClusterImport succeeded"
 	ConditionReasonClusterImportFailed           ConditionReason = "ClusterImportFailed"
 	ConditionReasonClusterImportFailedMessage                    = "ClusterImport failed"
+
+	ConditionReasonIPPoolImportSucceeded        ConditionReason = "IPPoolImportSucceeded"
+	ConditionReasonIPPoolImportSucceededMessage                 = "IPPoolImport succeeded"
+	ConditionReasonIPPoolImportFailed           ConditionReason = "IPPoolImportFailed"
+	ConditionReasonIPPoolImportFailedMessage                    = "IPPoolImport failed"
 )
 
 var conditionReasons = map[ConditionReason]conditionMeta{
@@ -32,6 +37,9 @@ var conditionReasons = map[ConditionReason]conditionMeta{
 
 	ConditionReasonClusterImportSucceeded: {Type: ConditionTypeReady, Status: metav1.ConditionTrue, Message: ConditionReasonClusterImportSucceededMessage},
 	ConditionReasonClusterImportFailed:    {Type: ConditionTypeReady, Status: metav1.ConditionFalse, Message: ConditionReasonClusterImportFailedMessage},
+
+	ConditionReasonIPPoolImportSucceeded: {Type: ConditionTypeReady, Status: metav1.ConditionTrue, Message: ConditionReasonIPPoolImportSucceededMessage},
+	ConditionReasonIPPoolImportFailed:    {Type: ConditionTypeReady, Status: metav1.ConditionFalse, Message: ConditionReasonIPPoolImportFailedMessage},
 }
 
 type ReasonWithMessage struct {

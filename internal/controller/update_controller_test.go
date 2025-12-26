@@ -554,7 +554,7 @@ var _ = Describe("Update Controller", func() {
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to update device device1 data: remoteboard interface not found")
 		})
 
-		It("should update device data when plaform does not match", func() {
+		It("should update device data when platform does not match", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameFunc = func(platformName string) (*models.Platform, error) {

@@ -31,6 +31,13 @@ type ClusterImportStatus interface {
 	SetCondition(clusterImportCR *argorav1alpha1.ClusterImport, reason argorav1alpha1.ReasonWithMessage)
 }
 
+type IPPoolImportStatus interface {
+	UpdateToReady(ctx context.Context, ipPoolImportCR *argorav1alpha1.IPPoolImport) error
+	UpdateToError(ctx context.Context, ipPoolImportCR *argorav1alpha1.IPPoolImport, err error) error
+
+	SetCondition(ipPoolImportCR *argorav1alpha1.IPPoolImport, reason argorav1alpha1.ReasonWithMessage)
+}
+
 func NewUpdateStatusHandler(k8sClient client.Client) UpdateStatus {
 	return UpdateStatusHandler{
 		k8sClient: k8sClient,
@@ -39,6 +46,12 @@ func NewUpdateStatusHandler(k8sClient client.Client) UpdateStatus {
 
 func NewClusterImportStatusHandler(k8sClient client.Client) ClusterImportStatus {
 	return ClusterImportStatusHandler{
+		k8sClient: k8sClient,
+	}
+}
+
+func NewIPPoolImportStatusHandler(k8sClient client.Client) IPPoolImportStatus {
+	return IPPoolImportStatusHandler{
 		k8sClient: k8sClient,
 	}
 }
@@ -115,6 +128,43 @@ func (d ClusterImportStatusHandler) SetCondition(clusterImportCR *argorav1alpha1
 		clusterImportCR.Status.Conditions = &[]metav1.Condition{}
 	}
 	setCondition(clusterImportCR.Status.Conditions, reason)
+}
+
+type IPPoolImportStatusHandler struct {
+	k8sClient client.Client
+}
+
+func (d IPPoolImportStatusHandler) update(ctx context.Context, ipPoolImportCR *argorav1alpha1.IPPoolImport) error {
+	newStatus := ipPoolImportCR.Status
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if getErr := d.k8sClient.Get(ctx, client.ObjectKeyFromObject(ipPoolImportCR), ipPoolImportCR); getErr != nil {
+			return getErr
+		}
+		ipPoolImportCR.Status = newStatus
+		if updateErr := d.k8sClient.Status().Update(ctx, ipPoolImportCR); updateErr != nil {
+			return updateErr
+		}
+		return nil
+	})
+}
+
+func (d IPPoolImportStatusHandler) UpdateToReady(ctx context.Context, ipPoolImportCR *argorav1alpha1.IPPoolImport) error {
+	ipPoolImportCR.Status.State = argorav1alpha1.Ready
+	ipPoolImportCR.Status.Description = ""
+	return d.update(ctx, ipPoolImportCR)
+}
+
+func (d IPPoolImportStatusHandler) UpdateToError(ctx context.Context, ipPoolImportCR *argorav1alpha1.IPPoolImport, err error) error {
+	ipPoolImportCR.Status.State = argorav1alpha1.Error
+	ipPoolImportCR.Status.Description = err.Error()
+	return d.update(ctx, ipPoolImportCR)
+}
+
+func (d IPPoolImportStatusHandler) SetCondition(ipPoolImportCR *argorav1alpha1.IPPoolImport, reason argorav1alpha1.ReasonWithMessage) {
+	if ipPoolImportCR.Status.Conditions == nil {
+		ipPoolImportCR.Status.Conditions = &[]metav1.Condition{}
+	}
+	setCondition(ipPoolImportCR.Status.Conditions, reason)
 }
 
 func setCondition(conditions *[]metav1.Condition, reason argorav1alpha1.ReasonWithMessage) {

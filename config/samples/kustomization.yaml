@@ -2,4 +2,5 @@
 resources:
 - argora_v1alpha1_update.yaml
 - argora_v1alpha1_clusterimport.yaml
+- argora_v1alpha1_ippoolimport.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
