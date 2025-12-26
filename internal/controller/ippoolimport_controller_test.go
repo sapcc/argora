@@ -236,9 +236,10 @@ var _ = Describe("IPPoolImport Controller", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 
-			transitPrefix := "10.10.30.0/24"
-			transitPrefixExclude := "10.10.30.0/25"
-			transitPrefixExcludeMask := 25
+			transitPrefix := "10.10.30.0/26"
+			transitPrefixMask := 26
+			transitPrefixExclude := "10.10.30.0/27"
+			transitPrefixExcludeMask := 27
 			transitRole := "transit"
 			transitSite := "site-3a"
 			transitNamePrefix := "transit"
@@ -299,7 +300,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: transitPoolName}, pool)
 			Expect(err).ToNot(HaveOccurred())
 
-			expectIPPool(pool, transitPoolName, transitPrefix, iPPoolPrefixMask1, transitPrefixExclude)
+			expectIPPool(pool, transitPoolName, transitPrefix, transitPrefixMask, transitPrefixExclude)
 			expectStatus(argorav1alpha1.Ready, types.NamespacedName{Name: transitPoolName, Namespace: resourceNamespace}, "")
 		})
 
