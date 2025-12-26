@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	ComputeTransitPrefixRoleName = "cc-kubernetes-compute-transit"
+	ComputeTransitPrefixRoleName = "kubernetes-compute-transit"
 )
 
 // IPPoolImportReconciler reconciles a IPPoolImport object
@@ -194,7 +194,7 @@ func (r *IPPoolImportReconciler) reconcileIPPool(ctx context.Context, ipPoolSele
 			},
 		}
 		if ipPoolSelector.ExcludeMask != nil {
-			newIPPool.Spec.ExcludedAddresses = []string{fmt.Sprintf("%s/%d", net, ipPoolSelector.ExcludeMask)}
+			newIPPool.Spec.ExcludedAddresses = []string{fmt.Sprintf("%s/%d", net, *ipPoolSelector.ExcludeMask)}
 		}
 
 		err = r.k8sClient.Create(ctx, newIPPool)
@@ -213,7 +213,7 @@ func (r *IPPoolImportReconciler) reconcileIPPool(ctx context.Context, ipPoolSele
 
 // generateIPPoolName generates the name of the IPPool based on the given name prefix and prefix information.
 func generateIPPoolName(namePrefix string, prefix *models.Prefix) (string, error) {
-	if prefix.Role.Slug == ComputeTransitPrefixRoleName {
+	if strings.Contains(prefix.Role.Slug, ComputeTransitPrefixRoleName) {
 		azLetter := strings.TrimPrefix(prefix.Site.Slug, prefix.Site.Region.Slug)
 
 		// if contains "compute1" it should be "%s-%s0-%s", if "compute2" it should be "%s-%s1-%s", and so on
