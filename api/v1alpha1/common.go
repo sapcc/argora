@@ -11,3 +11,14 @@ type ClusterSelector struct {
 	// +kubebuilder:validation:Optional
 	Type string `json:"type,omitempty"`
 }
+
+type IPPoolSelector struct {
+	// +kubebuilder:validation:Optional
+	NamePrefix string `json:"namePrefix,omitempty"`
+	// +kubebuilder:validation:Optional
+	Region string `json:"region,omitempty"`
+	// +kubebuilder:validation:Optional
+	Role string `json:"role,omitempty"`
+	// +kubebuilder:validation:Optional
+	ExcludeMask *int `json:"excludeMask,omitempty"`
+}

@@ -3,8 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [default.extend-words]
+Adress = "Adress"
+HPE = "HPE"
+Reponse = "Reponse"
+nd = "nd"
 
 [files]
 extend-exclude = [
   "go.mod",
+  "hack/**",
 ]

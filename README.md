@@ -33,6 +33,8 @@ credentials:
 
 crd:
   enable: true
+
+netboxURL: <netbox-url>
 ```
 
 **Run on dev cluster**
