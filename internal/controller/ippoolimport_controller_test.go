@@ -42,8 +42,8 @@ var _ = Describe("IPPoolImport Controller", func() {
 		iPPoolPrefixSite1 = "site-1a"
 
 		iPPoolName2       = "ippool-site-2a"
-		iPPoolPrefix2     = "10.10.20.0/24"
-		iPPoolPrefixMask2 = 24
+		iPPoolPrefix2     = "10.10.20.0/25"
+		iPPoolPrefixMask2 = 25
 		iPPoolPrefixSite2 = "site-2a"
 	)
 
