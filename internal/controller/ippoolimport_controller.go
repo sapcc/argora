@@ -200,8 +200,8 @@ func (r *IPPoolImportReconciler) reconcileIPPool(ctx context.Context, ipPoolSele
 			newIPPool.Spec.ExcludedAddresses = []string{fmt.Sprintf("%s/%d", net, *ipPoolSelector.ExcludeMask)}
 		}
 
-		if ipPoolSelector.ExcludeAddresses != nil {
-			newIPPool.Spec.ExcludedAddresses = append(newIPPool.Spec.ExcludedAddresses, ipPoolSelector.ExcludeAddresses...)
+		if ipPoolSelector.ExcludedAddresses != nil {
+			newIPPool.Spec.ExcludedAddresses = append(newIPPool.Spec.ExcludedAddresses, ipPoolSelector.ExcludedAddresses...)
 		}
 
 		err = r.k8sClient.Create(ctx, newIPPool)

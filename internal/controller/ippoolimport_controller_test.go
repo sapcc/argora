@@ -265,7 +265,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			ipPoolImport.Spec.IPPools[0].ExcludeMask = nil
-			ipPoolImport.Spec.IPPools[0].ExcludeAddresses = excludeAddresses
+			ipPoolImport.Spec.IPPools[0].ExcludedAddresses = excludeAddresses
 			Expect(k8sClient.Update(ctx, ipPoolImport)).To(Succeed())
 
 			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
@@ -301,7 +301,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			ipPoolImport.Spec.IPPools[0].ExcludeMask = &excludeMask
-			ipPoolImport.Spec.IPPools[0].ExcludeAddresses = []string{excludeAddress}
+			ipPoolImport.Spec.IPPools[0].ExcludedAddresses = []string{excludeAddress}
 			Expect(k8sClient.Update(ctx, ipPoolImport)).To(Succeed())
 
 			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
