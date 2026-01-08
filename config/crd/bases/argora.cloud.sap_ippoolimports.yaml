@@ -48,6 +48,10 @@ spec:
                   properties:
                     excludeMask:
                       type: integer
+                    excludedAddresses:
+                      items:
+                        type: string
+                      type: array
                     namePrefix:
                       type: string
                     region:

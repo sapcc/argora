@@ -136,19 +136,20 @@ var _ = Describe("IPPoolImport Controller", func() {
 			return netBoxMock
 		}
 
-		expectIPPool := func(pool *ipamv1alpha2.GlobalInClusterIPPool, ipPoolName string, prefix string, mask int, excludePrefix string) {
+		expectIPPool := func(pool *ipamv1alpha2.GlobalInClusterIPPool, ipPoolName string, prefix string, mask int, excludePrefix []string) {
 			Expect(pool.Name).To(Equal(ipPoolName))
 			Expect(pool.ObjectMeta.OwnerReferences).To(BeEmpty())
 
 			Expect(pool.Spec.Addresses).To(Equal([]string{prefix}))
 			Expect(pool.Spec.Prefix).To(Equal(mask))
-			if excludePrefix != "" {
-				Expect(pool.Spec.ExcludedAddresses).To(Equal([]string{excludePrefix}))
+			if excludePrefix != nil {
+				Expect(pool.Spec.ExcludedAddresses).To(Equal(excludePrefix))
 			}
 		}
 
 		BeforeEach(func() {
 			By("create IPPoolImport CR")
+			excludeMask = 0
 			err := k8sClient.Get(ctx, typeNamespacedIPPoolImportName, ipPoolImport)
 			if err != nil && apierrors.IsNotFound(err) {
 				resource := &argorav1alpha1.IPPoolImport{
@@ -209,18 +210,18 @@ var _ = Describe("IPPoolImport Controller", func() {
 			pool1 := &ipamv1alpha2.GlobalInClusterIPPool{}
 			err = k8sClient.Get(ctx, typeNamespacedIPPoolName1, pool1)
 			Expect(err).ToNot(HaveOccurred())
-			expectIPPool(pool1, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, "")
+			expectIPPool(pool1, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, nil)
 
 			// Fetch and validate second pool
 			pool2 := &ipamv1alpha2.GlobalInClusterIPPool{}
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: iPPoolName2, Namespace: resourceNamespace}, pool2)
 			Expect(err).ToNot(HaveOccurred())
-			expectIPPool(pool2, iPPoolName2, iPPoolPrefix2, iPPoolPrefixMask2, "")
+			expectIPPool(pool2, iPPoolName2, iPPoolPrefix2, iPPoolPrefixMask2, nil)
 
 			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
 		})
 
-		It("should successfully create a GlobalInClusterIPPool CR with Excluded Addresses field", func() {
+		It("should successfully create a GlobalInClusterIPPool CR with Excluded Mask field", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			excludeMask = 27
@@ -249,7 +250,78 @@ var _ = Describe("IPPoolImport Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedIPPoolName1, pool)
 			Expect(err).ToNot(HaveOccurred())
 
-			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, excludePrefix)
+			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, []string{excludePrefix})
+			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
+		})
+
+		It("should successfully create a GlobalInClusterIPPool CR with Excluded Addresses field", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			excludedAddress1 := "10.10.10.29"
+			excludedAddress2 := "10.10.10.30"
+			excludedAddresses := []string{excludedAddress1, excludedAddress2}
+
+			By("update IPPoolImport CR to add ExcludedAddress")
+			err := k8sClient.Get(ctx, typeNamespacedIPPoolImportName, ipPoolImport)
+			Expect(err).ToNot(HaveOccurred())
+
+			ipPoolImport.Spec.IPPools[0].ExcludeMask = nil
+			ipPoolImport.Spec.IPPools[0].ExcludedAddresses = excludedAddresses
+			Expect(k8sClient.Update(ctx, ipPoolImport)).To(Succeed())
+
+			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling IPPoolImport CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIPPoolImportName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleCalls).To(Equal(1))
+
+			pool := &ipamv1alpha2.GlobalInClusterIPPool{}
+			err = k8sClient.Get(ctx, typeNamespacedIPPoolName1, pool)
+			Expect(err).ToNot(HaveOccurred())
+
+			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, excludedAddresses)
+			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
+		})
+
+		It("should successfully create a GlobalInClusterIPPool CR with Excluded Addresses and Excluded Mask fields", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			excludeMask = 27
+			excludePrefix := "10.10.10.0/27"
+			excludedAddress := "10.10.10.30"
+			excludePrefixes := []string{excludePrefix, excludedAddress}
+
+			By("update IPPoolImport CR to add ExcludedAddress")
+			err := k8sClient.Get(ctx, typeNamespacedIPPoolImportName, ipPoolImport)
+			Expect(err).ToNot(HaveOccurred())
+
+			ipPoolImport.Spec.IPPools[0].ExcludeMask = &excludeMask
+			ipPoolImport.Spec.IPPools[0].ExcludedAddresses = []string{excludedAddress}
+			Expect(k8sClient.Update(ctx, ipPoolImport)).To(Succeed())
+
+			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling IPPoolImport CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIPPoolImportName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleCalls).To(Equal(1))
+
+			pool := &ipamv1alpha2.GlobalInClusterIPPool{}
+			err = k8sClient.Get(ctx, typeNamespacedIPPoolName1, pool)
+			Expect(err).ToNot(HaveOccurred())
+
+			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, excludePrefixes)
 			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
 		})
 
@@ -363,7 +435,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: computePoolName}, pool)
 			Expect(err).ToNot(HaveOccurred())
 
-			expectIPPool(pool, computePoolName, computePrefix, iPPoolPrefixMask1, "")
+			expectIPPool(pool, computePoolName, computePrefix, iPPoolPrefixMask1, nil)
 			expectStatus(argorav1alpha1.Ready, types.NamespacedName{Name: computePoolName, Namespace: resourceNamespace}, "")
 		})
 
