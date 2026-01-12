@@ -45,6 +45,8 @@ spec:
             properties:
               ippools:
                 items:
+                  description: IPPoolSelector defines the selection criteria for an
+                    IP pool to be imported.
                   properties:
                     excludeMask:
                       type: integer
@@ -52,6 +54,8 @@ spec:
                       items:
                         type: string
                       type: array
+                    nameOverride:
+                      type: string
                     namePrefix:
                       type: string
                     region:
@@ -59,6 +63,10 @@ spec:
                     role:
                       type: string
                   type: object
+                  x-kubernetes-validations:
+                  - message: either namePrefix or nameOverride must be set, but not
+                      both
+                    rule: has(self.namePrefix) != has(self.nameOverride)
                 type: array
             type: object
           status:
