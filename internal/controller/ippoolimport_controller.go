@@ -169,7 +169,7 @@ func (r *IPPoolImportReconciler) reconcileIPPool(ctx context.Context, ipPoolSele
 	logger.Info("reconciling IPPool", "prefix", prefix.Prefix, "ID", prefix.ID)
 
 	ippool := &ipamv1alpha2.GlobalInClusterIPPool{}
-	ippoolName, err := generateIPPoolName(ipPoolSelector.NamePrefix, prefix)
+	ippoolName, err := generateIPPoolName(ipPoolSelector, prefix)
 	if err != nil {
 		return fmt.Errorf("unable to generate ippool name for prefix %s: %w", prefix.Prefix, err)
 	}
@@ -219,7 +219,10 @@ func (r *IPPoolImportReconciler) reconcileIPPool(ctx context.Context, ipPoolSele
 }
 
 // generateIPPoolName generates the name of the IPPool based on the given name prefix and prefix information.
-func generateIPPoolName(namePrefix string, prefix *models.Prefix) (string, error) {
+func generateIPPoolName(ipPoolSelector *argorav1alpha1.IPPoolSelector, prefix *models.Prefix) (string, error) {
+	if ipPoolSelector.NameOverride != "" {
+		return ipPoolSelector.NameOverride, nil
+	}
 	if strings.Contains(prefix.Role.Slug, ComputeTransitPrefixRoleName) {
 		azLetter := strings.TrimPrefix(prefix.Site.Slug, prefix.Site.Region.Slug)
 
@@ -230,10 +233,10 @@ func generateIPPoolName(namePrefix string, prefix *models.Prefix) (string, error
 			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("%s-%s%d-%s", namePrefix, azLetter, computeNum-1, prefix.Site.Region.Slug), nil
+			return fmt.Sprintf("%s-%s%d-%s", ipPoolSelector.NamePrefix, azLetter, computeNum-1, prefix.Site.Region.Slug), nil
 		}
 	}
-	return fmt.Sprintf("%s-%s", namePrefix, prefix.Site.Slug), nil
+	return fmt.Sprintf("%s-%s", ipPoolSelector.NamePrefix, prefix.Site.Slug), nil
 }
 
 // generateNetGatewayIP generates the network address and gateway IP from the given prefix.
