@@ -628,7 +628,7 @@ var _ = Describe("Ironcore Controller", func() {
 				}
 				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
 					Expect(clusterID).To(BeElementOf(1))
-					devices := []models.Device{}
+					devices := make([]models.Device, 0, 2)
 					for _, deviceName := range []string{"device-name1", "device-name2"} {
 						devices = append(devices, models.Device{
 							ID:     1,
