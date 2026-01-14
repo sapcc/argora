@@ -4,3 +4,4 @@
 resources:
 - bases/argora.cloud.sap_updates.yaml
 - bases/argora.cloud.sap_clusterimports.yaml
+- bases/argora.cloud.sap_ippoolimports.yaml
