@@ -86,6 +86,17 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ipam.cluster.x-k8s.io
+  resources:
+  - globalinclusterippools
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - metal.ironcore.dev
   resources:
   - bmcs

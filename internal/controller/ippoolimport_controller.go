@@ -76,6 +76,7 @@ func (r *IPPoolImportReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter 
 // +kubebuilder:rbac:groups=argora.cloud.sap,resources=ippoolimports,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=argora.cloud.sap,resources=ippoolimports/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=argora.cloud.sap,resources=ippoolimports/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=globalinclusterippools,verbs=get;list;watch;create;update;patch
 
 func (r *IPPoolImportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
