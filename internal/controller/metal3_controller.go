@@ -39,24 +39,28 @@ const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
 
 var (
 	rootHintMap = map[string]string{
-		"poweredge-r660":       "BOSS",
-		"poweredge-r640":       "BOSS",
-		"poweredge-r840":       "BOSS",
-		"poweredge-r7615":      "BOSS",
-		"thinksystem-sr650":    "ThinkSystem M.2 VD",
-		"sr655-v3":             "NVMe 2-Bay",
-		"thinksystem-sr650-v3": "NVMe 2-Bay",
-		"proliant-dl320-gen11": "HPE NS204i-u Gen11 Boot Controller",
+		"poweredge-r660":         "BOSS",
+		"poweredge-r640":         "BOSS",
+		"poweredge-r840":         "BOSS",
+		"poweredge-r7615":        "BOSS",
+		"poweredge-r7715":        "BOSS",
+		"thinksystem-sr650":      "ThinkSystem M.2 VD",
+		"sr655-v3":               "NVMe 2-Bay",
+		"thinksystem-sr650-v3":   "NVMe 2-Bay",
+		"proliant-dl320-gen11":   "HPE NS204i-u Gen11 Boot Controller",
+		"proliant-dl345-gen11v2": "HPE NS204i-u Gen11 Boot Controller",
 	}
 
 	linkHintMapCeph = map[string]string{
-		"ThinkSystem SR650":    "en*f0np*",
-		"ThinkSystem SR650 v3": "en*1f*np*",
-		"Thinksystem SR655 v3": "en*f*np*",
-		"PowerEdge R640":       "en*f1np*",
-		"PowerEdge R660":       "en*f1np*",
-		"PowerEdge R7615":      "en*f*np*",
-		"Proliant DL320 Gen11": "en*f1np*",
+		"ThinkSystem SR650":      "en*f0np*",
+		"ThinkSystem SR650 v3":   "en*1f*np*",
+		"Thinksystem SR655 v3":   "en*f*np*",
+		"PowerEdge R640":         "en*f1np*",
+		"PowerEdge R660":         "en*f1np*",
+		"PowerEdge R7615":        "en*f*np*",
+		"PowerEdge R7715":        "en*f*np*",
+		"Proliant DL320 Gen11":   "en*f1np*",
+		"Proliant DL345 Gen11v2": "en*f1np*",
 	}
 
 	linkHintMapKvm = map[string]string{
