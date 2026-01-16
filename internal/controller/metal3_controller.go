@@ -43,6 +43,7 @@ var (
 		"poweredge-r640":         "BOSS",
 		"poweredge-r840":         "BOSS",
 		"poweredge-r7615":        "BOSS",
+		"poweredge-r7715":        "BOSS",
 		"thinksystem-sr650":      "ThinkSystem M.2 VD",
 		"sr655-v3":               "NVMe 2-Bay",
 		"thinksystem-sr650-v3":   "NVMe 2-Bay",
@@ -57,6 +58,7 @@ var (
 		"PowerEdge R640":         "en*f1np*",
 		"PowerEdge R660":         "en*f1np*",
 		"PowerEdge R7615":        "en*f*np*",
+		"PowerEdge R7715":        "en*f*np*",
 		"Proliant DL320 Gen11":   "en*f1np*",
 		"Proliant DL345 Gen11v2": "en*f1np*",
 	}
