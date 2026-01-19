@@ -58,7 +58,7 @@ var (
 		"PowerEdge R640":         "en*f1np*",
 		"PowerEdge R660":         "en*f1np*",
 		"PowerEdge R7615":        "en*f*np*",
-		"PowerEdge R7715":        "en*f*np*",
+		"PowerEdge R7715":        "eno*np*",
 		"Proliant DL320 Gen11":   "en*f1np*",
 		"ProLiant DL345 Gen11v2": "en*f1np*",
 	}
