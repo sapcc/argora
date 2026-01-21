@@ -36,6 +36,7 @@ rules:
   - argora.cloud.sap
   resources:
   - clusterimports
+  - ippoolimports
   - updates
   verbs:
   - create
@@ -49,6 +50,7 @@ rules:
   - argora.cloud.sap
   resources:
   - clusterimports/finalizers
+  - ippoolimports/finalizers
   - updates/finalizers
   verbs:
   - update
@@ -56,6 +58,7 @@ rules:
   - argora.cloud.sap
   resources:
   - clusterimports/status
+  - ippoolimports/status
   - updates/status
   verbs:
   - get
@@ -80,6 +83,17 @@ rules:
   verbs:
   - create
   - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ipam.cluster.x-k8s.io
+  resources:
+  - globalinclusterippools
+  verbs:
+  - create
   - get
   - list
   - patch

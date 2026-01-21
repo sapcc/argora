@@ -221,6 +221,42 @@ var _ = Describe("IPPoolImport Controller", func() {
 			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
 		})
 
+		It("should successfully create a GlobalInClusterIPPool CR with Name Override", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+
+			By("update IPPoolImport CR to add Name Override")
+			err := k8sClient.Get(ctx, typeNamespacedIPPoolImportName, ipPoolImport)
+			Expect(err).ToNot(HaveOccurred())
+
+			iPPoolName := "ippool-override-name"
+			ipPoolImport.Spec.IPPools[0].NameOverride = iPPoolName
+			ipPoolImport.Spec.IPPools[0].NamePrefix = ""
+			Expect(k8sClient.Update(ctx, ipPoolImport)).To(Succeed())
+
+			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling IPPoolImport CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIPPoolImportName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleCalls).To(Equal(1))
+
+			pool := &ipamv1alpha2.GlobalInClusterIPPool{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      iPPoolName,
+				Namespace: resourceNamespace,
+			}, pool)
+			Expect(err).ToNot(HaveOccurred())
+
+			expectIPPool(pool, iPPoolName, iPPoolPrefix1, iPPoolPrefixMask1, nil)
+			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
+		})
+
 		It("should successfully create a GlobalInClusterIPPool CR with Excluded Mask field", func() {
 			// given
 			netBoxMock := prepareNetboxMock()

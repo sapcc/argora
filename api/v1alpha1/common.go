@@ -12,9 +12,13 @@ type ClusterSelector struct {
 	Type string `json:"type,omitempty"`
 }
 
+// IPPoolSelector defines the selection criteria for an IP pool to be imported.
+// +kubebuilder:validation:XValidation:rule="has(self.namePrefix) != has(self.nameOverride)", message="either namePrefix or nameOverride must be set, but not both"
 type IPPoolSelector struct {
 	// +kubebuilder:validation:Optional
 	NamePrefix string `json:"namePrefix,omitempty"`
+	// +kubebuilder:validation:Optional
+	NameOverride string `json:"nameOverride,omitempty"`
 	// +kubebuilder:validation:Optional
 	Region string `json:"region,omitempty"`
 	// +kubebuilder:validation:Optional
