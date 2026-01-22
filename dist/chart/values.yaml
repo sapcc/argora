@@ -88,3 +88,19 @@ credentials:
   bmcUser: "_"
   bmcPassword: "_"
   netboxToken: "xxx"
+
+
+# Sample cluster import and update configurations
+# clusterImport:
+#   cluster1:
+#     clusters:
+#       - name: "cluster1"
+#         region: "emea"
+#         type: "compute"
+
+# update:
+#   cluster1:
+#     clusters:
+#       - name: "cluster1"
+#         region: "emea"
+#         type: "compute"

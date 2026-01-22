@@ -75,6 +75,100 @@ The `values.yaml` file allows you to configure various aspects of the Argora Ope
 - **certmanager**: Enable or disable cert-manager injection.
 - **networkPolicy**: Enable or disable NetworkPolicies.
 
+### ClusterImport and Update Custom Resources
+
+The Helm chart supports declarative creation of `ClusterImport` and `Update` custom resources through the values file. These resources enable you to import and update cluster configurations from Netbox.
+
+#### ClusterImport
+
+`ClusterImport` resources allow you to import cluster information from Netbox into your Kubernetes cluster. You can define multiple ClusterImport resources, each with its own set of cluster selectors.
+
+**Values Configuration:**
+
+```yaml
+clusterImport:
+  my-cluster-import:
+    clusters:
+      - name: "prod-cluster-01"
+        region: "us-west"
+        type: "compute"
+      - name: "prod-cluster-02"
+        region: "us-east"
+        type: "storage"
+  another-import:
+    clusters:
+      - name: "dev-cluster"
+        region: "emea"
+        type: "compute"
+```
+
+Each top-level key under `clusterImport` (e.g., `my-cluster-import`, `another-import`) becomes the name of a ClusterImport resource. The `clusters` field contains an array of cluster selectors with the following optional fields:
+
+- `name`: The name of the cluster to import from Netbox
+- `region`: The region where the cluster is located
+- `type`: The type of cluster (e.g., `compute`, `storage`)
+
+#### Update
+
+`Update` resources allow you to update cluster configurations based on Netbox data. The structure is identical to ClusterImport resources.
+
+**Values Configuration:**
+
+```yaml
+update:
+  my-cluster-update:
+    clusters:
+      - name: "prod-cluster-01"
+        region: "us-west"
+        type: "compute"
+      - name: "prod-cluster-02"
+        region: "us-east"
+        type: "storage"
+  scheduled-update:
+    clusters:
+      - region: "emea"
+        type: "compute"
+```
+
+The cluster selectors support the same fields as ClusterImport:
+
+- `name`: The name of the cluster to update from Netbox
+- `region`: The region where the cluster is located
+- `type`: The type of cluster
+
+**Note:** All fields in the cluster selectors are optional. You can use any combination of `name`, `region`, and `type` to select clusters from Netbox.
+
+**Example Installation with ClusterImport and Update:**
+
+```sh
+helm install argora-operator dist/chart --set-string credentials.netboxToken=mytoken \
+  --set-file values=custom-values.yaml
+```
+
+Where `custom-values.yaml` contains:
+
+```yaml
+credentials:
+  bmcUser: "admin"
+  bmcPassword: "password"
+  netboxToken: "your-netbox-token"
+
+netboxURL: "https://netbox.example.com"
+
+clusterImport:
+  initial-import:
+    clusters:
+      - name: "cluster1"
+        region: "emea"
+        type: "compute"
+
+update:
+  periodic-sync:
+    clusters:
+      - region: "emea"
+        type: "compute"
+```
+
 Refer to the `values.yaml` file for more details on each configuration option.
 
 ## Uninstallation
