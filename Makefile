@@ -33,10 +33,13 @@ endif
 
 default: build-all
 
-tilt: FORCE helm-build-local-image
+kind-up:
+	kind create cluster -n kind || true
+
+tilt: FORCE helm-build-local-image kind-up
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
-tilt-debug: FORCE helm-build-local-image
+tilt-debug: FORCE helm-build-local-image kind-up
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE) --TARGET debug
 
 ##@ kubebuilder
@@ -399,7 +402,7 @@ run-typos: FORCE install-typos
 
 build/cover.out: FORCE generate install-setup-envtest | build
 	@printf "\e[1;36m>> Running tests\e[0m\n"
-	KUBEBUILDER_ASSETS=$$(setup-envtest use 1.33 -p path) go run github.com/onsi/ginkgo/v2/ginkgo run --randomize-all -output-dir=build $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=argora -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' -covermode=count -coverpkg=$(subst $(space),$(comma),$(GO_COVERPKGS)) $(GO_TESTFLAGS) $(GO_TESTPKGS)
+	KUBEBUILDER_ASSETS=$$(setup-envtest use 1.34 -p path) go run github.com/onsi/ginkgo/v2/ginkgo run --randomize-all -output-dir=build $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=argora -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' -covermode=count -coverpkg=$(subst $(space),$(comma),$(GO_COVERPKGS)) $(GO_TESTFLAGS) $(GO_TESTPKGS)
 	@awk < build/coverprofile.out '$$1 != "mode:" { is_filename[$$1] = true; counts1[$$1]+=$$2; counts2[$$1]+=$$3 } END { for (filename in is_filename) { printf "%s %d %d\n", filename, counts1[filename], counts2[filename]; } }' | sort | $(SED) '1s/^/mode: count\n/' > $@
 
 build/cover.html: build/cover.out

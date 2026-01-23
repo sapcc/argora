@@ -11,16 +11,14 @@ import (
 	"os"
 	"time"
 
-	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
+	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
 	"github.com/sapcc/go-api-declarations/bininfo"
 	"go.uber.org/zap/zapcore"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
-	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,7 +36,9 @@ import (
 	ironcorev1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 
 	"github.com/sapcc/argora/internal/controller"
 	"github.com/sapcc/argora/internal/credentials"
@@ -87,6 +87,7 @@ func init() {
 	utilruntime.Must(ipamv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ironcorev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(ipamv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -190,8 +191,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "update")
 		os.Exit(1)
 	}
+
 	if err = controller.NewIPPoolImportReconciler(mgr, creds, status.NewIPPoolImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "IPPoolImport")
+		setupLog.Error(err, "unable to create controller", "controller", "ippoolimport")
+		os.Exit(1)
+	}
+
+	if err = controller.NewIPUpdateReconciler(mgr, creds, netbox.NewNetbox(flagVar.netboxURL)).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ipupdate")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
