@@ -64,7 +64,10 @@ deploy_cert_manager()
 deploy_bmo_crd()
 deploy_metal_crd()
 
-k8s_yaml('hack/deploy/cluster-api-components.yaml')
+load('ext://namespace', 'namespace_create', 'namespace_inject')
+namespace_create('argora-system')
+
+# k8s_yaml('hack/deploy/cluster-api-components.yaml')
 k8s_yaml('hack/deploy/cluster.yaml')
 k8s_yaml('crd/argora.cloud.sap_clusterimports.yaml')
 k8s_yaml('crd/argora.cloud.sap_ippoolimports.yaml')
