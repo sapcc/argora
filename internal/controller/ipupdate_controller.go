@@ -48,14 +48,14 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling update")
 
-	// ipAddress := &ipamv1.IPAddress{}
-	// err := r.k8sClient.Get(ctx, req.NamespacedName, ipAddress)
-	// if err != nil {
-	// 	logger.Error(err, "unable to get IP Address CR")
-	// 	return ctrl.Result{}, err
-	// }
+	ipAddress := &ipamv1.IPAddress{}
+	err := r.k8sClient.Get(ctx, req.NamespacedName, ipAddress)
+	if err != nil {
+		logger.Error(err, "unable to get IP Address CR")
+		return ctrl.Result{}, err
+	}
 
-	err := r.credentials.Reload()
+	err = r.credentials.Reload()
 	if err != nil {
 		logger.Error(err, "unable to reload credentials")
 		return ctrl.Result{}, err
@@ -68,6 +68,10 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Error(err, "unable to reload netbox")
 		return ctrl.Result{}, err
 	}
+
+	// ... perform update operations with r.netBox and ipAddress ...
+
+	logger.Info("reconcile completed successfully")
 
 	return ctrl.Result{}, nil
 }
