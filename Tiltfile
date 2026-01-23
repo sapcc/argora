@@ -68,11 +68,17 @@ load('ext://namespace', 'namespace_create', 'namespace_inject')
 namespace_create('argora-system')
 
 # k8s_yaml('hack/deploy/cluster-api-components.yaml')
-k8s_yaml('hack/deploy/cluster.yaml')
+
+k8s_yaml('hack/crd/cluster.x-k8s.io_clusters.yaml')
+k8s_yaml('hack/crd/ipam.cluster.x-k8s.io_ipaddresses.yaml')
+k8s_yaml('hack/crd/ipam.cluster.x-k8s.io_ipaddressclaims.yaml')
+k8s_yaml('hack/crd/ipam.cluster.x-k8s.io_globalinclusterippools.yaml')
 k8s_yaml('crd/argora.cloud.sap_clusterimports.yaml')
 k8s_yaml('crd/argora.cloud.sap_ippoolimports.yaml')
 k8s_yaml('crd/argora.cloud.sap_updates.yaml')
 k8s_yaml('dist/install.yaml')
+
+k8s_yaml('hack/deploy/cluster.yaml')
 k8s_yaml('config/samples/argora_v1alpha1_update.yaml')
 k8s_yaml('config/samples/argora_v1alpha1_clusterimport.yaml')
 
