@@ -34,12 +34,12 @@ endif
 default: build-all
 
 kind-up:
-	kind create cluster -n kind || true
+	kind get clusters | grep kind || kind create cluster -n kind
 
-tilt: FORCE helm-build-local-image kind-up
+tilt: FORCE generate helm-build-local-image kind-up
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
-tilt-debug: FORCE helm-build-local-image kind-up
+tilt-debug: FORCE generate helm-build-local-image kind-up
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE) --TARGET debug
 
 ##@ kubebuilder
