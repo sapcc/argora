@@ -85,6 +85,7 @@ type ListPrefixesRequest struct {
 	contains string
 	region   string
 	role     string
+	prefix   string
 }
 
 type ListPrefixesRequestOption func(c *ListPrefixesRequest)
@@ -122,6 +123,14 @@ func PrefixWithRole(role string) ListPrefixesRequestOption {
 	return opt
 }
 
+func PrefixWithPrefix(prefix string) ListPrefixesRequestOption {
+	opt := func(r *ListPrefixesRequest) {
+		r.prefix = prefix
+	}
+
+	return opt
+}
+
 func (r *ListPrefixesRequest) BuildRequest() models.ListPrefixesRequest {
 	listPrefixesRequest := models.ListPrefixesRequest{}
 	if r.contains != "" {
@@ -132,6 +141,9 @@ func (r *ListPrefixesRequest) BuildRequest() models.ListPrefixesRequest {
 	}
 	if r.role != "" {
 		listPrefixesRequest.Role = r.role
+	}
+	if r.prefix != "" {
+		listPrefixesRequest.Prefix = r.prefix
 	}
 	return listPrefixesRequest
 }

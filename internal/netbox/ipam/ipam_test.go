@@ -213,12 +213,31 @@ var _ = Describe("IPAM", func() {
 		It("should return an error when IP address is not found", func() {
 			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
 				Expect(opts.Address).To(Equal("192.168.1.2"))
-				return &models.ListIPAddressesResponse{Results: []models.IPAddress{}}, nil
+				return &models.ListIPAddressesResponse{
+					Results: []models.IPAddress{},
+				}, nil
 			}
 
 			_, err := ipamService.GetIPAddressByAddress("192.168.1.2")
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of IP addresses found with address 192.168.1.2: 0"))
+			Expect(err).To(MatchError("no IP addresses found with address 192.168.1.2: no objects found"))
+			Expect(errors.Is(err, ipam.ErrNoObjectsFound)).To(BeTrue())
+		})
+
+		It("should return an error when multiple IP addresses are found", func() {
+			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+				Expect(opts.Address).To(Equal("192.168.1.3"))
+				return &models.ListIPAddressesResponse{
+					Results: []models.IPAddress{
+						{NestedIPAddress: models.NestedIPAddress{Address: "192.168.1.3/32"}},
+						{NestedIPAddress: models.NestedIPAddress{Address: "192.168.1.3/24"}},
+					},
+				}, nil
+			}
+
+			_, err := ipamService.GetIPAddressByAddress("192.168.1.3")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of IP addresses found with address 192.168.1.3: 2"))
 		})
 	})
 
@@ -369,6 +388,137 @@ var _ = Describe("IPAM", func() {
 			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "network")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to list prefixes in region eu-central with role network: API error"))
+		})
+	})
+
+	Describe("GetPrefixesByPrefix", func() {
+		It("should return the prefixes for the specified prefix", func() {
+			mockClient.ListPrefixesFunc = func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+				Expect(opts.Prefix).To(Equal("10.0.0.0/16"))
+				return &models.ListPrefixesReponse{
+					Results: []models.Prefix{
+						{ID: 1, Prefix: "10.0.0.0/16"},
+						{ID: 2, Prefix: "10.0.0.0/16"},
+					},
+				}, nil
+			}
+
+			prefixes, err := ipamService.GetPrefixesByPrefix("10.0.0.0/16")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(prefixes).To(HaveLen(2))
+			Expect(prefixes[0].Prefix).To(Equal("10.0.0.0/16"))
+		})
+
+		It("should return an error when no prefixes are found", func() {
+			mockClient.ListPrefixesFunc = func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+				Expect(opts.Region).To(Equal("eu-central"))
+				Expect(opts.Role).To(Equal("storage"))
+				return &models.ListPrefixesReponse{Results: []models.Prefix{}}, nil
+			}
+
+			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "storage")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("prefixes in region eu-central with role storage not found"))
+		})
+
+		It("should return an error when unable to list prefixes", func() {
+			mockClient.ListPrefixesFunc = func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+				return nil, errors.New("API error")
+			}
+
+			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "network")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to list prefixes in region eu-central with role network: API error"))
+		})
+	})
+
+	Describe("CreateIPAddress", func() {
+		It("should create IP address successfully", func() {
+			mockClient.CreateIPAddressFunc = func(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+				Expect(ip.Address).To(Equal("123.123.123.123/24"))
+				Expect(ip.Tenant).To(Equal(1))
+				Expect(ip.AssignedObjectID).To(Equal(2))
+				Expect(ip.Vrf).To(Equal(3))
+				return &models.IPAddress{
+					NestedIPAddress:   models.NestedIPAddress{Address: ip.Address},
+					Tenant:            models.Tenant{NestedTenant: models.NestedTenant{ID: ip.Tenant}},
+					AssignedInterface: models.NestedInterface{ID: ip.AssignedObjectID},
+					Vrf:               models.VRF{NestedVRF: models.NestedVRF{ID: ip.Vrf}},
+				}, nil
+			}
+
+			gotAddr, err := ipamService.CreateIPAddress(ipam.CreateIPAddressParams{
+				Address:     "123.123.123.123/24",
+				TenantID:    1,
+				InterfaceID: 2,
+				VrfID:       3,
+			})
+
+			Expect(err).To(Succeed())
+			Expect(gotAddr.NestedIPAddress.Address).To(Equal("123.123.123.123/24"))
+			Expect(gotAddr.Tenant.ID).To(Equal(1))
+			Expect(gotAddr.AssignedInterface.ID).To(Equal(2))
+			Expect(gotAddr.Vrf.(models.VRF).ID).To(Equal(3))
+		})
+		It("should fail on client failure", func() {
+			mockClient.CreateIPAddressFunc = func(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+				return nil, errors.New("API error")
+			}
+
+			_, err := ipamService.CreateIPAddress(ipam.CreateIPAddressParams{
+				Address:     "123.123.123.123/24",
+				TenantID:    1,
+				InterfaceID: 2,
+				VrfID:       3,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to create ip address: API error"))
+		})
+	})
+
+	Describe("UpdateIPAddress", func() {
+		It("should create IP address successfully", func() {
+			mockClient.UpdateIPAddressFunc = func(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+				Expect(ip.Address).To(Equal("123.123.123.123/24"))
+				Expect(ip.Tenant).To(Equal(1))
+				Expect(ip.AssignedObjectID).To(Equal(2))
+				Expect(ip.Vrf).To(Equal(3))
+				return &models.IPAddress{
+					NestedIPAddress:   models.NestedIPAddress{Address: ip.Address},
+					Tenant:            models.Tenant{NestedTenant: models.NestedTenant{ID: ip.Tenant}},
+					AssignedInterface: models.NestedInterface{ID: ip.AssignedObjectID},
+					Vrf:               models.VRF{NestedVRF: models.NestedVRF{ID: ip.Vrf}},
+				}, nil
+			}
+
+			gotAddr, err := ipamService.UpdateIPAddress(models.WriteableIPAddress{
+				NestedIPAddress:  models.NestedIPAddress{Address: "123.123.123.123/24"},
+				Tenant:           1,
+				AssignedObjectID: 2,
+				Vrf:              3,
+			})
+
+			Expect(err).To(Succeed())
+			Expect(gotAddr.NestedIPAddress.Address).To(Equal("123.123.123.123/24"))
+			Expect(gotAddr.Tenant.ID).To(Equal(1))
+			Expect(gotAddr.AssignedInterface.ID).To(Equal(2))
+			Expect(gotAddr.Vrf.(models.VRF).ID).To(Equal(3))
+		})
+		It("should fail on client failure", func() {
+			mockClient.UpdateIPAddressFunc = func(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+				return nil, errors.New("API error")
+			}
+
+			_, err := ipamService.UpdateIPAddress(models.WriteableIPAddress{
+				NestedIPAddress:  models.NestedIPAddress{Address: "123.123.123.123/24"},
+				Tenant:           1,
+				AssignedObjectID: 2,
+				Vrf:              3,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unable to update ip address: API error"))
 		})
 	})
 
