@@ -6,6 +6,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
@@ -47,8 +48,9 @@ func (r *IPUpdateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddresses;ipaddressclaims,verbs=list;watch;update;patch
-// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverclaims;servers,verbs=list;watch;update;patch
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddresses,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;list;watch
+// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverclaims;servers,verbs=list;get;watch
 
 func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -75,7 +77,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	deviceName, err := r.findDeviceName(ctx, ipAddress)
+	deviceName, err := r.findDeviceName(ctx, req.Namespace, ipAddress)
 	if err != nil {
 		logger.Error(err, "unable to find device name")
 		return ctrl.Result{}, err
@@ -114,14 +116,11 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, ipAddr *ipamv1.IPAddress) (string, error) {
-	claimName := getOwnerByKind(ipAddr.OwnerReferences, "IPAddressClaim")
-	if claimName == "" {
-		return "", fmt.Errorf("no IPAddressClaim owner found for IPAddress %s", ipAddr.Name)
-	}
+func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) (string, error) {
+	claimName := ipAddr.Spec.ClaimRef.Name
 
 	ipClaim := &ipamv1.IPAddressClaim{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: ipAddr.Namespace, Name: claimName}, ipClaim); err != nil {
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: claimName}, ipClaim); err != nil {
 		return "", fmt.Errorf("get IpAddressClaim: %w", err)
 	}
 
@@ -131,7 +130,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, ipAddr *ipamv1.
 	}
 
 	serverClaim := &metalv1alpha1.ServerClaim{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: ipClaim.Namespace, Name: serverClaimName}, serverClaim); err != nil {
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaimName}, serverClaim); err != nil {
 		return "", fmt.Errorf("get ServerClaim: %w", err)
 	}
 
@@ -140,7 +139,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, ipAddr *ipamv1.
 	}
 
 	server := &metalv1alpha1.Server{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: serverClaim.Namespace, Name: serverClaim.Spec.ServerRef.Name}, server); err != nil {
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaim.Spec.ServerRef.Name}, server); err != nil {
 		return "", fmt.Errorf("get Server: %w", err)
 	}
 
@@ -163,20 +162,31 @@ func getOwnerByKind(owners []metav1.OwnerReference, kind string) string {
 
 func (r *IPUpdateReconciler) findTargetInterface(interfaces []models.Interface) (models.Interface, error) {
 	var target models.Interface
-	found := false
+	maxLag := ""
+
+	// \d+ - one or more digits, ^ and $ - exact match, (?i) - case-independent
+	re := regexp.MustCompile(`(?i)^LAG(\d+)$`)
 
 	for _, iface := range interfaces {
-		name := strings.ToUpper(iface.Name)
+		if strings.ToLower(iface.Type.Value) != "lag" {
+			continue
+		}
 
-		if strings.HasPrefix(name, "LAG") {
-			if !found || iface.Name > target.Name { // "LAG1" > "LAG0" returns true
-				target = iface
-				found = true
-			}
+		m := re.FindStringSubmatch(iface.Name)
+		if len(m) != 2 {
+			continue
+		}
+
+		// Add leading zeros, because "10" > "6" is false
+		padded := fmt.Sprintf("%03s", m[1])
+
+		if padded > maxLag {
+			maxLag = padded
+			target = iface
 		}
 	}
 
-	if !found {
+	if maxLag == "" {
 		return models.Interface{}, fmt.Errorf("no LAG interface found for device")
 	}
 
