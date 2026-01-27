@@ -5,18 +5,21 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	"github.com/sapcc/go-netbox-go/models"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
+
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
-	"github.com/sapcc/go-netbox-go/models"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -183,7 +186,7 @@ func (r *IPUpdateReconciler) findTargetInterface(interfaces []models.Interface) 
 	}
 
 	if maxLag == "" {
-		return models.Interface{}, fmt.Errorf("no LAG interface found for device")
+		return models.Interface{}, errors.New("no LAG interface found for device")
 	}
 
 	return target, nil
