@@ -98,8 +98,6 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("found interfaces", "interfaces", interfaces)
-
 	targetInterface, err := r.findTargetInterface(interfaces)
 	if err != nil {
 		logger.Error(err, "unable to find target interface")
@@ -164,8 +162,7 @@ func (r *IPUpdateReconciler) findTargetInterface(interfaces []models.Interface) 
 	var target models.Interface
 	maxLag := ""
 
-	// \d+ - one or more digits, ^ and $ - exact match, (?i) - case-independent
-	re := regexp.MustCompile(`(?i)^LAG(\d+)$`)
+	re := regexp.MustCompile(`^LAG(\d)$`)
 
 	for _, iface := range interfaces {
 		if strings.ToLower(iface.Type.Value) != "lag" {
@@ -177,11 +174,10 @@ func (r *IPUpdateReconciler) findTargetInterface(interfaces []models.Interface) 
 			continue
 		}
 
-		// Add leading zeros, because "10" > "6" is false
-		padded := fmt.Sprintf("%03s", m[1])
+		lag := m[1]
 
-		if padded > maxLag {
-			maxLag = padded
+		if lag > maxLag {
+			maxLag = lag
 			target = iface
 		}
 	}
