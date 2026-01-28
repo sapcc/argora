@@ -8,7 +8,7 @@ import (
 	"errors"
 	"time"
 
-	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
+	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
 	"github.com/sapcc/go-netbox-go/models"
 
@@ -16,13 +16,13 @@ import (
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/status"
 
+	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

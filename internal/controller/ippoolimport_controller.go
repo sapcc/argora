@@ -12,15 +12,17 @@ import (
 	"strings"
 	"time"
 
+	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
+
 	"github.com/sapcc/go-netbox-go/models"
 	"golang.org/x/time/rate"
 	"k8s.io/client-go/util/workqueue"
-	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
+	ipamv1alpha2 "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
+
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/status"

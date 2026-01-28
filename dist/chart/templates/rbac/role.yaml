@@ -100,6 +100,15 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ipam.cluster.x-k8s.io
+  resources:
+  - ipaddresses
+  verbs:
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - metal.ironcore.dev
   resources:
   - bmcs
