@@ -203,6 +203,97 @@ var _ = Describe("IP Update Controller", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 		})
+
+		It("fails when IPAddressClaim does not exist", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			ipClaim := &ipamv1.IPAddressClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-claim", Namespace: resourceNamespace,
+			}, ipClaim)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, ipClaim)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("get IpAddressClaim"))
+		})
+
+		It("fails when IPAddressClaim has no ServerClaim owner", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			ipClaim := &ipamv1.IPAddressClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-claim", Namespace: resourceNamespace,
+			}, ipClaim)).To(Succeed())
+
+			ipClaim.OwnerReferences = nil
+			Expect(k8sClient.Update(ctx, ipClaim)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no ServerClaim owner"))
+		})
+
+	})
+
+	Context("findTargetInterface", func() {
+		It("returns error when no LAG interfaces exist", func() {
+			r := &IPUpdateReconciler{}
+
+			_, err := r.findTargetInterface([]models.Interface{
+				{
+					Name: "eth0",
+					Type: models.InterfaceType{Value: "1000base-t"},
+				},
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no LAG interface"))
+		})
+
+		It("returns the only LAG interface when only one exists", func() {
+			r := &IPUpdateReconciler{}
+
+			iface, err := r.findTargetInterface([]models.Interface{
+				{
+					Name: "LAG0",
+					Type: models.InterfaceType{Value: "lag"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(iface.Name).To(Equal("LAG0"))
+		})
+
+		It("returns the highest numbered LAG interface", func() {
+			r := &IPUpdateReconciler{}
+
+			iface, err := r.findTargetInterface([]models.Interface{
+				{
+					Name: "LAG0",
+					Type: models.InterfaceType{Value: "lag"},
+				},
+				{
+					Name: "LAG2",
+					Type: models.InterfaceType{Value: "lag"},
+				},
+				{
+					Name: "LAG1",
+					Type: models.InterfaceType{Value: "lag"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(iface.Name).To(Equal("LAG2"))
+		})
 	})
 })
 

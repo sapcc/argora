@@ -99,8 +99,17 @@ rules:
 - apiGroups:
   - ipam.cluster.x-k8s.io
   resources:
+  - ipaddressclaims
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ipam.cluster.x-k8s.io
+  resources:
   - ipaddresses
   verbs:
+  - get
   - list
   - patch
   - update
@@ -118,6 +127,14 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - metal.ironcore.dev
+  resources:
+  - serverclaims
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - metal3.io
