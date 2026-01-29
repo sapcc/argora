@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"github.com/go-logr/logr"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
@@ -107,7 +109,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger = logger.WithValues("interface", targetInterface.Name)
 	logger.Info("target interface found")
 
-	err = r.reconcileNetboxIP(ctx, targetInterface, ipAddress)
+	err = r.reconcileNetboxIP(targetInterface, ipAddress, logger)
 	if err != nil {
 		logger.Error(err, "netbox ip reconciliation")
 		return ctrl.Result{}, err
@@ -118,70 +120,56 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-func (r *IPUpdateReconciler) reconcileNetboxIP(ctx context.Context, iface models.Interface, ipAddr *ipamv1.IPAddress) error {
-	neededAddress := ipAddr.Spec.Address
+func maskedIPAddr(ipAddr *ipamv1.IPAddress) string {
+	prefix := "32"
+	if ipAddr.Spec.Prefix != nil {
+		prefix = strconv.Itoa(int(*ipAddr.Spec.Prefix))
+	}
+
+	return ipAddr.Spec.Address + "/" + prefix
+}
+
+func (r *IPUpdateReconciler) reconcileNetboxIP(iface models.Interface, ipAddr *ipamv1.IPAddress, logger logr.Logger) error {
+	neededAddress := maskedIPAddr(ipAddr)
 	netboxAddresses, err := r.netBox.IPAM().GetIPAddressesForInterface(iface.ID)
 	if err != nil {
 		return err
 	}
 
-	switch len(netboxAddresses) {
-	case 0: // no addresses -> create
-		wIpAddr := models.WriteableIPAddress{
-			NestedIPAddress: models.NestedIPAddress{
-				ID:      0,
-				URL:     "",
-				Family:  nil,
-				Address: neededAddress,
-			},
-			Vrf:                0,
-			Tenant:             0,
-			Status:             "Active",
-			AssignedObjectType: "dcim.interface",
-			AssignedObjectID:   iface.ID,
-			NatInside:          0,
-			NatOutside:         0,
-			DNSName:            "",
-			Description:        "",
-			Tags:               []models.NestedTag{},
-			CustomFields:       nil,
-			Created:            "",
-			LastUpdated:        "",
-		}
-		_, err = r.netBox.IPAM().CreateIPAddress(wIpAddr)
-		if err != nil {
-			return err
-		}
-	case 1: // one ip -> either it's correct or update it
-		currAddr := netboxAddresses[0]
-		if currAddr.Address == neededAddress {
+	for _, addr := range netboxAddresses {
+		if addr.Address == neededAddress {
+			logger.Info("found matching ip address", "ip", neededAddress)
 			return nil
 		}
-
-		wIPAddr := models.WriteableIPAddress{
-			NestedIPAddress: models.NestedIPAddress{
-				ID:      currAddr.ID,
-				URL:     currAddr.URL,
-				Family:  currAddr.Family,
-				Address: neededAddress,
-			},
-		}
-
-		_, err = r.netBox.IPAM().UpdateIPAddress(wIPAddr)
-		if err != nil {
-			return err
-		}
-	default:
-		// edge case more then one ip, we cannot clarify which to update
-		// but if one address is equal to needed, then we can skip this
-		for _, addr := range netboxAddresses {
-			if addr.Address == neededAddress {
-				return nil
-			}
-		}
-
-		return fmt.Errorf("for interface %q exists more then 1 address, cannot clarify what to do", iface.Name)
 	}
+
+	wIpAddr := models.WriteableIPAddress{
+		NestedIPAddress: models.NestedIPAddress{
+			ID:      0,
+			URL:     "",
+			Family:  nil,
+			Address: neededAddress,
+		},
+		Vrf:                0,
+		Tenant:             0,
+		Status:             "active",
+		AssignedObjectType: "dcim.interface",
+		AssignedObjectID:   iface.ID,
+		NatInside:          0,
+		NatOutside:         0,
+		DNSName:            "",
+		Description:        "",
+		Tags:               []models.NestedTag{},
+		CustomFields:       nil,
+		Created:            "",
+		LastUpdated:        "",
+	}
+
+	_, err = r.netBox.IPAM().CreateIPAddress(wIpAddr)
+	if err != nil {
+		return err
+	}
+	logger.Info("ip address created", "ip", neededAddress)
 
 	return nil
 }
