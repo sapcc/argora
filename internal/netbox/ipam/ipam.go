@@ -19,6 +19,8 @@ type IPAM interface {
 	GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error)
 	GetPrefixesContaining(contains string) ([]models.Prefix, error)
 	GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error)
+	CreateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
 
 	DeleteIPAddress(id int) error
 }
@@ -124,4 +126,24 @@ func (i *IPAMService) DeleteIPAddress(id int) error {
 		return fmt.Errorf("unable to delete IP address (%d): %w", id, err)
 	}
 	return nil
+}
+
+func (i *IPAMService) CreateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+	i.logger.V(1).Info("create ipaddress", "addr", addr)
+	res, err := i.netboxAPI.CreateIPAddress(addr)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create ip address: %w", err)
+	}
+
+	return res, nil
+}
+
+func (i *IPAMService) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+	i.logger.V(1).Info("update ipaddress", "addr", addr)
+	res, err := i.netboxAPI.UpdateIPAddress(addr)
+	if err != nil {
+		return nil, fmt.Errorf("unable to update ip address: %w", err)
+	}
+
+	return res, nil
 }

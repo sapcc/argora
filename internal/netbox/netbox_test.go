@@ -102,6 +102,14 @@ func (m *MockIPAM) GetPrefixesByRegionRole(region, role string) ([]models.Prefix
 	return nil, nil
 }
 
+func (m *MockIPAM) CreateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+	return nil, nil
+}
+
+func (m *MockIPAM) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+	return nil, nil
+}
+
 func (m *MockIPAM) DeleteIPAddress(id int) error {
 	return nil
 }

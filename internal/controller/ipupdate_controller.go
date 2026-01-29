@@ -11,15 +11,13 @@ import (
 	"strings"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
-	"github.com/sapcc/go-netbox-go/models"
-	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
-
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
-
+	"github.com/sapcc/go-netbox-go/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -57,7 +55,7 @@ func (r *IPUpdateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling update")
+	logger.Info("reconciling update", "namespace_name", req.NamespacedName, "namespace", req.Name)
 
 	ipAddress := &ipamv1.IPAddress{}
 	err := r.k8sClient.Get(ctx, req.NamespacedName, ipAddress)
@@ -80,7 +78,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	deviceName, err := r.findDeviceName(ctx, req.Namespace, ipAddress)
+	deviceName, err := r.findDeviceName(ctx, ipAddress)
 	if err != nil {
 		logger.Error(err, "unable to find device name")
 		return ctrl.Result{}, err
@@ -110,18 +108,93 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger = logger.WithValues("interface", targetInterface.Name)
 	logger.Info("target interface found")
 
-	// ... perform update operations with r.netBox and ipAddress ...
+	err = r.reconcileNetboxIP(ctx, targetInterface, ipAddress)
+	if err != nil {
+		logger.Error(err, "netbox ip reconciliation")
+		return ctrl.Result{}, err
+	}
 
 	logger.Info("reconcile completed successfully")
 
 	return ctrl.Result{}, nil
 }
 
-func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) (string, error) {
-	claimName := ipAddr.Spec.ClaimRef.Name
+func (r *IPUpdateReconciler) reconcileNetboxIP(ctx context.Context, iface models.Interface, ipAddr *ipamv1.IPAddress) error {
+	neededAddress := ipAddr.Spec.Address
+	netboxAddresses, err := r.netBox.IPAM().GetIPAddressesForInterface(iface.ID)
+	if err != nil {
+		return err
+	}
+
+	switch len(netboxAddresses) {
+	case 0: // no addresses -> create
+		wIpAddr := models.WriteableIPAddress{
+			NestedIPAddress: models.NestedIPAddress{
+				ID:      0,
+				URL:     "",
+				Family:  nil,
+				Address: neededAddress,
+			},
+			Vrf:                0,
+			Tenant:             0,
+			Status:             "Active",
+			AssignedObjectType: "dcim.interface",
+			AssignedObjectID:   iface.ID,
+			NatInside:          0,
+			NatOutside:         0,
+			DNSName:            "",
+			Description:        "",
+			Tags:               []models.NestedTag{},
+			CustomFields:       nil,
+			Created:            "",
+			LastUpdated:        "",
+		}
+		_, err = r.netBox.IPAM().CreateIPAddress(wIpAddr)
+		if err != nil {
+			return err
+		}
+	case 1: // one ip -> either it's correct or update it
+		currAddr := netboxAddresses[0]
+		if currAddr.Address == neededAddress {
+			return nil
+		}
+
+		wIPAddr := models.WriteableIPAddress{
+			NestedIPAddress: models.NestedIPAddress{
+				ID:      currAddr.ID,
+				URL:     currAddr.URL,
+				Family:  currAddr.Family,
+				Address: neededAddress,
+			},
+		}
+
+		_, err = r.netBox.IPAM().UpdateIPAddress(wIPAddr)
+		if err != nil {
+			return err
+		}
+	default:
+		// edge case more then one ip, we cannot clarify which to update
+		// but if one address is equal to needed, then we can skip this
+		for _, addr := range netboxAddresses {
+			if addr.Address == neededAddress {
+				return nil
+			}
+		}
+
+		return fmt.Errorf("for interface %q exists more then 1 address, cannot clarify what to do", iface.Name)
+	}
+
+	return nil
+}
+
+func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, ipAddr *ipamv1.IPAddress) (string, error) {
+	claimName := getOwnerByKind(ipAddr.OwnerReferences, "IPAddressClaim")
+	if claimName == "" {
+		return "", fmt.Errorf("no IPAddressClaim owner found for IPAddress %s", ipAddr.Name)
+	}
 
 	ipClaim := &ipamv1.IPAddressClaim{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: claimName}, ipClaim); err != nil {
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: ipAddr.Namespace, Name: claimName}, ipClaim); err != nil {
 		return "", fmt.Errorf("get IpAddressClaim: %w", err)
 	}
 
@@ -131,7 +204,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 	}
 
 	serverClaim := &metalv1alpha1.ServerClaim{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaimName}, serverClaim); err != nil {
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: ipClaim.Namespace, Name: serverClaimName}, serverClaim); err != nil {
 		return "", fmt.Errorf("get ServerClaim: %w", err)
 	}
 
@@ -140,7 +213,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 	}
 
 	server := &metalv1alpha1.Server{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaim.Spec.ServerRef.Name}, server); err != nil {
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: serverClaim.Namespace, Name: serverClaim.Spec.ServerRef.Name}, server); err != nil {
 		return "", fmt.Errorf("get Server: %w", err)
 	}
 
