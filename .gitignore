@@ -28,7 +28,7 @@ go.work
 
 # custom
 bin/
-crd/
+/crd/
 hack/deploy/cluster.yaml
 helm/
 build/

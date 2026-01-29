@@ -12,7 +12,9 @@ import (
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/go-netbox-go/models"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
@@ -25,6 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+const ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
 
 // IPUpdateReconciler reconciles a ipam.cluster.x-k8s.io.IPAddress object
 type IPUpdateReconciler struct {
@@ -62,9 +66,14 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	ipAddress := &ipamv1.IPAddress{}
 	err := r.k8sClient.Get(ctx, req.NamespacedName, ipAddress)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 		logger.Error(err, "unable to get IP Address CR")
 		return ctrl.Result{}, err
 	}
+
+	logger = logger.WithValues("ipAddress", getIPWithMask(ipAddress))
 
 	err = r.credentials.Reload()
 	if err != nil {
@@ -80,13 +89,38 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	if !ipAddress.DeletionTimestamp.IsZero() {
+		ctx = log.IntoContext(ctx, logger)
+
+		if err = r.reconcileDelete(ctx, ipAddress); err != nil {
+			logger.Error(err, "unable to delete IP Address")
+			return ctrl.Result{}, err
+		}
+
+		controllerutil.RemoveFinalizer(ipAddress, ipAddressFinalizer)
+		if err = r.k8sClient.Update(ctx, ipAddress); err != nil {
+			logger.Error(err, "unable to update CR after removing finalizer")
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	if notExists := controllerutil.AddFinalizer(ipAddress, ipAddressFinalizer); notExists {
+		if err := r.k8sClient.Update(ctx, ipAddress); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
 	deviceName, err := r.findDeviceName(ctx, req.Namespace, ipAddress)
 	if err != nil {
 		logger.Error(err, "unable to find device name")
 		return ctrl.Result{}, err
 	}
 
-	logger = logger.WithValues("deviceName", deviceName, "deviceIP", ipAddress.Spec.Address)
+	logger = logger.WithValues("deviceName", deviceName)
 	logger.Info("device found")
 
 	device, err := r.netBox.DCIM().GetDeviceByName(deviceName)
@@ -115,6 +149,37 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info("reconcile completed successfully")
 
 	return ctrl.Result{}, nil
+}
+
+func getIPWithMask(ipaddr *ipamv1.IPAddress) string {
+	if ipaddr == nil || ipaddr.Spec.Prefix == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%s/%d", ipaddr.Spec.Address, *ipaddr.Spec.Prefix)
+}
+
+func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, ipAddr *ipamv1.IPAddress) error {
+	logger := log.FromContext(ctx)
+	logger.Info("deleting IP Address")
+
+	if !controllerutil.ContainsFinalizer(ipAddr, ipAddressFinalizer) {
+		return nil
+	}
+
+	ipStr := getIPWithMask(ipAddr)
+
+	nbIP, err := r.netBox.IPAM().GetIPAddressByAddress(ipStr)
+	if err != nil {
+		logger.Error(err, "unable to find IP netbox ip address, NetBox IP will not be removed")
+		return nil
+	}
+
+	if err = r.netBox.IPAM().DeleteIPAddress(nbIP.ID); err != nil {
+		return fmt.Errorf("delete ip from netbox: %w", err)
+	}
+
+	return nil
 }
 
 func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) (string, error) {
