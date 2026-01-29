@@ -193,6 +193,11 @@ type IPAMMock struct {
 
 	DeleteIPAddressFunc  func(id int) error
 	DeleteIPAddressCalls int
+
+	CreateIPAddressFunc  func(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	CreateIPAddressCalls int
+	UpdateIPAddressFunc  func(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	UpdateIPAddressCalls int
 }
 
 func (i *IPAMMock) GetVlanByName(vlanName string) (*models.Vlan, error) {
@@ -225,9 +230,19 @@ func (i *IPAMMock) GetPrefixesByRegionRole(region, role string) ([]models.Prefix
 	return i.GetPrefixesByRegionRoleFunc(region, role)
 }
 
+func (i *IPAMMock) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+	i.UpdateIPAddressCalls++
+	return i.UpdateIPAddressFunc(addr)
+}
+
 func (i *IPAMMock) DeleteIPAddress(id int) error {
 	i.DeleteIPAddressCalls++
 	return i.DeleteIPAddressFunc(id)
+}
+
+func (i *IPAMMock) CreateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+	i.CreateIPAddressCalls++
+	return i.CreateIPAddressFunc(addr)
 }
 
 type ExtrasMock struct {
