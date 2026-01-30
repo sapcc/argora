@@ -97,17 +97,21 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 
-		controllerutil.RemoveFinalizer(ipAddress, ipAddressFinalizer)
-		if err = r.k8sClient.Update(ctx, ipAddress); err != nil {
-			logger.Error(err, "unable to update CR after removing finalizer")
-			return ctrl.Result{}, err
+		base := ipAddress.DeepCopy()
+		if removed := controllerutil.RemoveFinalizer(ipAddress, ipAddressFinalizer); removed {
+			if err := r.k8sClient.Patch(ctx, ipAddress, client.MergeFrom(base)); err != nil {
+				logger.Error(err, "unable to remove finalizer")
+				return ctrl.Result{}, err
+			}
 		}
 
 		return ctrl.Result{}, nil
 	}
 
-	if notExists := controllerutil.AddFinalizer(ipAddress, ipAddressFinalizer); notExists {
-		if err := r.k8sClient.Update(ctx, ipAddress); err != nil {
+	base := ipAddress.DeepCopy()
+	if added := controllerutil.AddFinalizer(ipAddress, ipAddressFinalizer); added {
+		if err := r.k8sClient.Patch(ctx, ipAddress, client.MergeFrom(base)); err != nil {
+			logger.Error(err, "unable to add finalizer")
 			return ctrl.Result{}, err
 		}
 
@@ -162,10 +166,6 @@ func getIPWithMask(ipaddr *ipamv1.IPAddress) string {
 func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, ipAddr *ipamv1.IPAddress) error {
 	logger := log.FromContext(ctx)
 	logger.Info("deleting IP Address")
-
-	if !controllerutil.ContainsFinalizer(ipAddr, ipAddressFinalizer) {
-		return nil
-	}
 
 	ipStr := getIPWithMask(ipAddr)
 
