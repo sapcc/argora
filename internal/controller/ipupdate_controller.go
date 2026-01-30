@@ -109,7 +109,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger = logger.WithValues("interface", targetInterface.Name)
 	logger.Info("target interface found")
 
-	err = r.reconcileNetboxIP(targetInterface, ipAddress, logger)
+	err = r.reconcileNetboxIP(targetInterface, ipAddress, device.Tenant.ID, logger)
 	if err != nil {
 		logger.Error(err, "netbox ip reconciliation")
 		return ctrl.Result{}, err
@@ -129,7 +129,7 @@ func maskedIPAddr(ipAddr *ipamv1.IPAddress) string {
 	return ipAddr.Spec.Address + "/" + prefix
 }
 
-func (r *IPUpdateReconciler) reconcileNetboxIP(iface models.Interface, ipAddr *ipamv1.IPAddress, logger logr.Logger) error {
+func (r *IPUpdateReconciler) reconcileNetboxIP(iface models.Interface, ipAddr *ipamv1.IPAddress, tenantID int, logger logr.Logger) error {
 	neededAddress := maskedIPAddr(ipAddr)
 	netboxAddresses, err := r.netBox.IPAM().GetIPAddressesForInterface(iface.ID)
 	if err != nil {
@@ -151,7 +151,7 @@ func (r *IPUpdateReconciler) reconcileNetboxIP(iface models.Interface, ipAddr *i
 			Address: neededAddress,
 		},
 		Vrf:                0,
-		Tenant:             0,
+		Tenant:             tenantID,
 		Status:             "active",
 		AssignedObjectType: "dcim.interface",
 		AssignedObjectID:   iface.ID,

@@ -352,6 +352,8 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			Expect(err).To(Succeed())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).CreateIPAddressCalls).To(Equal(1))
 		})
 
 		It("create IP address if no matching ip exist", func() {
@@ -377,6 +379,8 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			Expect(err).To(Succeed())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).CreateIPAddressCalls).To(Equal(1))
 		})
 
 		It("do nothing if there is matching ip", func() {
@@ -399,6 +403,7 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			Expect(err).To(Succeed())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceCalls).To(Equal(1))
 		})
 	})
 
