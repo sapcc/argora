@@ -179,7 +179,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 
 	ipClaim := &ipamv1.IPAddressClaim{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: claimName}, ipClaim); err != nil {
-		return "", fmt.Errorf("get IpAddressClaim: %w", err)
+		return "", fmt.Errorf("failed to get IPAddressClaim for IPAddress: %w", err)
 	}
 
 	serverClaimName := getOwnerByKind(ipClaim.OwnerReferences, "ServerClaim")
