@@ -21,6 +21,10 @@ import (
 	"github.com/sapcc/argora/internal/credentials"
 )
 
+const ipAddressString = "192.168.1.100"
+const ipAddressMask int32 = 24
+const fullIpAddress = "192.168.1.100/24"
+
 var _ = Describe("IP Update Controller", func() {
 	const resourceName = "test-resource"
 	const resourceNamespace = "default"
@@ -79,7 +83,17 @@ var _ = Describe("IP Update Controller", func() {
 						}, nil
 					},
 				},
-				IPAMMock:   &mock.IPAMMock{},
+				IPAMMock: &mock.IPAMMock{
+					GetIPAddressesForInterfaceFunc: func(interfaceID int) ([]models.IPAddress, error) {
+						return []models.IPAddress{
+							{
+								NestedIPAddress: models.NestedIPAddress{
+									Address: fullIpAddress,
+								},
+							},
+						}, nil
+					},
+				},
 				ExtrasMock: &mock.ExtrasMock{},
 			}
 
@@ -174,7 +188,7 @@ var _ = Describe("IP Update Controller", func() {
 					Namespace: resourceNamespace,
 				},
 				Spec: ipamv1.IPAddressSpec{
-					Address: "192.168.1.100",
+					Address: ipAddressString,
 					PoolRef: ipamv1.IPPoolReference{
 						Name:     "test-ippool",
 						APIGroup: "ipam.cluster.x-k8s.io",
@@ -183,7 +197,7 @@ var _ = Describe("IP Update Controller", func() {
 					ClaimRef: ipamv1.IPAddressClaimReference{
 						Name: "test-claim",
 					},
-					Prefix: ptr.To(int32(24)),
+					Prefix: ptr.To(ipAddressMask),
 				},
 			}
 
@@ -198,7 +212,7 @@ var _ = Describe("IP Update Controller", func() {
 			}
 		})
 
-		It("should successfully reconcile the CR", func() {
+		It("leshould successfully reconci the CR", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
@@ -322,6 +336,70 @@ var _ = Describe("IP Update Controller", func() {
 			Expect(err.Error()).To(ContainSubstring("has no bmcRef name"))
 		})
 
+		It("create IP address if ips don't exist", func() {
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.IPAMMock = &mock.IPAMMock{
+				GetIPAddressesForInterfaceFunc: func(interfaceID int) ([]models.IPAddress, error) {
+					return []models.IPAddress{}, nil
+				},
+				CreateIPAddressFunc: func(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+					return &models.IPAddress{}, nil
+				},
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(Succeed())
+		})
+
+		It("create IP address if no matching ip exist", func() {
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.IPAMMock = &mock.IPAMMock{
+				GetIPAddressesForInterfaceFunc: func(interfaceID int) ([]models.IPAddress, error) {
+					return []models.IPAddress{
+						{
+							NestedIPAddress: models.NestedIPAddress{Address: "100.0.0.1/12"},
+						},
+						{
+							NestedIPAddress: models.NestedIPAddress{Address: "100.0.3.1/12"},
+						},
+					}, nil
+				},
+				CreateIPAddressFunc: func(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+					return &models.IPAddress{}, nil
+				},
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(Succeed())
+		})
+
+		It("do nothing if there is matching ip", func() {
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.IPAMMock = &mock.IPAMMock{
+				GetIPAddressesForInterfaceFunc: func(interfaceID int) ([]models.IPAddress, error) {
+					return []models.IPAddress{
+						{
+							NestedIPAddress: models.NestedIPAddress{Address: "100.0.0.1/12"},
+						},
+						{
+							NestedIPAddress: models.NestedIPAddress{Address: fullIpAddress},
+						},
+					}, nil
+				},
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(Succeed())
+		})
 	})
 
 	Context("findTargetInterface", func() {
