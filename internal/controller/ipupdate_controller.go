@@ -132,7 +132,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 
 	serverClaim := &metalv1alpha1.ServerClaim{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaimName}, serverClaim); err != nil {
-		return "", fmt.Errorf("get ServerClaim: %w", err)
+		return "", fmt.Errorf("failed to get ServerClaim: %w", err)
 	}
 
 	if serverClaim.Spec.ServerRef == nil {
@@ -141,7 +141,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 
 	server := &metalv1alpha1.Server{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaim.Spec.ServerRef.Name}, server); err != nil {
-		return "", fmt.Errorf("get Server: %w", err)
+		return "", fmt.Errorf("failed to get Server referenced by ServerClaim: %w", err)
 	}
 
 	if server.Spec.BMCRef.Name == "" {
