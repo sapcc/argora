@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/sapcc/argora/internal/netbox/ipam"
 	"github.com/sapcc/go-netbox-go/models"
 )
 
@@ -102,7 +103,7 @@ func (m *MockIPAM) GetPrefixesByRegionRole(region, role string) ([]models.Prefix
 	return nil, nil
 }
 
-func (m *MockIPAM) CreateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+func (m *MockIPAM) CreateIPAddress(addr ipam.CreateIPAddressParams) (*models.IPAddress, error) {
 	return nil, nil
 }
 

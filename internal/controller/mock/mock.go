@@ -194,7 +194,7 @@ type IPAMMock struct {
 	DeleteIPAddressFunc  func(id int) error
 	DeleteIPAddressCalls int
 
-	CreateIPAddressFunc  func(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	CreateIPAddressFunc  func(params ipam.CreateIPAddressParams) (*models.IPAddress, error)
 	CreateIPAddressCalls int
 	UpdateIPAddressFunc  func(addr models.WriteableIPAddress) (*models.IPAddress, error)
 	UpdateIPAddressCalls int
@@ -240,9 +240,9 @@ func (i *IPAMMock) DeleteIPAddress(id int) error {
 	return i.DeleteIPAddressFunc(id)
 }
 
-func (i *IPAMMock) CreateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+func (i *IPAMMock) CreateIPAddress(params ipam.CreateIPAddressParams) (*models.IPAddress, error) {
 	i.CreateIPAddressCalls++
-	return i.CreateIPAddressFunc(addr)
+	return i.CreateIPAddressFunc(params)
 }
 
 type ExtrasMock struct {

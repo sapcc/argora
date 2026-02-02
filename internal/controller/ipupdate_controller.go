@@ -15,6 +15,7 @@ import (
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
+	"github.com/sapcc/argora/internal/netbox/ipam"
 	"github.com/sapcc/go-netbox-go/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,6 +25,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+var ErrIPAssignedAsAnotherDevicePrimaryAddress = errors.New("ip is already assigned as primary to another device")
+var ErrIPAssignToAnotherDevice = errors.New("ip assigned to another device")
+var ErrIPAssignedToAnotherInteface = errors.New("ip assigned to another interface")
 
 // IPUpdateReconciler reconciles a ipam.cluster.x-k8s.io.IPAddress object
 type IPUpdateReconciler struct {
@@ -109,7 +114,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger = logger.WithValues("interface", targetInterface.Name)
 	logger.Info("target interface found")
 
-	err = r.reconcileNetboxIP(targetInterface, ipAddress, device.Tenant.ID, logger)
+	err = r.reconcileNetbox(targetInterface, device, ipAddress, logger)
 	if err != nil {
 		logger.Error(err, "netbox ip reconciliation")
 		return ctrl.Result{}, err
@@ -129,52 +134,97 @@ func maskedIPAddr(ipAddr *ipamv1.IPAddress) string {
 	return ipAddr.Spec.Address + "/" + prefix
 }
 
-func (r *IPUpdateReconciler) reconcileNetboxIP(iface models.Interface, ipAddr *ipamv1.IPAddress, tenantID int, logger logr.Logger) error {
-	neededAddress := maskedIPAddr(ipAddr)
-	netboxAddresses, err := r.netBox.IPAM().GetIPAddressesForInterface(iface.ID)
+func (r *IPUpdateReconciler) reconcileNetbox(
+	iface models.Interface,
+	device *models.Device,
+	ipAddr *ipamv1.IPAddress,
+	logger logr.Logger,
+) error {
+	addr, err := r.reconcileNetboxAddressIP(iface, ipAddr, device, logger)
 	if err != nil {
 		return err
 	}
 
-	for _, addr := range netboxAddresses {
-		if addr.Address == neededAddress {
-			logger.Info("found matching ip address", "ip", neededAddress)
-			return nil
-		}
-	}
-
-	wIpAddr := models.WriteableIPAddress{
-		NestedIPAddress: models.NestedIPAddress{
-			ID:      0,
-			URL:     "",
-			Family:  nil,
-			Address: neededAddress,
-		},
-		Vrf:                0,
-		Tenant:             tenantID,
-		Status:             "active",
-		AssignedObjectType: "dcim.interface",
-		AssignedObjectID:   iface.ID,
-		NatInside:          0,
-		NatOutside:         0,
-		DNSName:            "",
-		Description:        "",
-		Tags:               []models.NestedTag{},
-		CustomFields:       nil,
-		Created:            "",
-		LastUpdated:        "",
-	}
-
-	_, err = r.netBox.IPAM().CreateIPAddress(wIpAddr)
+	err = r.reconcileDevicePrimaryIP(addr, device, logger)
 	if err != nil {
 		return err
 	}
-	logger.Info("ip address created", "ip", neededAddress)
 
 	return nil
 }
 
-func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) (string, error) {
+func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
+	iface models.Interface,
+	ipAddr *ipamv1.IPAddress,
+	newDevice *models.Device,
+	logger logr.Logger,
+) (*models.IPAddress, error) {
+	neededAddress := maskedIPAddr(ipAddr)
+	addr, err := r.netBox.IPAM().GetIPAddressByAddress(neededAddress)
+	if err != nil {
+		logger.Info("no ip address found, creating ip")
+		ipParams := ipam.CreateIPAddressParams{
+			Address:     neededAddress,
+			TenantID:    newDevice.Tenant.ID,
+			InterfaceID: iface.ID,
+		}
+
+		addr, err = r.netBox.IPAM().CreateIPAddress(ipParams)
+		if err != nil {
+			return nil, err
+		}
+		logger.Info("ip address created", "ip", neededAddress)
+
+		return addr, nil
+	}
+
+	if addr.AssignedInterface.ID != iface.ID {
+		return addr, fmt.Errorf("%w, old interface %d, adr %d",
+			ErrIPAssignedToAnotherInteface, addr.AssignedInterface.ID, addr.ID)
+	}
+
+	logger.Info("ip is assigned to needed interface")
+
+	oldDeviceID := addr.AssignedInterface.Device.ID
+	if newDevice.ID != oldDeviceID {
+		err := fmt.Errorf("%w old device %d, newDevice %d, addr %d",
+			ErrIPAssignToAnotherDevice, addr.AssignedInterface.Device.ID, newDevice.ID, addr.ID)
+		return nil, err
+	}
+
+	logger.Info("ip is assigned to needed device")
+
+	return addr, nil
+}
+
+func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
+	addr *models.IPAddress,
+	device *models.Device,
+	logger logr.Logger,
+) error {
+	if device.PrimaryIP.ID == addr.ID {
+		logger.Info("primary device id is same", "ipaddres_id", addr.ID)
+		return nil
+	}
+
+	wDevice := device.Writeable()
+	wDevice.PrimaryIP4 = addr.ID
+
+	_, err := r.netBox.DCIM().UpdateDevice(wDevice)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("primary device id updated", "device_id", device.ID, "address_id", addr.ID)
+
+	return nil
+}
+
+func (r *IPUpdateReconciler) findDeviceName(
+	ctx context.Context,
+	namespace string,
+	ipAddr *ipamv1.IPAddress,
+) (string, error) {
 	claimName := ipAddr.Spec.ClaimRef.Name
 
 	ipClaim := &ipamv1.IPAddressClaim{}
@@ -188,7 +238,8 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 	}
 
 	serverClaim := &metalv1alpha1.ServerClaim{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaimName}, serverClaim); err != nil {
+	err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaimName}, serverClaim)
+	if err != nil {
 		return "", fmt.Errorf("get ServerClaim: %w", err)
 	}
 
@@ -197,7 +248,8 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 	}
 
 	server := &metalv1alpha1.Server{}
-	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaim.Spec.ServerRef.Name}, server); err != nil {
+	err = r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaim.Spec.ServerRef.Name}, server)
+	if err != nil {
 		return "", fmt.Errorf("get Server: %w", err)
 	}
 

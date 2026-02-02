@@ -5,6 +5,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -19,11 +20,14 @@ import (
 
 	"github.com/sapcc/argora/internal/controller/mock"
 	"github.com/sapcc/argora/internal/credentials"
+	"github.com/sapcc/argora/internal/netbox/ipam"
 )
 
 const ipAddressString = "192.168.1.100"
 const ipAddressMask int32 = 24
-const fullIpAddress = "192.168.1.100/24"
+const fullIPAddress = "192.168.1.100/24"
+const interfaceID = 123
+const deviceID = 321
 
 var _ = Describe("IP Update Controller", func() {
 	const resourceName = "test-resource"
@@ -60,19 +64,22 @@ var _ = Describe("IP Update Controller", func() {
 				ReturnError:        false,
 				VirtualizationMock: &mock.VirtualizationMock{},
 				DCIMMock: &mock.DCIMMock{
-					GetDeviceByNameFunc: func(deviceName string) (*models.Device, error) {
+					GetDeviceByNameFunc: func(_ string) (*models.Device, error) {
 						return &models.Device{
-							ID:   1,
+							ID:   deviceID,
 							Name: "node013-ap002",
 						}, nil
 					},
-					GetInterfacesForDeviceFunc: func(device *models.Device) ([]models.Interface, error) {
+					GetInterfacesForDeviceFunc: func(_ *models.Device) ([]models.Interface, error) {
 						return []models.Interface{
 							{
 								Name: "LAG0",
 								Type: models.InterfaceType{Value: "lag"},
 							},
 							{
+								NestedInterface: models.NestedInterface{
+									ID: interfaceID,
+								},
 								Name: "LAG1",
 								Type: models.InterfaceType{Value: "lag"},
 							},
@@ -84,16 +91,22 @@ var _ = Describe("IP Update Controller", func() {
 					},
 				},
 				IPAMMock: &mock.IPAMMock{
-					GetIPAddressesForInterfaceFunc: func(interfaceID int) ([]models.IPAddress, error) {
-						return []models.IPAddress{
-							{
-								NestedIPAddress: models.NestedIPAddress{
-									Address: fullIpAddress,
+					GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
+						return &models.IPAddress{
+							NestedIPAddress: models.NestedIPAddress{
+								Address: fullIPAddress,
+							},
+							AssignedObjectID: interfaceID,
+							AssignedInterface: models.NestedInterface{
+								ID: interfaceID,
+								Device: models.NestedDevice{
+									ID: deviceID,
 								},
 							},
 						}, nil
 					},
 				},
+
 				ExtrasMock: &mock.ExtrasMock{},
 			}
 
@@ -336,13 +349,13 @@ var _ = Describe("IP Update Controller", func() {
 			Expect(err.Error()).To(ContainSubstring("has no bmcRef name"))
 		})
 
-		It("create IP address if ips don't exist", func() {
+		It("create IP address if address don't exist", func() {
 			netBoxMock := prepareNetboxMock()
 			netBoxMock.IPAMMock = &mock.IPAMMock{
-				GetIPAddressesForInterfaceFunc: func(interfaceID int) ([]models.IPAddress, error) {
-					return []models.IPAddress{}, nil
+				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
+					return nil, errors.New("not exists")
 				},
-				CreateIPAddressFunc: func(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+				CreateIPAddressFunc: func(_ ipam.CreateIPAddressParams) (*models.IPAddress, error) {
 					return &models.IPAddress{}, nil
 				},
 			}
@@ -352,47 +365,35 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			Expect(err).To(Succeed())
-			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceCalls).To(Equal(1))
-			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).CreateIPAddressCalls).To(Equal(1))
-		})
-
-		It("create IP address if no matching ip exist", func() {
-			netBoxMock := prepareNetboxMock()
-			netBoxMock.IPAMMock = &mock.IPAMMock{
-				GetIPAddressesForInterfaceFunc: func(interfaceID int) ([]models.IPAddress, error) {
-					return []models.IPAddress{
-						{
-							NestedIPAddress: models.NestedIPAddress{Address: "100.0.0.1/12"},
-						},
-						{
-							NestedIPAddress: models.NestedIPAddress{Address: "100.0.3.1/12"},
-						},
-					}, nil
-				},
-				CreateIPAddressFunc: func(addr models.WriteableIPAddress) (*models.IPAddress, error) {
-					return &models.IPAddress{}, nil
-				},
-			}
-
-			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
-
-			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
-
-			Expect(err).To(Succeed())
-			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).CreateIPAddressCalls).To(Equal(1))
 		})
 
 		It("do nothing if there is matching ip", func() {
 			netBoxMock := prepareNetboxMock()
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+
+			Expect(err).To(Succeed())
+		})
+
+		It("raise error if ip exists, and assigned to another interface", func() {
+			netBoxMock := prepareNetboxMock()
 			netBoxMock.IPAMMock = &mock.IPAMMock{
-				GetIPAddressesForInterfaceFunc: func(interfaceID int) ([]models.IPAddress, error) {
-					return []models.IPAddress{
-						{
-							NestedIPAddress: models.NestedIPAddress{Address: "100.0.0.1/12"},
+				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress: models.NestedIPAddress{
+							Address: fullIPAddress,
 						},
-						{
-							NestedIPAddress: models.NestedIPAddress{Address: fullIpAddress},
+						AssignedInterface: models.NestedInterface{
+							ID: -1,
+							Device: models.NestedDevice{
+								ID: deviceID,
+							},
 						},
 					}, nil
 				},
@@ -402,8 +403,34 @@ var _ = Describe("IP Update Controller", func() {
 
 			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
-			Expect(err).To(Succeed())
-			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressesForInterfaceCalls).To(Equal(1))
+			Expect(err).To(HaveOccurred())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+		})
+
+		It("raise error if ip exists, and assigned to another device", func() {
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.IPAMMock = &mock.IPAMMock{
+				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress: models.NestedIPAddress{
+							Address: fullIPAddress,
+						},
+						AssignedInterface: models.NestedInterface{
+							ID: interfaceID,
+							Device: models.NestedDevice{
+								ID: -1,
+							},
+						},
+					}, nil
+				},
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(HaveOccurred())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
 		})
 	})
 

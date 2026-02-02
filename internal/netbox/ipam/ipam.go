@@ -19,7 +19,7 @@ type IPAM interface {
 	GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error)
 	GetPrefixesContaining(contains string) ([]models.Prefix, error)
 	GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error)
-	CreateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	CreateIPAddress(addr CreateIPAddressParams) (*models.IPAddress, error)
 	UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
 
 	DeleteIPAddress(id int) error
@@ -128,7 +128,34 @@ func (i *IPAMService) DeleteIPAddress(id int) error {
 	return nil
 }
 
-func (i *IPAMService) CreateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+type CreateIPAddressParams struct {
+	Address     string
+	TenantID    int
+	InterfaceID int
+}
+
+func (i *IPAMService) CreateIPAddress(params CreateIPAddressParams) (*models.IPAddress, error) {
+	addr := models.WriteableIPAddress{
+		NestedIPAddress: models.NestedIPAddress{
+			ID:      0,
+			URL:     "",
+			Family:  nil,
+			Address: params.Address,
+		},
+		Vrf:                0,
+		Tenant:             params.TenantID,
+		Status:             "active",
+		AssignedObjectType: "dcim.interface",
+		AssignedObjectID:   params.InterfaceID,
+		NatInside:          0,
+		NatOutside:         0,
+		DNSName:            "",
+		Description:        "",
+		Tags:               []models.NestedTag{},
+		CustomFields:       nil,
+		Created:            "",
+		LastUpdated:        "",
+	}
 	i.logger.V(1).Info("create ipaddress", "addr", addr)
 	res, err := i.netboxAPI.CreateIPAddress(addr)
 	if err != nil {
