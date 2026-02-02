@@ -21,6 +21,7 @@ type IPAM interface {
 	GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error)
 	CreateIPAddress(addr CreateIPAddressParams) (*models.IPAddress, error)
 	UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	GetPrefixByPrefix(prefix string) (models.Prefix, error)
 
 	DeleteIPAddress(id int) error
 }
@@ -119,6 +120,21 @@ func (i *IPAMService) GetPrefixesByRegionRole(region, role string) ([]models.Pre
 	return res.Results, nil
 }
 
+func (i *IPAMService) GetPrefixByPrefix(prefix string) (models.Prefix, error) {
+	listPrefixesRequest := NewListPrefixesRequest(
+		PreifxWithPrefix(prefix),
+	).BuildRequest()
+	i.logger.V(1).Info("list prefixes", "request", listPrefixesRequest)
+	res, err := i.netboxAPI.ListPrefixes(listPrefixesRequest)
+	if err != nil {
+		return models.Prefix{}, fmt.Errorf("unable to list prefixes with prefix %s: %w", prefix, err)
+	}
+	if len(res.Results) != 1 {
+		return models.Prefix{}, fmt.Errorf("unexpected number %v of prefixes for prefix %s", len(res.Results), prefix)
+	}
+	return res.Results[0], nil
+}
+
 func (i *IPAMService) DeleteIPAddress(id int) error {
 	i.logger.V(1).Info("delete IP address", "ID", id)
 	err := i.netboxAPI.DeleteIPAddress(id)
@@ -132,6 +148,7 @@ type CreateIPAddressParams struct {
 	Address     string
 	TenantID    int
 	InterfaceID int
+	VrfID       int
 }
 
 func (i *IPAMService) CreateIPAddress(params CreateIPAddressParams) (*models.IPAddress, error) {
@@ -142,7 +159,7 @@ func (i *IPAMService) CreateIPAddress(params CreateIPAddressParams) (*models.IPA
 			Family:  nil,
 			Address: params.Address,
 		},
-		Vrf:                0,
+		Vrf:                params.VrfID,
 		Tenant:             params.TenantID,
 		Status:             "active",
 		AssignedObjectType: "dcim.interface",

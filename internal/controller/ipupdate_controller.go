@@ -7,8 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -125,15 +125,6 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-func maskedIPAddr(ipAddr *ipamv1.IPAddress) string {
-	prefix := "32"
-	if ipAddr.Spec.Prefix != nil {
-		prefix = strconv.Itoa(int(*ipAddr.Spec.Prefix))
-	}
-
-	return ipAddr.Spec.Address + "/" + prefix
-}
-
 func (r *IPUpdateReconciler) reconcileNetbox(
 	iface models.Interface,
 	device *models.Device,
@@ -153,33 +144,43 @@ func (r *IPUpdateReconciler) reconcileNetbox(
 	return nil
 }
 
+func getPrefix(addres *ipamv1.IPAddress) (netip.Prefix, error) {
+	addr, err := netip.ParseAddr(addres.Spec.Address)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+
+	cidr := 32
+	if addres.Spec.Prefix != nil {
+		cidr = int(*addres.Spec.Prefix)
+	}
+
+	return netip.PrefixFrom(addr, cidr), nil
+}
+
 func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	iface models.Interface,
 	ipAddr *ipamv1.IPAddress,
 	newDevice *models.Device,
 	logger logr.Logger,
 ) (*models.IPAddress, error) {
-	neededAddress := maskedIPAddr(ipAddr)
-	addr, err := r.netBox.IPAM().GetIPAddressByAddress(neededAddress)
+	prefix, err := getPrefix(ipAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	addr, err := r.netBox.IPAM().GetIPAddressByAddress(prefix.String())
 	if err != nil {
 		logger.Info("no ip address found, creating ip")
-		ipParams := ipam.CreateIPAddressParams{
-			Address:     neededAddress,
-			TenantID:    newDevice.Tenant.ID,
-			InterfaceID: iface.ID,
-		}
-
-		addr, err = r.netBox.IPAM().CreateIPAddress(ipParams)
+		addr, err = r.createIPAddress(prefix, iface.ID, newDevice.Tenant.ID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create ip adddres: %w", err)
 		}
-		logger.Info("ip address created", "ip", neededAddress)
-
-		return addr, nil
+		logger.Info("ip address created", "ip", prefix)
 	}
 
 	if addr.AssignedInterface.ID != iface.ID {
-		return addr, fmt.Errorf("%w, old interface %d, adr %d",
+		return addr, fmt.Errorf("%w, old interface %d, addr %d",
 			ErrIPAssignedToAnotherInteface, addr.AssignedInterface.ID, addr.ID)
 	}
 
@@ -195,6 +196,27 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	logger.Info("ip is assigned to needed device")
 
 	return addr, nil
+}
+
+func (r *IPUpdateReconciler) createIPAddress(prefix netip.Prefix, ifaceID, tenantID int) (*models.IPAddress, error) {
+	netboxPrefix, err := r.netBox.IPAM().GetPrefixByPrefix(prefix.Masked().String())
+	if err != nil {
+		return nil, err
+	}
+
+	ipParams := ipam.CreateIPAddressParams{
+		Address:     prefix.String(),
+		TenantID:    tenantID,
+		InterfaceID: ifaceID,
+		VrfID:       netboxPrefix.Vrf.ID,
+	}
+
+	address, err := r.netBox.IPAM().CreateIPAddress(ipParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return address, nil
 }
 
 func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(

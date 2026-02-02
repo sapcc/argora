@@ -356,7 +356,12 @@ var _ = Describe("IP Update Controller", func() {
 					return nil, errors.New("not exists")
 				},
 				CreateIPAddressFunc: func(_ ipam.CreateIPAddressParams) (*models.IPAddress, error) {
-					return &models.IPAddress{}, nil
+					return &models.IPAddress{
+						AssignedInterface: models.NestedInterface{ID: interfaceID, Device: models.NestedDevice{ID: deviceID}},
+					}, nil
+				},
+				GetPrefixByPrefixFunc: func(_ string) (models.Prefix, error) {
+					return models.Prefix{}, nil
 				},
 			}
 
