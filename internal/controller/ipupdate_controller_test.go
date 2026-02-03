@@ -25,6 +25,7 @@ import (
 
 const ipAddressString = "192.168.1.100"
 const ipAddressMask int32 = 24
+const ipAddressID = 456
 const fullIPAddress = "192.168.1.100/24"
 const interfaceID = 123
 const deviceID = 321
@@ -66,8 +67,9 @@ var _ = Describe("IP Update Controller", func() {
 				DCIMMock: &mock.DCIMMock{
 					GetDeviceByNameFunc: func(_ string) (*models.Device, error) {
 						return &models.Device{
-							ID:   deviceID,
-							Name: "node013-ap002",
+							ID:        deviceID,
+							Name:      "node013-ap002",
+							PrimaryIP: models.NestedIPAddress{ID: ipAddressID},
 						}, nil
 					},
 					GetInterfacesForDeviceFunc: func(_ *models.Device) ([]models.Interface, error) {
@@ -94,6 +96,7 @@ var _ = Describe("IP Update Controller", func() {
 					GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
 						return &models.IPAddress{
 							NestedIPAddress: models.NestedIPAddress{
+								ID:      ipAddressID,
 								Address: fullIPAddress,
 							},
 							AssignedObjectID: interfaceID,
@@ -225,7 +228,7 @@ var _ = Describe("IP Update Controller", func() {
 			}
 		})
 
-		It("leshould successfully reconci the CR", func() {
+		It("should successfully reconcile the CR", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
@@ -357,6 +360,7 @@ var _ = Describe("IP Update Controller", func() {
 				},
 				CreateIPAddressFunc: func(_ ipam.CreateIPAddressParams) (*models.IPAddress, error) {
 					return &models.IPAddress{
+						NestedIPAddress:   models.NestedIPAddress{ID: ipAddressID},
 						AssignedInterface: models.NestedInterface{ID: interfaceID, Device: models.NestedDevice{ID: deviceID}},
 					}, nil
 				},
@@ -436,6 +440,65 @@ var _ = Describe("IP Update Controller", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+		})
+
+		It("updates device primary ip if is not matching", func() {
+			netBoxMock := prepareNetboxMock()
+			dcimMock := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcimMock.GetDeviceByNameFunc = func(_ string) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+			dcimMock.UpdateDeviceFunc = func(_ models.WritableDeviceWithConfigContext) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+
+			Expect(err).To(Succeed())
+		})
+
+		It("updates device primary ip if is not matching", func() {
+			netBoxMock := prepareNetboxMock()
+			dcimMock := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcimMock.GetDeviceByNameFunc = func(_ string) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+			dcimMock.UpdateDeviceFunc = func(_ models.WritableDeviceWithConfigContext) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(Succeed())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+		})
+
+		It("raise error if error appear on device primary ip update", func() {
+			netBoxMock := prepareNetboxMock()
+			dcimMock := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcimMock.GetDeviceByNameFunc = func(_ string) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+			updateErr := errors.New("new error")
+			dcimMock.UpdateDeviceFunc = func(_ models.WritableDeviceWithConfigContext) (*models.Device, error) {
+				return nil, updateErr
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(HaveOccurred())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+			Expect(err).To(MatchError(updateErr))
 		})
 	})
 

@@ -238,6 +238,9 @@ func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
 		return nil
 	}
 
+	logger.Info("updating device primary id", "device_id", device.ID,
+		"current_primary_ip", device.PrimaryIP.ID, "needed_primary_ip", addr.ID)
+
 	wDevice := device.Writeable()
 	wDevice.PrimaryIP4 = addr.ID
 
