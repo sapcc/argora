@@ -256,9 +256,9 @@ func capiCRDExists(k8sClient client.Client) (bool, error) {
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return false, nil
-		} else {
-			return false, err
 		}
+
+		return false, err
 	}
 	return true, nil
 }

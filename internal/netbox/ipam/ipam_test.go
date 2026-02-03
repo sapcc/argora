@@ -213,12 +213,31 @@ var _ = Describe("IPAM", func() {
 		It("should return an error when IP address is not found", func() {
 			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
 				Expect(opts.Address).To(Equal("192.168.1.2"))
-				return &models.ListIPAddressesResponse{Results: []models.IPAddress{}}, nil
+				return &models.ListIPAddressesResponse{
+					Results: []models.IPAddress{},
+				}, nil
 			}
 
 			_, err := ipamService.GetIPAddressByAddress("192.168.1.2")
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError("unexpected number of IP addresses found with address 192.168.1.2: 0"))
+			Expect(err).To(MatchError("no IP addresses found with address 192.168.1.2: no objects found"))
+			Expect(errors.Is(err, ipam.ErrNoObjectsFound)).To(BeTrue())
+		})
+
+		It("should return an error when multiple IP addresses are found", func() {
+			mockClient.ListIPAddressesFunc = func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error) {
+				Expect(opts.Address).To(Equal("192.168.1.3"))
+				return &models.ListIPAddressesResponse{
+					Results: []models.IPAddress{
+						{NestedIPAddress: models.NestedIPAddress{Address: "192.168.1.3/32"}},
+						{NestedIPAddress: models.NestedIPAddress{Address: "192.168.1.3/24"}},
+					},
+				}, nil
+			}
+
+			_, err := ipamService.GetIPAddressByAddress("192.168.1.3")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("unexpected number of IP addresses found with address 192.168.1.3: 2"))
 		})
 	})
 
