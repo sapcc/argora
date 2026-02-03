@@ -122,7 +122,7 @@ func (i *IPAMService) GetPrefixesByRegionRole(region, role string) ([]models.Pre
 
 func (i *IPAMService) GetPrefixesByPrefix(prefix string) ([]models.Prefix, error) {
 	listPrefixesRequest := NewListPrefixesRequest(
-		PreifxWithPrefix(prefix),
+		PrefixWithPrefix(prefix),
 	).BuildRequest()
 	i.logger.V(1).Info("list prefixes", "request", listPrefixesRequest)
 	res, err := i.netboxAPI.ListPrefixes(listPrefixesRequest)
@@ -151,24 +151,12 @@ type CreateIPAddressParams struct {
 func (i *IPAMService) CreateIPAddress(params CreateIPAddressParams) (*models.IPAddress, error) {
 	addr := models.WriteableIPAddress{
 		NestedIPAddress: models.NestedIPAddress{
-			ID:      0,
-			URL:     "",
-			Family:  nil,
 			Address: params.Address,
 		},
 		Vrf:                params.VrfID,
 		Tenant:             params.TenantID,
-		Status:             "active",
 		AssignedObjectType: "dcim.interface",
 		AssignedObjectID:   params.InterfaceID,
-		NatInside:          0,
-		NatOutside:         0,
-		DNSName:            "",
-		Description:        "",
-		Tags:               []models.NestedTag{},
-		CustomFields:       nil,
-		Created:            "",
-		LastUpdated:        "",
 	}
 	i.logger.V(1).Info("create ipaddress", "addr", addr)
 	res, err := i.netboxAPI.CreateIPAddress(addr)

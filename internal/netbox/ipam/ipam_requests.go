@@ -123,7 +123,7 @@ func PrefixWithRole(role string) ListPrefixesRequestOption {
 	return opt
 }
 
-func PreifxWithPrefix(prefix string) ListPrefixesRequestOption {
+func PrefixWithPrefix(prefix string) ListPrefixesRequestOption {
 	opt := func(r *ListPrefixesRequest) {
 		r.prefix = prefix
 	}

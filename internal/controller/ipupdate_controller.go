@@ -19,6 +19,7 @@ import (
 	"github.com/sapcc/go-netbox-go/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -144,24 +145,21 @@ func (r *IPUpdateReconciler) reconcileNetbox(
 	return nil
 }
 
-func getPrefix(addres *ipamv1.IPAddress) (netip.Prefix, error) {
-	addr, err := netip.ParseAddr(addres.Spec.Address)
+func getPrefix(address *ipamv1.IPAddress) (netip.Prefix, error) {
+	addr, err := netip.ParseAddr(address.Spec.Address)
 	if err != nil {
 		return netip.Prefix{}, err
 	}
 
-	cidr := 32
-	if addres.Spec.Prefix != nil {
-		cidr = int(*addres.Spec.Prefix)
-	}
+	cidr := ptr.Deref(address.Spec.Prefix, 32)
 
-	return netip.PrefixFrom(addr, cidr), nil
+	return netip.PrefixFrom(addr, int(cidr)), nil
 }
 
 func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	iface models.Interface,
 	ipAddr *ipamv1.IPAddress,
-	newDevice *models.Device,
+	neededDevice *models.Device,
 	logger logr.Logger,
 ) (*models.IPAddress, error) {
 	prefix, err := getPrefix(ipAddr)
@@ -173,7 +171,7 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	addr, err := r.netBox.IPAM().GetIPAddressByAddress(prefix.String())
 	if err != nil {
 		logger.Info("no ip address found, creating ip")
-		addr, err = r.createIPAddress(prefix, iface.ID, newDevice.Tenant.ID, logger)
+		addr, err = r.createIPAddress(prefix, iface.ID, neededDevice.Tenant.ID, logger)
 		if err != nil {
 			return nil, fmt.Errorf("create ip adddres: %w", err)
 		}
@@ -189,10 +187,10 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 
 	logger.Info("ip is assigned to needed interface")
 
-	oldDeviceID := addr.AssignedInterface.Device.ID
-	if newDevice.ID != oldDeviceID {
+	currDeviceID := addr.AssignedInterface.Device.ID
+	if neededDevice.ID != currDeviceID {
 		err := fmt.Errorf("%w old device %d, newDevice %d, addr %d",
-			ErrIPAssignToAnotherDevice, addr.AssignedInterface.Device.ID, newDevice.ID, addr.ID)
+			ErrIPAssignToAnotherDevice, addr.AssignedInterface.Device.ID, neededDevice.ID, addr.ID)
 		return nil, err
 	}
 
@@ -236,7 +234,7 @@ func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
 	logger logr.Logger,
 ) error {
 	if device.PrimaryIP.ID == addr.ID {
-		logger.Info("primary device id is same", "ipaddres_id", addr.ID)
+		logger.Info("primary device id is same", "ipaddress_id", addr.ID)
 		return nil
 	}
 

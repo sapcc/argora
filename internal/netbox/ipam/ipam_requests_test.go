@@ -42,4 +42,20 @@ var _ = Describe("BuildRequest", func() {
 			Expect(req.InterfaceID).To(BeZero())
 		})
 	})
+
+	Context("ListPrefixesWithPrefix", func() {
+		It("should build request with context", func() {
+			req := ipam.NewListPrefixesRequest(
+				ipam.PrefixWithPrefix("123.123.123.0/24"),
+			).BuildRequest()
+
+			Expect(req.Prefix).To(Equal("123.123.123.0/24"))
+		})
+
+		It("should build request without prefix", func() {
+			req := ipam.NewListPrefixesRequest().BuildRequest()
+
+			Expect(req.Prefix).To(BeZero())
+		})
+	})
 })
