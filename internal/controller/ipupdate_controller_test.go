@@ -5,13 +5,13 @@ package controller
 
 import (
 	"context"
+	"errors"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sapcc/go-netbox-go/models"
 	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -53,141 +53,152 @@ var _ = Describe("IP Update Controller", func() {
 		}
 
 		prepareNetboxMock := func() *mock.NetBoxMock {
-			netBoxMock := &mock.NetBoxMock{
-				ReturnError:        false,
-				VirtualizationMock: &mock.VirtualizationMock{},
-				DCIMMock: &mock.DCIMMock{
-					GetDeviceByNameFunc: func(deviceName string) (*models.Device, error) {
-						return &models.Device{
-							ID:   1,
-							Name: "node013-ap002",
-						}, nil
-					},
-					GetInterfacesForDeviceFunc: func(device *models.Device) ([]models.Interface, error) {
-						return []models.Interface{
-							{
-								Name: "LAG0",
-								Type: models.InterfaceType{Value: "lag"},
-							},
-							{
-								Name: "LAG1",
-								Type: models.InterfaceType{Value: "lag"},
-							},
-							{
-								Name: "eth0",
-								Type: models.InterfaceType{Value: "1000base-t"},
-							},
-						}, nil
-					},
+			dcimMock := &mock.DCIMMock{
+				GetDeviceByNameFunc: func(deviceName string) (*models.Device, error) {
+					return &models.Device{
+						ID:   1,
+						Name: "node013-ap002",
+					}, nil
 				},
+				GetInterfacesForDeviceFunc: func(device *models.Device) ([]models.Interface, error) {
+					return []models.Interface{
+						{
+							Name: "LAG0",
+							Type: models.InterfaceType{Value: "lag"},
+						},
+						{
+							Name: "LAG1",
+							Type: models.InterfaceType{Value: "lag"},
+						},
+					}, nil
+				},
+			}
+
+			return &mock.NetBoxMock{
+				DCIMMock:   dcimMock,
 				IPAMMock:   &mock.IPAMMock{},
 				ExtrasMock: &mock.ExtrasMock{},
 			}
-
-			return netBoxMock
 		}
 
 		BeforeEach(func() {
-			By("create Server CR")
-			serverName := "test-server"
-			server := &metalv1alpha1.Server{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Name: serverName, Namespace: resourceNamespace}, server)
-			if err != nil && apierrors.IsNotFound(err) {
-				resource := &metalv1alpha1.Server{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      serverName,
-						Namespace: resourceNamespace,
-					},
-					Spec: metalv1alpha1.ServerSpec{
-						SystemUUID: "test_uuid",
-						BMCRef: &v1.LocalObjectReference{
-							Name: "node013-ap002",
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			By("reset Server CR")
+			server := &metalv1alpha1.Server{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: resourceNamespace,
+				},
 			}
 
-			By("create ServerClaim CR")
-			serverClaimName := "test-server-claim"
-			serverClaim := &metalv1alpha1.ServerClaim{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: serverClaimName, Namespace: resourceNamespace}, serverClaim)
-			if err != nil && apierrors.IsNotFound(err) {
-				resource := &metalv1alpha1.ServerClaim{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      serverClaimName,
-						Namespace: resourceNamespace,
-					},
-					Spec: metalv1alpha1.ServerClaimSpec{
-						ServerRef: &v1.LocalObjectReference{
-							Name: serverName,
-						},
-						Image: "gardenlinux:latest",
-						Power: "On",
-					},
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			server.Spec = metalv1alpha1.ServerSpec{
+				SystemUUID: "test_uuid",
+				BMCRef: &v1.LocalObjectReference{
+					Name: "node013-ap002",
+				},
 			}
 
-			By("create IPAM IPAddressClaim CR")
-			ipClaimName := "test-claim"
-			ipClaim := &ipamv1.IPAddressClaim{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: ipClaimName, Namespace: resourceNamespace}, ipClaim)
-			if err != nil && apierrors.IsNotFound(err) {
-				resource := &ipamv1.IPAddressClaim{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      ipClaimName,
-						Namespace: resourceNamespace,
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion: "metal.ironcore.dev/v1alpha1",
-								Kind:       "ServerClaim",
-								Name:       serverClaimName,
-								UID:        "fake-uid",
-							},
-						},
-					},
-					Spec: ipamv1.IPAddressClaimSpec{
-						PoolRef: ipamv1.IPPoolReference{
-							Name:     "test-pool",
-							Kind:     "GlobalInClusterIPPool",
-							APIGroup: "ipam.cluster.x-k8s.io",
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			Expect(k8sClient.Create(ctx, server)).To(Succeed())
+
+			By("reset ServerClaim CR")
+			serverClaim := &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server-claim",
+					Namespace: resourceNamespace,
+				},
 			}
 
-			By("create IPAM IPAddress CR")
-			err = k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)
-			if err != nil && apierrors.IsNotFound(err) {
-				resource := &ipamv1.IPAddress{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: resourceNamespace,
-					},
-					Spec: ipamv1.IPAddressSpec{
-						Address: "192.168.1.100",
-						PoolRef: ipamv1.IPPoolReference{
-							Name:     "test-ippool",
-							APIGroup: "ipam.cluster.x-k8s.io",
-							Kind:     "IPPool",
-						},
-						ClaimRef: ipamv1.IPAddressClaimReference{
-							Name: "test-claim",
-						},
-						Prefix: ptr.To(int32(24)),
-					},
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			serverClaim.Spec = metalv1alpha1.ServerClaimSpec{
+				ServerRef: &v1.LocalObjectReference{
+					Name: "test-server",
+				},
+				Image: "gardenlinux:latest",
+				Power: "On",
 			}
+
+			Expect(k8sClient.Create(ctx, serverClaim)).To(Succeed())
+
+			By("reset IPAM IPAddressClaim CR")
+			ipClaim := &ipamv1.IPAddressClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-claim",
+					Namespace: resourceNamespace,
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "metal.ironcore.dev/v1alpha1",
+							Kind:       "ServerClaim",
+							Name:       "test-server-claim",
+							UID:        "fake-uid",
+						},
+					},
+				},
+				Spec: ipamv1.IPAddressClaimSpec{
+					PoolRef: ipamv1.IPPoolReference{
+						Name:     "test-pool",
+						Kind:     "GlobalInClusterIPPool",
+						APIGroup: "ipam.cluster.x-k8s.io",
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, ipClaim)).To(Succeed())
+
+			By("reset IPAM IPAddress CR")
+			ipAddress.ObjectMeta = metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: resourceNamespace,
+			}
+
+			ipAddress = &ipamv1.IPAddress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: resourceNamespace,
+				},
+				Spec: ipamv1.IPAddressSpec{
+					Address: "192.168.1.100",
+					PoolRef: ipamv1.IPPoolReference{
+						Name:     "test-ippool",
+						APIGroup: "ipam.cluster.x-k8s.io",
+						Kind:     "IPPool",
+					},
+					ClaimRef: ipamv1.IPAddressClaimReference{
+						Name: "test-claim",
+					},
+					Prefix: ptr.To(int32(24)),
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, ipAddress)).To(Succeed())
 		})
 
 		AfterEach(func() {
-			By("delete IPAM IPAddress CR")
-			err := k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, ipAddress)).To(Succeed())
+			By("cleanup IPAM IPAddress")
+			ipAddress := &ipamv1.IPAddress{}
+			if err := k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress); err == nil {
+				_ = k8sClient.Delete(ctx, ipAddress)
+			}
+
+			By("cleanup IPAM IPAddressClaim")
+			ipClaim := &ipamv1.IPAddressClaim{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-claim", Namespace: resourceNamespace,
+			}, ipClaim); err == nil {
+				_ = k8sClient.Delete(ctx, ipClaim)
+			}
+
+			By("cleanup ServerClaim")
+			serverClaim := &metalv1alpha1.ServerClaim{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-server-claim", Namespace: resourceNamespace,
+			}, serverClaim); err == nil {
+				_ = k8sClient.Delete(ctx, serverClaim)
+			}
+
+			By("cleanup Server")
+			server := &metalv1alpha1.Server{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-server", Namespace: resourceNamespace,
+			}, server); err == nil {
+				_ = k8sClient.Delete(ctx, server)
 			}
 		})
 
@@ -202,6 +213,249 @@ var _ = Describe("IP Update Controller", func() {
 
 			// then
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("fails when IPAddressClaim does not exist", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			ipClaim := &ipamv1.IPAddressClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-claim", Namespace: resourceNamespace,
+			}, ipClaim)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, ipClaim)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get IPAddressClaim for IPAddress:"))
+		})
+
+		It("fails when IPAddressClaim has no ServerClaim owner", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			ipClaim := &ipamv1.IPAddressClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-claim", Namespace: resourceNamespace,
+			}, ipClaim)).To(Succeed())
+
+			ipClaim.OwnerReferences = nil
+			Expect(k8sClient.Update(ctx, ipClaim)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no ServerClaim owner"))
+		})
+
+		It("fails when ServerClaim is not yet bound to a Server", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			By("recreating ServerClaim without ServerRef")
+			serverClaim := &metalv1alpha1.ServerClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "test-server-claim",
+				Namespace: resourceNamespace,
+			}, serverClaim)).To(Succeed())
+
+			Expect(k8sClient.Delete(ctx, serverClaim)).To(Succeed())
+
+			serverClaim = &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server-claim",
+					Namespace: resourceNamespace,
+				},
+				Spec: metalv1alpha1.ServerClaimSpec{
+					Image: "gardenlinux:latest",
+					Power: "On",
+				},
+			}
+			Expect(k8sClient.Create(ctx, serverClaim)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not yet bound to a server"))
+		})
+
+		It("fails when referenced Server does not exist", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			server := &metalv1alpha1.Server{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "test-server",
+				Namespace: resourceNamespace,
+			}, server)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, server)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get Server referenced by ServerClaim"))
+		})
+
+		It("fails when Server has no BMCRef name", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			server := &metalv1alpha1.Server{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "test-server",
+				Namespace: resourceNamespace,
+			}, server)).To(Succeed())
+
+			server.Spec.BMCRef.Name = ""
+			Expect(k8sClient.Update(ctx, server)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("has no bmcRef name"))
+		})
+
+		It("fails when referenced ServerClaim does not exist", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			serverClaim := &metalv1alpha1.ServerClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "test-server-claim",
+				Namespace: resourceNamespace,
+			}, serverClaim)).To(Succeed())
+
+			Expect(k8sClient.Delete(ctx, serverClaim)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get ServerClaim"))
+		})
+
+		It("fails when NetBox cannot find device by name", func() {
+			netBoxMock := prepareNetboxMock()
+
+			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcim.GetDeviceByNameFunc = func(deviceName string) (*models.Device, error) {
+				return nil, errors.New("device not found")
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("device not found"))
+		})
+
+		It("fails when NetBox cannot list interfaces for device", func() {
+			netBoxMock := prepareNetboxMock()
+
+			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+				return nil, errors.New("failed to list interfaces")
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to list interfaces"))
+		})
+
+		It("fails when no LAG interface is found", func() {
+			netBoxMock := prepareNetboxMock()
+
+			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+				return []models.Interface{
+					{
+						Name: "eth0",
+						Type: models.InterfaceType{Value: "1000base-t"},
+					},
+				}, nil
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no LAG interface found"))
+		})
+
+	})
+
+	Context("findTargetInterface", func() {
+		It("returns error when no LAG interfaces exist", func() {
+			r := &IPUpdateReconciler{}
+
+			_, err := r.findTargetInterface([]models.Interface{
+				{
+					Name: "eth0",
+					Type: models.InterfaceType{Value: "1000base-t"},
+				},
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no LAG interface"))
+		})
+
+		It("returns the only LAG interface when only one exists", func() {
+			r := &IPUpdateReconciler{}
+
+			iface, err := r.findTargetInterface([]models.Interface{
+				{
+					Name: "LAG0",
+					Type: models.InterfaceType{Value: "lag"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(iface.Name).To(Equal("LAG0"))
+		})
+
+		It("returns the highest numbered LAG interface", func() {
+			r := &IPUpdateReconciler{}
+
+			iface, err := r.findTargetInterface([]models.Interface{
+				{
+					Name: "LAG0",
+					Type: models.InterfaceType{Value: "lag"},
+				},
+				{
+					Name: "LAG2",
+					Type: models.InterfaceType{Value: "lag"},
+				},
+				{
+					Name: "LAG1",
+					Type: models.InterfaceType{Value: "lag"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(iface.Name).To(Equal("LAG2"))
 		})
 	})
 })
