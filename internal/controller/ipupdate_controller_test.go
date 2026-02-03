@@ -174,7 +174,9 @@ var _ = Describe("IP Update Controller", func() {
 			By("cleanup IPAM IPAddress")
 			ipAddress := &ipamv1.IPAddress{}
 			if err := k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress); err == nil {
-				_ = k8sClient.Delete(ctx, ipAddress)
+				ipAddress.Finalizers = nil
+				Expect(k8sClient.Update(ctx, ipAddress)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ipAddress)).To(Succeed())
 			}
 
 			By("cleanup IPAM IPAddressClaim")
@@ -182,7 +184,9 @@ var _ = Describe("IP Update Controller", func() {
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name: "test-claim", Namespace: resourceNamespace,
 			}, ipClaim); err == nil {
-				_ = k8sClient.Delete(ctx, ipClaim)
+				ipClaim.Finalizers = nil
+				Expect(k8sClient.Update(ctx, ipClaim)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ipClaim)).To(Succeed())
 			}
 
 			By("cleanup ServerClaim")
@@ -190,7 +194,9 @@ var _ = Describe("IP Update Controller", func() {
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name: "test-server-claim", Namespace: resourceNamespace,
 			}, serverClaim); err == nil {
-				_ = k8sClient.Delete(ctx, serverClaim)
+				serverClaim.Finalizers = nil
+				Expect(k8sClient.Update(ctx, serverClaim)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, serverClaim)).To(Succeed())
 			}
 
 			By("cleanup Server")
@@ -198,7 +204,9 @@ var _ = Describe("IP Update Controller", func() {
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name: "test-server", Namespace: resourceNamespace,
 			}, server); err == nil {
-				_ = k8sClient.Delete(ctx, server)
+				server.Finalizers = nil
+				Expect(k8sClient.Update(ctx, server)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, server)).To(Succeed())
 			}
 		})
 
@@ -228,6 +236,11 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get IPAddressClaim for IPAddress:"))
@@ -246,6 +259,11 @@ var _ = Describe("IP Update Controller", func() {
 			Expect(k8sClient.Update(ctx, ipClaim)).To(Succeed())
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
@@ -277,8 +295,12 @@ var _ = Describe("IP Update Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, serverClaim)).To(Succeed())
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
@@ -296,8 +318,12 @@ var _ = Describe("IP Update Controller", func() {
 				Namespace: resourceNamespace,
 			}, server)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, server)).To(Succeed())
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
@@ -317,8 +343,12 @@ var _ = Describe("IP Update Controller", func() {
 
 			server.Spec.BMCRef.Name = ""
 			Expect(k8sClient.Update(ctx, server)).To(Succeed())
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
@@ -341,6 +371,11 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get ServerClaim"))
@@ -355,8 +390,12 @@ var _ = Describe("IP Update Controller", func() {
 			}
 
 			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
@@ -373,8 +412,12 @@ var _ = Describe("IP Update Controller", func() {
 			}
 
 			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
@@ -396,8 +439,12 @@ var _ = Describe("IP Update Controller", func() {
 			}
 
 			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
