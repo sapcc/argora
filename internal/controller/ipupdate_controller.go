@@ -7,12 +7,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"regexp"
 	"strings"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/go-netbox-go/models"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/utils/ptr"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -74,7 +76,13 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	logger = logger.WithValues("ipAddress", getIPWithMask(ipAddress))
+	prefix, err := getPrefix(ipAddress)
+	if err != nil {
+		logger.Error(err, "unable to get ip prefix")
+		return ctrl.Result{}, err
+	}
+
+	logger = logger.WithValues("ipAddress", prefix.String())
 	ctx = log.IntoContext(ctx, logger)
 
 	err = r.credentials.Reload()
@@ -134,19 +142,27 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-func getIPWithMask(ipaddr *ipamv1.IPAddress) string {
-	if ipaddr == nil || ipaddr.Spec.Prefix == nil {
-		return ""
+func getPrefix(address *ipamv1.IPAddress) (netip.Prefix, error) {
+	addr, err := netip.ParseAddr(address.Spec.Address)
+	if err != nil {
+		return netip.Prefix{}, err
 	}
 
-	return fmt.Sprintf("%s/%d", ipaddr.Spec.Address, *ipaddr.Spec.Prefix)
+	cidr := ptr.Deref(address.Spec.Prefix, 32)
+
+	return netip.PrefixFrom(addr, int(cidr)), nil
 }
 
 func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) error {
 	logger := log.FromContext(ctx)
 	logger.Info("deleting IP Address")
 
-	ipStr := getIPWithMask(ipAddr)
+	prefix, err := getPrefix(ipAddr)
+	if err != nil {
+		return fmt.Errorf("unable to get ip prefix: %w", err)
+	}
+
+	ipStr := prefix.String()
 
 	nbIP, err := r.netBox.IPAM().GetIPAddressByAddress(ipStr)
 	if err != nil {
