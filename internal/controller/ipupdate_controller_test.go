@@ -122,13 +122,6 @@ var _ = Describe("IP Update Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-claim",
 					Namespace: resourceNamespace,
-				},
-			}
-
-			ipClaim = &ipamv1.IPAddressClaim{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-claim",
-					Namespace: resourceNamespace,
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion: "metal.ironcore.dev/v1alpha1",
@@ -334,11 +327,9 @@ var _ = Describe("IP Update Controller", func() {
 		})
 
 		It("fails when referenced ServerClaim does not exist", func() {
-			// given
 			netBoxMock := prepareNetboxMock()
 			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
 
-			// delete ServerClaim
 			serverClaim := &metalv1alpha1.ServerClaim{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      "test-server-claim",
@@ -347,12 +338,10 @@ var _ = Describe("IP Update Controller", func() {
 
 			Expect(k8sClient.Delete(ctx, serverClaim)).To(Succeed())
 
-			// when
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
-			// then
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get ServerClaim"))
 		})
