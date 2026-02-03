@@ -168,15 +168,18 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	if err != nil {
 		return nil, err
 	}
+	logger = logger.WithValues("ip", prefix.String())
 
 	addr, err := r.netBox.IPAM().GetIPAddressByAddress(prefix.String())
 	if err != nil {
 		logger.Info("no ip address found, creating ip")
-		addr, err = r.createIPAddress(prefix, iface.ID, newDevice.Tenant.ID)
+		addr, err = r.createIPAddress(prefix, iface.ID, newDevice.Tenant.ID, logger)
 		if err != nil {
 			return nil, fmt.Errorf("create ip adddres: %w", err)
 		}
 		logger.Info("ip address created", "ip", prefix)
+
+		return addr, nil
 	}
 
 	if addr.AssignedInterface.ID != iface.ID {
@@ -198,17 +201,25 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	return addr, nil
 }
 
-func (r *IPUpdateReconciler) createIPAddress(prefix netip.Prefix, ifaceID, tenantID int) (*models.IPAddress, error) {
-	netboxPrefix, err := r.netBox.IPAM().GetPrefixByPrefix(prefix.Masked().String())
+func (r *IPUpdateReconciler) createIPAddress(prefix netip.Prefix, ifaceID, tenantID int, logger logr.Logger) (*models.IPAddress, error) {
+	netboxPrefixes, err := r.netBox.IPAM().GetPrefixesByPrefix(prefix.Masked().String())
 	if err != nil {
 		return nil, err
+	}
+
+	var vrfID int
+	if len(netboxPrefixes) == 1 {
+		vrfID = netboxPrefixes[0].Vrf.ID
+	} else {
+		logger.Info("cannot determine right prefix, fallback to default VRF",
+			"prefix", prefix.Masked().String(), "found_amount", len(netboxPrefixes))
 	}
 
 	ipParams := ipam.CreateIPAddressParams{
 		Address:     prefix.String(),
 		TenantID:    tenantID,
 		InterfaceID: ifaceID,
-		VrfID:       netboxPrefix.Vrf.ID,
+		VrfID:       vrfID,
 	}
 
 	address, err := r.netBox.IPAM().CreateIPAddress(ipParams)

@@ -21,7 +21,7 @@ type IPAM interface {
 	GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error)
 	CreateIPAddress(addr CreateIPAddressParams) (*models.IPAddress, error)
 	UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
-	GetPrefixByPrefix(prefix string) (models.Prefix, error)
+	GetPrefixesByPrefix(prefix string) ([]models.Prefix, error)
 
 	DeleteIPAddress(id int) error
 }
@@ -120,19 +120,16 @@ func (i *IPAMService) GetPrefixesByRegionRole(region, role string) ([]models.Pre
 	return res.Results, nil
 }
 
-func (i *IPAMService) GetPrefixByPrefix(prefix string) (models.Prefix, error) {
+func (i *IPAMService) GetPrefixesByPrefix(prefix string) ([]models.Prefix, error) {
 	listPrefixesRequest := NewListPrefixesRequest(
 		PreifxWithPrefix(prefix),
 	).BuildRequest()
 	i.logger.V(1).Info("list prefixes", "request", listPrefixesRequest)
 	res, err := i.netboxAPI.ListPrefixes(listPrefixesRequest)
 	if err != nil {
-		return models.Prefix{}, fmt.Errorf("unable to list prefixes with prefix %s: %w", prefix, err)
+		return nil, fmt.Errorf("unable to list prefixes with prefix %s: %w", prefix, err)
 	}
-	if len(res.Results) != 1 {
-		return models.Prefix{}, fmt.Errorf("unexpected number %v of prefixes for prefix %s", len(res.Results), prefix)
-	}
-	return res.Results[0], nil
+	return res.Results, nil
 }
 
 func (i *IPAMService) DeleteIPAddress(id int) error {

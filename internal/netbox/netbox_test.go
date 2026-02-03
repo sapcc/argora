@@ -103,8 +103,8 @@ func (m *MockIPAM) GetPrefixesByRegionRole(region, role string) ([]models.Prefix
 	return nil, nil
 }
 
-func (m *MockIPAM) GetPrefixByPrefix(_ string) (models.Prefix, error) {
-	return models.Prefix{}, nil
+func (m *MockIPAM) GetPrefixesByPrefix(_ string) ([]models.Prefix, error) {
+	return nil, nil
 }
 
 func (m *MockIPAM) CreateIPAddress(addr ipam.CreateIPAddressParams) (*models.IPAddress, error) {

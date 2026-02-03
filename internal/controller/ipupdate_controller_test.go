@@ -360,8 +360,8 @@ var _ = Describe("IP Update Controller", func() {
 						AssignedInterface: models.NestedInterface{ID: interfaceID, Device: models.NestedDevice{ID: deviceID}},
 					}, nil
 				},
-				GetPrefixByPrefixFunc: func(_ string) (models.Prefix, error) {
-					return models.Prefix{}, nil
+				GetPrefixesByPrefixesFunc: func(_ string) ([]models.Prefix, error) {
+					return nil, nil
 				},
 			}
 

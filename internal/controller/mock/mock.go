@@ -190,8 +190,8 @@ type IPAMMock struct {
 	GetPrefixesContainingCalls      int
 	GetPrefixesByRegionRoleFunc     func(region, role string) ([]models.Prefix, error)
 	GetPrefixesByRegionRoleCalls    int
-	GetPrefixByPrefixFunc           func(prefix string) (models.Prefix, error)
-	GetPrefixByPrefixCalls          int
+	GetPrefixesByPrefixesFunc       func(prefix string) ([]models.Prefix, error)
+	GetPrefixesByPrefixesCalls      int
 
 	DeleteIPAddressFunc  func(id int) error
 	DeleteIPAddressCalls int
@@ -232,9 +232,9 @@ func (i *IPAMMock) GetPrefixesByRegionRole(region, role string) ([]models.Prefix
 	return i.GetPrefixesByRegionRoleFunc(region, role)
 }
 
-func (i *IPAMMock) GetPrefixByPrefix(prefix string) (models.Prefix, error) {
-	i.GetPrefixByPrefixCalls++
-	return i.GetPrefixByPrefixFunc(prefix)
+func (i *IPAMMock) GetPrefixesByPrefix(prefix string) ([]models.Prefix, error) {
+	i.GetPrefixesByPrefixesCalls++
+	return i.GetPrefixesByPrefixesFunc(prefix)
 }
 
 func (i *IPAMMock) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
