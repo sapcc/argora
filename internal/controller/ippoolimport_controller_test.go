@@ -143,7 +143,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 			Expect(pool.Spec.Addresses).To(Equal([]string{prefix}))
 			Expect(pool.Spec.Prefix).To(Equal(mask))
 			if excludePrefix != nil {
-				Expect(pool.Spec.ExcludedAddresses).To(Equal(excludePrefix))
+				Expect(pool.Spec.ExcludedAddresses).To(ConsistOf(excludePrefix))
 			}
 		}
 
@@ -322,6 +322,43 @@ var _ = Describe("IPPoolImport Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, excludedAddresses)
+			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
+		})
+
+		It("should successfully create a GlobalInClusterIPPool CR with Excluded Addresses and Excluded Last N Addresses fields", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			excludeMask = 27
+			excludePrefix := "10.10.10.0/27"
+			excludedLastNAddress := 3
+			excludedLastAddresses := []string{"10.10.10.253", "10.10.10.254", "10.10.10.255"}
+			excludePrefixes := append(excludedLastAddresses, excludePrefix)
+
+			By("update IPPoolImport CR to add ExcludedLastNAddresses")
+			err := k8sClient.Get(ctx, typeNamespacedIPPoolImportName, ipPoolImport)
+			Expect(err).ToNot(HaveOccurred())
+
+			ipPoolImport.Spec.IPPools[0].ExcludeMask = &excludeMask
+			ipPoolImport.Spec.IPPools[0].ExcludeLastNAddresses = &excludedLastNAddress
+			Expect(k8sClient.Update(ctx, ipPoolImport)).To(Succeed())
+
+			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling IPPoolImport CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIPPoolImportName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleCalls).To(Equal(1))
+
+			pool := &ipamv1alpha2.GlobalInClusterIPPool{}
+			err = k8sClient.Get(ctx, typeNamespacedIPPoolName1, pool)
+			Expect(err).ToNot(HaveOccurred())
+
+			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, excludePrefixes)
 			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
 		})
 
