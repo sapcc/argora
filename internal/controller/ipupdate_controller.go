@@ -155,6 +155,7 @@ func (r *IPUpdateReconciler) reconcileNetbox(
 	ipAddr *ipamv1.IPAddress,
 	logger logr.Logger,
 ) error {
+
 	addr, err := r.reconcileNetboxAddressIP(iface, ipAddr, device, logger)
 	if err != nil {
 		return err
@@ -185,6 +186,7 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	neededDevice models.Device,
 	logger logr.Logger,
 ) (*models.IPAddress, error) {
+
 	prefix, err := getPrefix(ipAddr)
 	if err != nil {
 		return nil, err
@@ -259,6 +261,7 @@ func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
 	device models.Device,
 	logger logr.Logger,
 ) error {
+
 	if device.PrimaryIP.ID == addr.ID {
 		logger.Info("primary device id is same", "ipaddress_id", addr.ID)
 		return nil

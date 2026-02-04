@@ -6,11 +6,13 @@ package netbox
 import (
 	"testing"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sapcc/argora/internal/netbox/ipam"
+
+	"github.com/go-logr/logr"
 	"github.com/sapcc/go-netbox-go/models"
+
+	"github.com/sapcc/argora/internal/netbox/ipam"
 )
 
 func TestNetbox(t *testing.T) {
