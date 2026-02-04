@@ -369,6 +369,25 @@ var _ = Describe("IP Update Controller", func() {
 			Expect(err.Error()).To(ContainSubstring("has no bmcRef name"))
 		})
 
+		It("fails when referenced ServerClaim does not exist", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			serverClaim := &metalv1alpha1.ServerClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "test-server-claim",
+				Namespace: resourceNamespace,
+			}, serverClaim)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, serverClaim)).To(Succeed())
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedUpdateName,
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get ServerClaim"))
+		})
+
 		It("create IP address if address don't exist", func() {
 			netBoxMock := prepareNetboxMock()
 			netBoxMock.IPAMMock = &mock.IPAMMock{
@@ -517,6 +536,145 @@ var _ = Describe("IP Update Controller", func() {
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
 			Expect(err).To(MatchError(updateErr))
 		})
+
+		It("reconcileDelete does nothing when IP not found in NetBox", func() {
+			netBoxMock := prepareNetboxMock()
+			ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+			ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+				return nil, ipam.ErrNoObjectsFound
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			err := controllerReconciler.reconcileDelete(ctx, resourceNamespace, ipAddress)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("reconcileDelete returns error when GetIPAddressByAddress fails", func() {
+			netBoxMock := prepareNetboxMock()
+			ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+			ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+				return nil, errors.New("netbox error")
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			err := controllerReconciler.reconcileDelete(ctx, resourceNamespace, ipAddress)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unable to find IP in NetBox"))
+		})
+
+		It("reconcileDelete skips deletion when findNetboxTarget fails", func() {
+			netBoxMock := prepareNetboxMock()
+			ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+			ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+				return &models.IPAddress{
+					NestedIPAddress: models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
+				}, nil
+			}
+			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcim.GetDeviceByNameFunc = func(deviceName string) (*models.Device, error) {
+				return nil, errors.New("device not found")
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			err := controllerReconciler.reconcileDelete(ctx, resourceNamespace, ipAddress)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("reconcileDelete skips deletion when IP assigned to different interface", func() {
+			netBoxMock := prepareNetboxMock()
+			ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+			ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+				return &models.IPAddress{
+					NestedIPAddress:  models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
+					AssignedObjectID: 999,
+				}, nil
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			err := controllerReconciler.reconcileDelete(ctx, resourceNamespace, ipAddress)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("reconcileDelete deletes IP when assigned to expected interface", func() {
+			netBoxMock := prepareNetboxMock()
+			ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+			ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+				return &models.IPAddress{
+					NestedIPAddress:  models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
+					AssignedObjectID: interfaceID,
+				}, nil
+			}
+			deleted := false
+			ipamMock.DeleteIPAddressFunc = func(id int) error {
+				if id != ipAddressID {
+					return errors.New("unexpected delete id")
+				}
+				deleted = true
+				return nil
+			}
+
+			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+				return []models.Interface{
+					{
+						NestedInterface: models.NestedInterface{ID: interfaceID},
+						Name:            "LAG1",
+						Type:            models.InterfaceType{Value: "lag"},
+					},
+				}, nil
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			err := controllerReconciler.reconcileDelete(ctx, resourceNamespace, ipAddress)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(deleted).To(BeTrue())
+		})
+
+		It("reconcileDelete reports error when DeleteIPAddress fails", func() {
+			netBoxMock := prepareNetboxMock()
+			ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+			ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+				return &models.IPAddress{
+					NestedIPAddress:  models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
+					AssignedObjectID: interfaceID,
+				}, nil
+			}
+			ipamMock.DeleteIPAddressFunc = func(id int) error {
+				return errors.New("delete failed")
+			}
+
+			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+				return []models.Interface{
+					{
+						NestedInterface: models.NestedInterface{ID: interfaceID},
+						Name:            "LAG1",
+						Type:            models.InterfaceType{Value: "lag"},
+					},
+				}, nil
+			}
+
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			err := controllerReconciler.reconcileDelete(ctx, resourceNamespace, ipAddress)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("delete ip from netbox"))
+		})
+
+		It("reconcileDelete returns error when IP prefix cannot be parsed", func() {
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			badIP := &ipamv1.IPAddress{
+				Spec: ipamv1.IPAddressSpec{
+					Address: "not-an-ip",
+					Prefix:  ptr.To(int32(24)),
+				},
+			}
+
+			err := controllerReconciler.reconcileDelete(ctx, resourceNamespace, badIP)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unable to get ip prefix"))
+		})
+
 	})
 
 	Context("findTargetInterface", func() {
