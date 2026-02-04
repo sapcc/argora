@@ -23,12 +23,14 @@ import (
 	"github.com/sapcc/argora/internal/netbox/ipam"
 )
 
-const ipAddressString = "192.168.1.100"
-const ipAddressMask int32 = 24
-const ipAddressID = 456
-const fullIPAddress = "192.168.1.100/24"
-const interfaceID = 123
-const deviceID = 321
+const (
+	ipAddressString       = "192.168.1.100"
+	ipAddressMask   int32 = 24
+	ipAddressID           = 456
+	fullIPAddress         = "192.168.1.100/24"
+	interfaceID           = 123
+	deviceID              = 321
+)
 
 var _ = Describe("IP Update Controller", func() {
 	const resourceName = "test-resource"
