@@ -372,7 +372,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 
 	serverClaim := &metalv1alpha1.ServerClaim{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaimName}, serverClaim); err != nil {
-		return "", fmt.Errorf("get ServerClaim: %w", err)
+		return "", fmt.Errorf("failed to get ServerClaim: %w", err)
 	}
 
 	if serverClaim.Spec.ServerRef == nil {
