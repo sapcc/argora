@@ -125,6 +125,8 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			logger.Error(err, "unable to add finalizer")
 			return ctrl.Result{}, err
 		}
+
+		return ctrl.Result{}, err
 	}
 
 	target, err := r.findNetboxTarget(ctx, req.Namespace, ipAddress)
@@ -191,6 +193,9 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 
 	addr, err := r.netBox.IPAM().GetIPAddressByAddress(prefix.String())
 	if err != nil {
+		if !errors.Is(err, ipam.ErrNoObjectsFound) {
+			return nil, err
+		}
 		logger.Info("no ip address found, creating ip")
 		addr, err = r.createIPAddress(prefix, iface.ID, neededDevice.Tenant.ID, logger)
 		if err != nil {
@@ -226,7 +231,7 @@ func (r *IPUpdateReconciler) createIPAddress(prefix netip.Prefix, ifaceID, tenan
 		return nil, err
 	}
 
-	var vrfID int
+	vrfID := 0 // default(global) vrf
 	if len(netboxPrefixes) == 1 {
 		vrfID = netboxPrefixes[0].Vrf.ID
 	} else {

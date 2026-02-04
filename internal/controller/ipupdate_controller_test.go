@@ -185,8 +185,9 @@ var _ = Describe("IP Update Controller", func() {
 
 			ipAddress = &ipamv1.IPAddress{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: resourceNamespace,
+					Name:       resourceName,
+					Namespace:  resourceNamespace,
+					Finalizers: []string{"ipupdate.argora.cloud.sap.com/finalizer"},
 				},
 				Spec: ipamv1.IPAddressSpec{
 					Address: ipAddressString,
@@ -370,7 +371,7 @@ var _ = Describe("IP Update Controller", func() {
 			netBoxMock := prepareNetboxMock()
 			netBoxMock.IPAMMock = &mock.IPAMMock{
 				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
-					return nil, errors.New("not exists")
+					return nil, ipam.ErrNoObjectsFound
 				},
 				CreateIPAddressFunc: func(_ ipam.CreateIPAddressParams) (*models.IPAddress, error) {
 					return &models.IPAddress{
