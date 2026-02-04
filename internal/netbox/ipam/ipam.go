@@ -5,12 +5,15 @@
 package ipam
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/sapcc/go-netbox-go/ipam"
 	"github.com/sapcc/go-netbox-go/models"
 )
+
+var ErrNoObjectsFound = errors.New("no objects found")
 
 type IPAM interface {
 	GetVlanByName(vlanName string) (*models.Vlan, error)
@@ -58,6 +61,9 @@ func (i *IPAMService) GetIPAddressByAddress(address string) (*models.IPAddress, 
 	res, err := i.netboxAPI.ListIPAddresses(ListIPAddressesRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list IP addresses with address %s: %w", address, err)
+	}
+	if len(res.Results) == 0 {
+		return nil, fmt.Errorf("no IP addresses found with address %s: %w", address, ErrNoObjectsFound)
 	}
 	if len(res.Results) != 1 {
 		return nil, fmt.Errorf("unexpected number of IP addresses found with address %s: %d", address, len(res.Results))

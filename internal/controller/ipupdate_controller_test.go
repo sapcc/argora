@@ -125,8 +125,6 @@ var _ = Describe("IP Update Controller", func() {
 				},
 			}
 
-			_ = k8sClient.Delete(ctx, server)
-
 			server.Spec = metalv1alpha1.ServerSpec{
 				SystemUUID: "test_uuid",
 				BMCRef: &v1.LocalObjectReference{
@@ -144,8 +142,6 @@ var _ = Describe("IP Update Controller", func() {
 				},
 			}
 
-			_ = k8sClient.Delete(ctx, serverClaim)
-
 			serverClaim.Spec = metalv1alpha1.ServerClaimSpec{
 				ServerRef: &v1.LocalObjectReference{
 					Name: "test-server",
@@ -158,15 +154,6 @@ var _ = Describe("IP Update Controller", func() {
 
 			By("reset IPAM IPAddressClaim CR")
 			ipClaim := &ipamv1.IPAddressClaim{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-claim",
-					Namespace: resourceNamespace,
-				},
-			}
-
-			_ = k8sClient.Delete(ctx, ipClaim)
-
-			ipClaim = &ipamv1.IPAddressClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-claim",
 					Namespace: resourceNamespace,
@@ -196,8 +183,6 @@ var _ = Describe("IP Update Controller", func() {
 				Namespace: resourceNamespace,
 			}
 
-			_ = k8sClient.Delete(ctx, ipAddress)
-
 			ipAddress = &ipamv1.IPAddress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
@@ -221,10 +206,42 @@ var _ = Describe("IP Update Controller", func() {
 		})
 
 		AfterEach(func() {
-			By("delete IPAM IPAddress CR")
-			err := k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)
-			if err == nil {
+			By("cleanup IPAM IPAddress")
+			ipAddress := &ipamv1.IPAddress{}
+			if err := k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress); err == nil {
+				ipAddress.Finalizers = nil
+				Expect(k8sClient.Update(ctx, ipAddress)).To(Succeed())
 				Expect(k8sClient.Delete(ctx, ipAddress)).To(Succeed())
+			}
+
+			By("cleanup IPAM IPAddressClaim")
+			ipClaim := &ipamv1.IPAddressClaim{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-claim", Namespace: resourceNamespace,
+			}, ipClaim); err == nil {
+				ipClaim.Finalizers = nil
+				Expect(k8sClient.Update(ctx, ipClaim)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ipClaim)).To(Succeed())
+			}
+
+			By("cleanup ServerClaim")
+			serverClaim := &metalv1alpha1.ServerClaim{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-server-claim", Namespace: resourceNamespace,
+			}, serverClaim); err == nil {
+				serverClaim.Finalizers = nil
+				Expect(k8sClient.Update(ctx, serverClaim)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, serverClaim)).To(Succeed())
+			}
+
+			By("cleanup Server")
+			server := &metalv1alpha1.Server{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name: "test-server", Namespace: resourceNamespace,
+			}, server); err == nil {
+				server.Finalizers = nil
+				Expect(k8sClient.Update(ctx, server)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, server)).To(Succeed())
 			}
 		})
 
@@ -303,12 +320,11 @@ var _ = Describe("IP Update Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, serverClaim)).To(Succeed())
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
-
 			Expect(err).To(HaveOccurred())
+
 			Expect(err.Error()).To(ContainSubstring("not yet bound to a server"))
 		})
 
@@ -322,13 +338,12 @@ var _ = Describe("IP Update Controller", func() {
 				Namespace: resourceNamespace,
 			}, server)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, server)).To(Succeed())
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("get Server"))
+			Expect(err.Error()).To(ContainSubstring(`servers.metal.ironcore.dev "test-server" not found`))
 		})
 
 		It("fails when Server has no BMCRef name", func() {
@@ -343,7 +358,6 @@ var _ = Describe("IP Update Controller", func() {
 
 			server.Spec.BMCRef.Name = ""
 			Expect(k8sClient.Update(ctx, server)).To(Succeed())
-
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})

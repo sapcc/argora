@@ -11,18 +11,21 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/go-logr/logr"
-	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/netbox/ipam"
+
+	"github.com/go-logr/logr"
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/go-netbox-go/models"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -30,6 +33,8 @@ import (
 var ErrIPAssignedAsAnotherDevicePrimaryAddress = errors.New("ip is already assigned as primary to another device")
 var ErrIPAssignToAnotherDevice = errors.New("ip assigned to another device")
 var ErrIPAssignedToAnotherInteface = errors.New("ip assigned to another interface")
+
+const ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
 
 // IPUpdateReconciler reconciles a ipam.cluster.x-k8s.io.IPAddress object
 type IPUpdateReconciler struct {
@@ -67,9 +72,21 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	ipAddress := &ipamv1.IPAddress{}
 	err := r.k8sClient.Get(ctx, req.NamespacedName, ipAddress)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 		logger.Error(err, "unable to get IP Address CR")
 		return ctrl.Result{}, err
 	}
+
+	prefix, err := getPrefix(ipAddress)
+	if err != nil {
+		logger.Error(err, "unable to get ip prefix")
+		return ctrl.Result{}, err
+	}
+
+	logger = logger.WithValues("ipAddress", prefix.String())
+	ctx = log.IntoContext(ctx, logger)
 
 	err = r.credentials.Reload()
 	if err != nil {
@@ -85,37 +102,41 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	deviceName, err := r.findDeviceName(ctx, req.Namespace, ipAddress)
+	if !ipAddress.DeletionTimestamp.IsZero() {
+		if err = r.reconcileDelete(ctx, req.Namespace, ipAddress); err != nil {
+			logger.Error(err, "unable to delete IP Address")
+			return ctrl.Result{}, err
+		}
+
+		base := ipAddress.DeepCopy()
+		if removed := controllerutil.RemoveFinalizer(ipAddress, ipAddressFinalizer); removed {
+			if err := r.k8sClient.Patch(ctx, ipAddress, client.MergeFrom(base)); err != nil {
+				logger.Error(err, "unable to remove finalizer")
+				return ctrl.Result{}, err
+			}
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	base := ipAddress.DeepCopy()
+	if added := controllerutil.AddFinalizer(ipAddress, ipAddressFinalizer); added {
+		if err := r.k8sClient.Patch(ctx, ipAddress, client.MergeFrom(base)); err != nil {
+			logger.Error(err, "unable to add finalizer")
+			return ctrl.Result{}, err
+		}
+	}
+
+	target, err := r.findNetboxTarget(ctx, req.Namespace, ipAddress)
 	if err != nil {
-		logger.Error(err, "unable to find device name")
+		logger.Error(err, "unable to find target in NetBox")
 		return ctrl.Result{}, err
 	}
 
-	logger = logger.WithValues("deviceName", deviceName, "deviceIP", ipAddress.Spec.Address)
-	logger.Info("device found")
+	logger = logger.WithValues("deviceName", target.device.Name, "interface", target.iface.Name)
+	logger.Info("target device and interface are found")
 
-	device, err := r.netBox.DCIM().GetDeviceByName(deviceName)
-	if err != nil {
-		logger.Error(err, "unable to find device by name")
-		return ctrl.Result{}, err
-	}
-
-	interfaces, err := r.netBox.DCIM().GetInterfacesForDevice(device)
-	if err != nil {
-		logger.Error(err, "unable to find interfaces by name")
-		return ctrl.Result{}, err
-	}
-
-	targetInterface, err := r.findTargetInterface(interfaces)
-	if err != nil {
-		logger.Error(err, "unable to find target interface")
-		return ctrl.Result{}, err
-	}
-
-	logger = logger.WithValues("interface", targetInterface.Name)
-	logger.Info("target interface found")
-
-	err = r.reconcileNetbox(targetInterface, device, ipAddress, logger)
+	err = r.reconcileNetbox(target.iface, target.device, ipAddress, logger)
 	if err != nil {
 		logger.Error(err, "netbox ip reconciliation")
 		return ctrl.Result{}, err
@@ -128,7 +149,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 func (r *IPUpdateReconciler) reconcileNetbox(
 	iface models.Interface,
-	device *models.Device,
+	device models.Device,
 	ipAddr *ipamv1.IPAddress,
 	logger logr.Logger,
 ) error {
@@ -159,7 +180,7 @@ func getPrefix(address *ipamv1.IPAddress) (netip.Prefix, error) {
 func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	iface models.Interface,
 	ipAddr *ipamv1.IPAddress,
-	neededDevice *models.Device,
+	neededDevice models.Device,
 	logger logr.Logger,
 ) (*models.IPAddress, error) {
 	prefix, err := getPrefix(ipAddr)
@@ -230,7 +251,7 @@ func (r *IPUpdateReconciler) createIPAddress(prefix netip.Prefix, ifaceID, tenan
 
 func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
 	addr *models.IPAddress,
-	device *models.Device,
+	device models.Device,
 	logger logr.Logger,
 ) error {
 	if device.PrimaryIP.ID == addr.ID {
@@ -253,12 +274,80 @@ func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
 
 	return nil
 }
+func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) error {
+	logger := log.FromContext(ctx)
+	logger.Info("deleting IP Address")
 
-func (r *IPUpdateReconciler) findDeviceName(
-	ctx context.Context,
-	namespace string,
-	ipAddr *ipamv1.IPAddress,
-) (string, error) {
+	prefix, err := getPrefix(ipAddr)
+	if err != nil {
+		return fmt.Errorf("unable to get ip prefix: %w", err)
+	}
+
+	ipStr := prefix.String()
+
+	nbIP, err := r.netBox.IPAM().GetIPAddressByAddress(ipStr)
+	if err != nil {
+		if errors.Is(err, ipam.ErrNoObjectsFound) {
+			logger.Info("IP not found in NetBox, nothing to delete")
+			return nil
+		}
+
+		return fmt.Errorf("unable to find IP in NetBox: %w", err)
+	}
+
+	target, err := r.findNetboxTarget(ctx, namespace, ipAddr)
+	if err != nil {
+		logger.Info("could not determine expected interface, skipping safety check", "reason", err.Error())
+		return nil
+	}
+
+	if nbIP.AssignedObjectID != target.iface.ID {
+		logger.Info("IP is assigned to a different interface in NetBox; skipping deletion to prevent collapse",
+			"actualInterfaceID", nbIP.AssignedObjectID, "expectedInterfaceID", target.iface.ID, "deviceName", target.device.Name,
+		)
+		return nil
+	}
+
+	if err = r.netBox.IPAM().DeleteIPAddress(nbIP.ID); err != nil {
+		return fmt.Errorf("delete ip from netbox: %w", err)
+	}
+
+	return nil
+}
+
+type netboxTarget struct {
+	device models.Device
+	iface  models.Interface
+}
+
+func (r *IPUpdateReconciler) findNetboxTarget(ctx context.Context, namespace string, ipAddress *ipamv1.IPAddress) (*netboxTarget, error) {
+	deviceName, err := r.findDeviceName(ctx, namespace, ipAddress)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find device name: %w", err)
+	}
+
+	device, err := r.netBox.DCIM().GetDeviceByName(deviceName)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find device by name: %w", err)
+	}
+
+	interfaces, err := r.netBox.DCIM().GetInterfacesForDevice(device)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find interfaces for device %w", err)
+	}
+
+	targetInterface, err := r.findTargetInterface(interfaces)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find target interface: %w", err)
+	}
+
+	return &netboxTarget{
+		device: *device,
+		iface:  targetInterface,
+	}, nil
+}
+
+func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) (string, error) {
 	claimName := ipAddr.Spec.ClaimRef.Name
 
 	ipClaim := &ipamv1.IPAddressClaim{}
