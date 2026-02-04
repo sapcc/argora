@@ -205,6 +205,18 @@ func (r *IPPoolImportReconciler) reconcileIPPool(ctx context.Context, ipPoolSele
 			newIPPool.Spec.ExcludedAddresses = append(newIPPool.Spec.ExcludedAddresses, ipPoolSelector.ExcludedAddresses...)
 		}
 
+		if ipPoolSelector.ExcludeLastNAddresses != nil {
+			prefixParsed, err := netip.ParsePrefix(prefix.Prefix)
+			if err != nil {
+				return fmt.Errorf("unable to parse prefix %s: %w", prefix.Prefix, err)
+			}
+			lastN := getLastNIPs(prefixParsed, *ipPoolSelector.ExcludeLastNAddresses)
+
+			for _, ip := range lastN {
+				newIPPool.Spec.ExcludedAddresses = append(newIPPool.Spec.ExcludedAddresses, ip.String())
+			}
+		}
+
 		err = r.k8sClient.Create(ctx, newIPPool)
 		if err != nil {
 			logger.Error(err, "unable to create IPPool", "name", ippoolName)
@@ -247,4 +259,35 @@ func generateNetGatewayIP(prefix *models.Prefix) (net, gw string, mask int, err 
 		return "", "", 0, err
 	}
 	return prefixParsed.Addr().String(), prefixParsed.Addr().Next().String(), prefixParsed.Bits(), nil
+}
+
+// getLastNIPs returns the last N IPs in the given prefix.
+func getLastNIPs(prefix netip.Prefix, n int) []netip.Addr {
+	lastIP := lastAddrInPrefix(prefix)
+	var ips []netip.Addr
+	current := lastIP
+	for range n {
+		ips = append([]netip.Addr{current}, ips...)
+		current = current.Prev()
+		if !prefix.Contains(current) {
+			break
+		}
+	}
+	return ips
+}
+
+// lastAddrInPrefix returns the last address in the given prefix.
+func lastAddrInPrefix(p netip.Prefix) netip.Addr {
+	p = p.Masked()
+	addr := p.Addr().As4()
+	bits := p.Bits()
+	//nolint:gosec
+	mask := uint32(0xFFFFFFFF) >> uint32(bits)
+	last := (uint32(addr[0])<<24 | uint32(addr[1])<<16 | uint32(addr[2])<<8 | uint32(addr[3])) | mask
+	return netip.AddrFrom4([4]byte{
+		byte(last >> 24),
+		byte(last >> 16),
+		byte(last >> 8),
+		byte(last),
+	})
 }

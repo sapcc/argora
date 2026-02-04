@@ -48,6 +48,8 @@ spec:
                   description: IPPoolSelector defines the selection criteria for an
                     IP pool to be imported.
                   properties:
+                    excludeLastNAddresses:
+                      type: integer
                     excludeMask:
                       type: integer
                     excludedAddresses:

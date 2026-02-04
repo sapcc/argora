@@ -143,7 +143,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 			Expect(pool.Spec.Addresses).To(Equal([]string{prefix}))
 			Expect(pool.Spec.Prefix).To(Equal(mask))
 			if excludePrefix != nil {
-				Expect(pool.Spec.ExcludedAddresses).To(Equal(excludePrefix))
+				Expect(pool.Spec.ExcludedAddresses).To(ConsistOf(excludePrefix))
 			}
 		}
 
@@ -322,6 +322,103 @@ var _ = Describe("IPPoolImport Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, excludedAddresses)
+			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
+		})
+
+		It("should successfully create a GlobalInClusterIPPool CR with Excluded Addresses and Excluded Last N Addresses fields", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			excludeMask = 27
+			excludePrefix := "10.10.10.0/27"
+			excludedLastNAddress := 3
+			excludedLastAddresses := []string{"10.10.10.253", "10.10.10.254", "10.10.10.255"}
+			excludePrefixes := append(excludedLastAddresses, excludePrefix)
+
+			By("update IPPoolImport CR to add ExcludedLastNAddresses")
+			err := k8sClient.Get(ctx, typeNamespacedIPPoolImportName, ipPoolImport)
+			Expect(err).ToNot(HaveOccurred())
+
+			ipPoolImport.Spec.IPPools[0].ExcludeMask = &excludeMask
+			ipPoolImport.Spec.IPPools[0].ExcludeLastNAddresses = &excludedLastNAddress
+			Expect(k8sClient.Update(ctx, ipPoolImport)).To(Succeed())
+
+			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling IPPoolImport CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIPPoolImportName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleCalls).To(Equal(1))
+
+			pool := &ipamv1alpha2.GlobalInClusterIPPool{}
+			err = k8sClient.Get(ctx, typeNamespacedIPPoolName1, pool)
+			Expect(err).ToNot(HaveOccurred())
+
+			expectIPPool(pool, iPPoolName1, iPPoolPrefix1, iPPoolPrefixMask1, excludePrefixes)
+			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
+		})
+
+		It("should gracefully handle Excluded Last N Addresses larger than usable Prefix size", func() {
+			// given
+			ctx := context.Background()
+			typeNamespacedIPPoolImportName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: resourceNamespace,
+			}
+			typeNamespacedIPPoolName := types.NamespacedName{
+				Name:      "ippool-site-1a",
+				Namespace: resourceNamespace,
+			}
+
+			// Mock a /30 prefix to limit total addresses to 4
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role string) ([]models.Prefix, error) {
+				Expect(region).To(Equal(regionName))
+				Expect(role).To(Equal(roleName))
+				return []models.Prefix{
+					{
+						ID:     1,
+						Prefix: "10.10.10.0/30",
+						Site: models.Site{
+							ID:   1,
+							Name: iPPoolPrefixSite1,
+							Slug: iPPoolPrefixSite1,
+						},
+					},
+				}, nil
+			}
+
+			// Request excluding last 5 addresses (larger than /30 capacity)
+			excludedLastNAddress := 5
+			Expect(k8sClient.Get(ctx, typeNamespacedIPPoolImportName, ipPoolImport)).To(Succeed())
+			ipPoolImport.Spec.IPPools[0].ExcludeMask = nil
+			ipPoolImport.Spec.IPPools[0].ExcludedAddresses = nil
+			ipPoolImport.Spec.IPPools[0].ExcludeLastNAddresses = &excludedLastNAddress
+			Expect(k8sClient.Update(ctx, ipPoolImport)).To(Succeed())
+
+			controllerReconciler := createIPPoolImportReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedIPPoolImportName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleCalls).To(Equal(1))
+
+			pool := &ipamv1alpha2.GlobalInClusterIPPool{}
+			Expect(k8sClient.Get(ctx, typeNamespacedIPPoolName, pool)).To(Succeed())
+
+			// Only last 4 addresses of /30 are excluded
+			Expect(pool.Spec.Addresses).To(Equal([]string{"10.10.10.0/30"}))
+			Expect(pool.Spec.Prefix).To(Equal(30))
+			Expect(pool.Spec.Gateway).To(Equal("10.10.10.1"))
+			Expect(pool.Spec.ExcludedAddresses).To(ConsistOf([]string{"10.10.10.0", "10.10.10.1", "10.10.10.2", "10.10.10.3"}))
+
 			expectStatus(argorav1alpha1.Ready, typeNamespacedIPPoolImportName, "")
 		})
 

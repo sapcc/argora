@@ -27,4 +27,6 @@ type IPPoolSelector struct {
 	ExcludeMask *int `json:"excludeMask,omitempty"`
 	// +kubebuilder:validation:Optional
 	ExcludedAddresses []string `json:"excludedAddresses,omitempty"`
+	// +kubebuilder:validation:Optional
+	ExcludeLastNAddresses *int `json:"excludeLastNAddresses,omitempty"`
 }
