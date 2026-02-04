@@ -109,6 +109,11 @@ linters:
     revive:
       rules:
         - name: comment-spacings
+        - name: dot-imports
+          arguments:
+          - allowed-packages: 
+            - github.com/onsi/ginkgo/v2
+            - github.com/onsi/gomega
     staticcheck:
       dot-import-whitelist:
         - github.com/onsi/ginkgo/v2

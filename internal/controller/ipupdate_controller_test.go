@@ -20,6 +20,16 @@ import (
 
 	"github.com/sapcc/argora/internal/controller/mock"
 	"github.com/sapcc/argora/internal/credentials"
+	"github.com/sapcc/argora/internal/netbox/ipam"
+)
+
+const (
+	ipAddressString       = "192.168.1.100"
+	ipAddressMask   int32 = 24
+	ipAddressID           = 456
+	fullIPAddress         = "192.168.1.100/24"
+	interfaceID           = 123
+	deviceID              = 321
 )
 
 var _ = Describe("IP Update Controller", func() {
@@ -53,32 +63,59 @@ var _ = Describe("IP Update Controller", func() {
 		}
 
 		prepareNetboxMock := func() *mock.NetBoxMock {
-			dcimMock := &mock.DCIMMock{
-				GetDeviceByNameFunc: func(deviceName string) (*models.Device, error) {
-					return &models.Device{
-						ID:   1,
-						Name: "node013-ap002",
-					}, nil
+			netBoxMock := &mock.NetBoxMock{
+				ReturnError:        false,
+				VirtualizationMock: &mock.VirtualizationMock{},
+				DCIMMock: &mock.DCIMMock{
+					GetDeviceByNameFunc: func(_ string) (*models.Device, error) {
+						return &models.Device{
+							ID:        deviceID,
+							Name:      "node013-ap002",
+							PrimaryIP: models.NestedIPAddress{ID: ipAddressID},
+						}, nil
+					},
+					GetInterfacesForDeviceFunc: func(_ *models.Device) ([]models.Interface, error) {
+						return []models.Interface{
+							{
+								Name: "LAG0",
+								Type: models.InterfaceType{Value: "lag"},
+							},
+							{
+								NestedInterface: models.NestedInterface{
+									ID: interfaceID,
+								},
+								Name: "LAG1",
+								Type: models.InterfaceType{Value: "lag"},
+							},
+							{
+								Name: "eth0",
+								Type: models.InterfaceType{Value: "1000base-t"},
+							},
+						}, nil
+					},
 				},
-				GetInterfacesForDeviceFunc: func(device *models.Device) ([]models.Interface, error) {
-					return []models.Interface{
-						{
-							Name: "LAG0",
-							Type: models.InterfaceType{Value: "lag"},
-						},
-						{
-							Name: "LAG1",
-							Type: models.InterfaceType{Value: "lag"},
-						},
-					}, nil
+				IPAMMock: &mock.IPAMMock{
+					GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
+						return &models.IPAddress{
+							NestedIPAddress: models.NestedIPAddress{
+								ID:      ipAddressID,
+								Address: fullIPAddress,
+							},
+							AssignedObjectID: interfaceID,
+							AssignedInterface: models.NestedInterface{
+								ID: interfaceID,
+								Device: models.NestedDevice{
+									ID: deviceID,
+								},
+							},
+						}, nil
+					},
 				},
-			}
 
-			return &mock.NetBoxMock{
-				DCIMMock:   dcimMock,
-				IPAMMock:   &mock.IPAMMock{},
 				ExtrasMock: &mock.ExtrasMock{},
 			}
+
+			return netBoxMock
 		}
 
 		BeforeEach(func() {
@@ -150,11 +187,12 @@ var _ = Describe("IP Update Controller", func() {
 
 			ipAddress = &ipamv1.IPAddress{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: resourceNamespace,
+					Name:       resourceName,
+					Namespace:  resourceNamespace,
+					Finalizers: []string{"ipupdate.argora.cloud.sap.com/finalizer"},
 				},
 				Spec: ipamv1.IPAddressSpec{
-					Address: "192.168.1.100",
+					Address: ipAddressString,
 					PoolRef: ipamv1.IPPoolReference{
 						Name:     "test-ippool",
 						APIGroup: "ipam.cluster.x-k8s.io",
@@ -163,7 +201,7 @@ var _ = Describe("IP Update Controller", func() {
 					ClaimRef: ipamv1.IPAddressClaimReference{
 						Name: "test-claim",
 					},
-					Prefix: ptr.To(int32(24)),
+					Prefix: ptr.To(ipAddressMask),
 				},
 			}
 
@@ -236,11 +274,6 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
-			Expect(err).ToNot(HaveOccurred())
-
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get IPAddressClaim for IPAddress:"))
@@ -259,11 +292,6 @@ var _ = Describe("IP Update Controller", func() {
 			Expect(k8sClient.Update(ctx, ipClaim)).To(Succeed())
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
-			Expect(err).ToNot(HaveOccurred())
-
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
 
@@ -298,13 +326,8 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
-			Expect(err).ToNot(HaveOccurred())
-
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
-
 			Expect(err).To(HaveOccurred())
+
 			Expect(err.Error()).To(ContainSubstring("not yet bound to a server"))
 		})
 
@@ -321,14 +344,9 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
-			Expect(err).ToNot(HaveOccurred())
-
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to get Server referenced by ServerClaim"))
+			Expect(err.Error()).To(ContainSubstring(`servers.metal.ironcore.dev "test-server" not found`))
 		})
 
 		It("fails when Server has no BMCRef name", func() {
@@ -346,112 +364,159 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedUpdateName,
 			})
-			Expect(err).ToNot(HaveOccurred())
-
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("has no bmcRef name"))
 		})
 
-		It("fails when referenced ServerClaim does not exist", func() {
+		It("create IP address if address don't exist", func() {
 			netBoxMock := prepareNetboxMock()
-			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
-
-			serverClaim := &metalv1alpha1.ServerClaim{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "test-server-claim",
-				Namespace: resourceNamespace,
-			}, serverClaim)).To(Succeed())
-
-			Expect(k8sClient.Delete(ctx, serverClaim)).To(Succeed())
-
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
-			Expect(err).ToNot(HaveOccurred())
-
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to get ServerClaim"))
-		})
-
-		It("fails when NetBox cannot find device by name", func() {
-			netBoxMock := prepareNetboxMock()
-
-			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
-			dcim.GetDeviceByNameFunc = func(deviceName string) (*models.Device, error) {
-				return nil, errors.New("device not found")
+			netBoxMock.IPAMMock = &mock.IPAMMock{
+				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
+					return nil, ipam.ErrNoObjectsFound
+				},
+				CreateIPAddressFunc: func(_ ipam.CreateIPAddressParams) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress:   models.NestedIPAddress{ID: ipAddressID},
+						AssignedInterface: models.NestedInterface{ID: interfaceID, Device: models.NestedDevice{ID: deviceID}},
+					}, nil
+				},
+				GetPrefixesByPrefixesFunc: func(_ string) ([]models.Prefix, error) {
+					return nil, nil
+				},
 			}
 
-			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
-			Expect(err).ToNot(HaveOccurred())
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
 
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("device not found"))
+			Expect(err).To(Succeed())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).CreateIPAddressCalls).To(Equal(1))
 		})
 
-		It("fails when NetBox cannot list interfaces for device", func() {
+		It("do nothing if there is matching ip", func() {
 			netBoxMock := prepareNetboxMock()
 
-			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
-			dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
-				return nil, errors.New("failed to list interfaces")
-			}
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
 
-			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
-			Expect(err).ToNot(HaveOccurred())
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
 
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to list interfaces"))
+			Expect(err).To(Succeed())
 		})
 
-		It("fails when no LAG interface is found", func() {
+		It("raise error if ip exists, and assigned to another interface", func() {
 			netBoxMock := prepareNetboxMock()
-
-			dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
-			dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
-				return []models.Interface{
-					{
-						Name: "eth0",
-						Type: models.InterfaceType{Value: "1000base-t"},
-					},
-				}, nil
+			netBoxMock.IPAMMock = &mock.IPAMMock{
+				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress: models.NestedIPAddress{
+							Address: fullIPAddress,
+						},
+						AssignedInterface: models.NestedInterface{
+							ID: -1,
+							Device: models.NestedDevice{
+								ID: deviceID,
+							},
+						},
+					}, nil
+				},
 			}
 
-			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
-			Expect(err).ToNot(HaveOccurred())
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
 
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedUpdateName,
-			})
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no LAG interface found"))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
 		})
 
+		It("raise error if ip exists, and assigned to another device", func() {
+			netBoxMock := prepareNetboxMock()
+			netBoxMock.IPAMMock = &mock.IPAMMock{
+				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress: models.NestedIPAddress{
+							Address: fullIPAddress,
+						},
+						AssignedInterface: models.NestedInterface{
+							ID: interfaceID,
+							Device: models.NestedDevice{
+								ID: -1,
+							},
+						},
+					}, nil
+				},
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(HaveOccurred())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+		})
+
+		It("updates device primary ip if is not matching", func() {
+			netBoxMock := prepareNetboxMock()
+			dcimMock := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcimMock.GetDeviceByNameFunc = func(_ string) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+			dcimMock.UpdateDeviceFunc = func(_ models.WritableDeviceWithConfigContext) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+
+			Expect(err).To(Succeed())
+		})
+
+		It("updates device primary ip if is not matching", func() {
+			netBoxMock := prepareNetboxMock()
+			dcimMock := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcimMock.GetDeviceByNameFunc = func(_ string) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+			dcimMock.UpdateDeviceFunc = func(_ models.WritableDeviceWithConfigContext) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(Succeed())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+		})
+
+		It("raise error if error appear on device primary ip update", func() {
+			netBoxMock := prepareNetboxMock()
+			dcimMock := netBoxMock.DCIMMock.(*mock.DCIMMock)
+			dcimMock.GetDeviceByNameFunc = func(_ string) (*models.Device, error) {
+				return &models.Device{ID: deviceID, PrimaryIP: models.NestedIPAddress{ID: 0}}, nil
+			}
+			updateErr := errors.New("new error")
+			dcimMock.UpdateDeviceFunc = func(_ models.WritableDeviceWithConfigContext) (*models.Device, error) {
+				return nil, updateErr
+			}
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(err).To(HaveOccurred())
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).UpdateDeviceCalls).To(Equal(1))
+			Expect(err).To(MatchError(updateErr))
+		})
 	})
 
 	Context("findTargetInterface", func() {

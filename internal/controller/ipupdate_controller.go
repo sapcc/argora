@@ -11,24 +11,29 @@ import (
 	"regexp"
 	"strings"
 
-	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
-	"github.com/sapcc/go-netbox-go/models"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/utils/ptr"
-	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/netbox/ipam"
 
+	"github.com/go-logr/logr"
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	"github.com/sapcc/go-netbox-go/models"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
+	"k8s.io/utils/ptr"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+var (
+	ErrIPAssignedAsAnotherDevicePrimaryAddress = errors.New("ip is already assigned as primary to another device")
+	ErrIPAssignToAnotherDevice                 = errors.New("ip assigned to another device")
+	ErrIPAssignedToAnotherInterface            = errors.New("ip assigned to another interface")
 )
 
 const ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
@@ -123,7 +128,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 
 	target, err := r.findNetboxTarget(ctx, req.Namespace, ipAddress)
@@ -135,11 +140,35 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger = logger.WithValues("deviceName", target.device.Name, "interface", target.iface.Name)
 	logger.Info("target device and interface are found")
 
-	// ... perform update operations with r.netBox and ipAddress ...
+	err = r.reconcileNetbox(target.iface, target.device, ipAddress, logger)
+	if err != nil {
+		logger.Error(err, "netbox ip reconciliation failed")
+		return ctrl.Result{}, err
+	}
 
 	logger.Info("reconcile completed successfully")
 
 	return ctrl.Result{}, nil
+}
+
+func (r *IPUpdateReconciler) reconcileNetbox(
+	iface models.Interface,
+	device models.Device,
+	ipAddr *ipamv1.IPAddress,
+	logger logr.Logger,
+) error {
+
+	addr, err := r.reconcileNetboxAddressIP(iface, ipAddr, device, logger)
+	if err != nil {
+		return err
+	}
+
+	err = r.reconcileDevicePrimaryIP(addr, device, logger)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getPrefix(address *ipamv1.IPAddress) (netip.Prefix, error) {
@@ -153,6 +182,108 @@ func getPrefix(address *ipamv1.IPAddress) (netip.Prefix, error) {
 	return netip.PrefixFrom(addr, int(cidr)), nil
 }
 
+func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
+	iface models.Interface,
+	ipAddr *ipamv1.IPAddress,
+	neededDevice models.Device,
+	logger logr.Logger,
+) (*models.IPAddress, error) {
+
+	prefix, err := getPrefix(ipAddr)
+	if err != nil {
+		return nil, err
+	}
+	logger = logger.WithValues("ip", prefix.String())
+
+	addr, err := r.netBox.IPAM().GetIPAddressByAddress(prefix.String())
+	if err != nil {
+		if !errors.Is(err, ipam.ErrNoObjectsFound) {
+			return nil, err
+		}
+		logger.V(1).Info("no ip address found, creating ip")
+		addr, err = r.createIPAddress(prefix, iface.ID, neededDevice.Tenant.ID, logger)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create IPAddress: %w", err)
+		}
+		logger.V(1).Info("ip address created", "ip", prefix)
+
+		return addr, nil
+	}
+
+	if addr.AssignedInterface.ID != iface.ID {
+		return addr, fmt.Errorf("%w, IPAddress with ID %d has already assigned interface with ID %d",
+			ErrIPAssignedToAnotherInterface, addr.ID, addr.AssignedInterface.ID)
+	}
+
+	logger.V(1).Info("ip is assigned to needed interface")
+
+	currDeviceID := addr.AssignedInterface.Device.ID
+	if neededDevice.ID != currDeviceID {
+		err := fmt.Errorf("%w, IPAddress with ID %d has already assigned device with ID %d",
+			ErrIPAssignToAnotherDevice, addr.ID, neededDevice.ID)
+		return nil, err
+	}
+
+	logger.V(1).Info("ip is assigned to needed device")
+
+	return addr, nil
+}
+
+func (r *IPUpdateReconciler) createIPAddress(prefix netip.Prefix, ifaceID, tenantID int, logger logr.Logger) (*models.IPAddress, error) {
+	netboxPrefixes, err := r.netBox.IPAM().GetPrefixesByPrefix(prefix.Masked().String())
+	if err != nil {
+		return nil, err
+	}
+
+	vrfID := 0 // default(global) vrf
+	if len(netboxPrefixes) == 1 {
+		vrfID = netboxPrefixes[0].Vrf.ID
+	} else {
+		logger.V(1).Info("cannot determine a single prefix for this IP, fallback to default VRF",
+			"prefix", prefix.Masked().String(), "found_amount", len(netboxPrefixes))
+	}
+
+	ipParams := ipam.CreateIPAddressParams{
+		Address:     prefix.String(),
+		TenantID:    tenantID,
+		InterfaceID: ifaceID,
+		VrfID:       vrfID,
+	}
+
+	address, err := r.netBox.IPAM().CreateIPAddress(ipParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return address, nil
+}
+
+func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
+	addr *models.IPAddress,
+	device models.Device,
+	logger logr.Logger,
+) error {
+
+	if device.PrimaryIP.ID == addr.ID {
+		logger.V(1).Info("primary device id is same", "ipaddress_id", addr.ID)
+		return nil
+	}
+
+	logger.V(1).Info("updating device primary id", "device_id", device.ID,
+		"current_primary_ip", device.PrimaryIP.ID, "needed_primary_ip", addr.ID)
+
+	wDevice := device.Writeable()
+	wDevice.PrimaryIP4 = addr.ID
+
+	_, err := r.netBox.DCIM().UpdateDevice(wDevice)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("primary device id updated", "device_id", device.ID, "address_id", addr.ID)
+
+	return nil
+}
 func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) error {
 	logger := log.FromContext(ctx)
 	logger.Info("deleting IP Address")
@@ -167,7 +298,7 @@ func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace stri
 	nbIP, err := r.netBox.IPAM().GetIPAddressByAddress(ipStr)
 	if err != nil {
 		if errors.Is(err, ipam.ErrNoObjectsFound) {
-			logger.Info("IP not found in NetBox, nothing to delete")
+			logger.V(1).Info("IP not found in NetBox, nothing to delete")
 			return nil
 		}
 
@@ -176,12 +307,12 @@ func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace stri
 
 	target, err := r.findNetboxTarget(ctx, namespace, ipAddr)
 	if err != nil {
-		logger.Info("could not determine expected interface, skipping safety check", "reason", err.Error())
+		logger.V(1).Info("could not determine expected interface, skipping safety check", "reason", err.Error())
 		return nil
 	}
 
 	if nbIP.AssignedObjectID != target.iface.ID {
-		logger.Info("IP is assigned to a different interface in NetBox; skipping deletion to prevent collapse",
+		logger.V(1).Info("IP is assigned to a different interface in NetBox; skipping deletion to prevent collapse",
 			"actualInterfaceID", nbIP.AssignedObjectID, "expectedInterfaceID", target.iface.ID, "deviceName", target.device.Name,
 		)
 		return nil
@@ -250,7 +381,7 @@ func (r *IPUpdateReconciler) findDeviceName(ctx context.Context, namespace strin
 
 	server := &metalv1alpha1.Server{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serverClaim.Spec.ServerRef.Name}, server); err != nil {
-		return "", fmt.Errorf("failed to get Server referenced by ServerClaim: %w", err)
+		return "", fmt.Errorf("failed to get Server: %w", err)
 	}
 
 	if server.Spec.BMCRef.Name == "" {

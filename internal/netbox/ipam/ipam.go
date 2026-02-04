@@ -22,6 +22,9 @@ type IPAM interface {
 	GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error)
 	GetPrefixesContaining(contains string) ([]models.Prefix, error)
 	GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error)
+	CreateIPAddress(addr CreateIPAddressParams) (*models.IPAddress, error)
+	UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	GetPrefixesByPrefix(prefix string) ([]models.Prefix, error)
 
 	DeleteIPAddress(id int) error
 }
@@ -123,6 +126,18 @@ func (i *IPAMService) GetPrefixesByRegionRole(region, role string) ([]models.Pre
 	return res.Results, nil
 }
 
+func (i *IPAMService) GetPrefixesByPrefix(prefix string) ([]models.Prefix, error) {
+	listPrefixesRequest := NewListPrefixesRequest(
+		PrefixWithPrefix(prefix),
+	).BuildRequest()
+	i.logger.V(1).Info("list prefixes", "request", listPrefixesRequest)
+	res, err := i.netboxAPI.ListPrefixes(listPrefixesRequest)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list prefixes with prefix %s: %w", prefix, err)
+	}
+	return res.Results, nil
+}
+
 func (i *IPAMService) DeleteIPAddress(id int) error {
 	i.logger.V(1).Info("delete IP address", "ID", id)
 	err := i.netboxAPI.DeleteIPAddress(id)
@@ -130,4 +145,40 @@ func (i *IPAMService) DeleteIPAddress(id int) error {
 		return fmt.Errorf("unable to delete IP address (%d): %w", id, err)
 	}
 	return nil
+}
+
+type CreateIPAddressParams struct {
+	Address     string
+	TenantID    int
+	InterfaceID int
+	VrfID       int
+}
+
+func (i *IPAMService) CreateIPAddress(params CreateIPAddressParams) (*models.IPAddress, error) {
+	addr := models.WriteableIPAddress{
+		NestedIPAddress: models.NestedIPAddress{
+			Address: params.Address,
+		},
+		Vrf:                params.VrfID,
+		Tenant:             params.TenantID,
+		AssignedObjectType: "dcim.interface",
+		AssignedObjectID:   params.InterfaceID,
+	}
+	i.logger.V(1).Info("create ipaddress", "addr", addr)
+	res, err := i.netboxAPI.CreateIPAddress(addr)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create ip address: %w", err)
+	}
+
+	return res, nil
+}
+
+func (i *IPAMService) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+	i.logger.V(1).Info("update ipaddress", "addr", addr)
+	res, err := i.netboxAPI.UpdateIPAddress(addr)
+	if err != nil {
+		return nil, fmt.Errorf("unable to update ip address: %w", err)
+	}
+
+	return res, nil
 }

@@ -6,10 +6,13 @@ package netbox
 import (
 	"testing"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/go-logr/logr"
 	"github.com/sapcc/go-netbox-go/models"
+
+	"github.com/sapcc/argora/internal/netbox/ipam"
 )
 
 func TestNetbox(t *testing.T) {
@@ -99,6 +102,18 @@ func (m *MockIPAM) GetPrefixesContaining(contains string) ([]models.Prefix, erro
 }
 
 func (m *MockIPAM) GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error) {
+	return nil, nil
+}
+
+func (m *MockIPAM) GetPrefixesByPrefix(_ string) ([]models.Prefix, error) {
+	return nil, nil
+}
+
+func (m *MockIPAM) CreateIPAddress(addr ipam.CreateIPAddressParams) (*models.IPAddress, error) {
+	return nil, nil
+}
+
+func (m *MockIPAM) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
 	return nil, nil
 }
 
