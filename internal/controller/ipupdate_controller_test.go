@@ -71,7 +71,7 @@ var _ = Describe("IP Update Controller", func() {
 					GetDeviceByNameFunc: func(_ string) (*models.Device, error) {
 						return &models.Device{
 							ID:        deviceID,
-							Name:      "node013-ap002",
+							Name:      "node001-rack01",
 							PrimaryIP: models.NestedIPAddress{ID: ipAddressID},
 						}, nil
 					},
@@ -131,7 +131,7 @@ var _ = Describe("IP Update Controller", func() {
 			server.Spec = metalv1alpha1.ServerSpec{
 				SystemUUID: "test_uuid",
 				BMCRef: &v1.LocalObjectReference{
-					Name: "node013-ap002",
+					Name: "node001-rack01",
 				},
 			}
 
