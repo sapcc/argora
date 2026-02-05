@@ -237,7 +237,7 @@ func generateIPPoolName(ipPoolSelector *argorav1alpha1.IPPoolSelector, prefix *m
 		return ipPoolSelector.NameOverride, nil
 	}
 	if strings.Contains(prefix.Role.Slug, ComputeTransitPrefixRoleName) {
-		azLetter := strings.TrimPrefix(prefix.Site.Slug, prefix.Site.Region.Slug)
+		azLetter := strings.TrimPrefix(prefix.Site.Slug, strings.ToLower(ipPoolSelector.Region))
 
 		// if contains "compute1" it should be "%s-%s0-%s", if "compute2" it should be "%s-%s1-%s", and so on
 		re := regexp.MustCompile(`(?i)compute(\d+)`)
@@ -246,7 +246,7 @@ func generateIPPoolName(ipPoolSelector *argorav1alpha1.IPPoolSelector, prefix *m
 			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("%s-%s%d-%s", ipPoolSelector.NamePrefix, azLetter, computeNum-1, prefix.Site.Region.Slug), nil
+			return fmt.Sprintf("%s-%s%d-%s", ipPoolSelector.NamePrefix, azLetter, computeNum-1, strings.ToLower(ipPoolSelector.Region)), nil
 		}
 	}
 	return fmt.Sprintf("%s-%s", ipPoolSelector.NamePrefix, prefix.Site.Slug), nil
