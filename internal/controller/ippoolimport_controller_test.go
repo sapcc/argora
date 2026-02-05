@@ -495,10 +495,10 @@ var _ = Describe("IPPoolImport Controller", func() {
 
 			computePrefix := "10.10.40.0/24"
 			computeRole := "test-kubernetes-compute-transit"
-			computeSite := "test-eu-1a"
-			computeRegion := "test-eu-1"
+			computeSite := "eu-central-1a"
+			computeRegion := "eu-central-1"
 			computeNamePrefix := "compute"
-			computePoolName := "compute-a0-test-eu-1"
+			computePoolName := "compute-a0-eu-central-1"
 
 			// Create IPPoolImport CR for compute name case
 			computeIPPoolImportCR := &argorav1alpha1.IPPoolImport{
@@ -539,11 +539,6 @@ var _ = Describe("IPPoolImport Controller", func() {
 							ID:   1,
 							Name: computeSite,
 							Slug: computeSite,
-							Region: models.NestedRegion{
-								ID:   1,
-								Name: computeRegion,
-								Slug: computeRegion,
-							},
 						},
 						Vlan: models.NestedVLAN{
 							ID:   1,
