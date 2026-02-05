@@ -190,9 +190,16 @@ type IPAMMock struct {
 	GetPrefixesContainingCalls      int
 	GetPrefixesByRegionRoleFunc     func(region, role string) ([]models.Prefix, error)
 	GetPrefixesByRegionRoleCalls    int
+	GetPrefixesByPrefixesFunc       func(prefix string) ([]models.Prefix, error)
+	GetPrefixesByPrefixesCalls      int
 
 	DeleteIPAddressFunc  func(id int) error
 	DeleteIPAddressCalls int
+
+	CreateIPAddressFunc  func(params ipam.CreateIPAddressParams) (*models.IPAddress, error)
+	CreateIPAddressCalls int
+	UpdateIPAddressFunc  func(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	UpdateIPAddressCalls int
 }
 
 func (i *IPAMMock) GetVlanByName(vlanName string) (*models.Vlan, error) {
@@ -225,9 +232,24 @@ func (i *IPAMMock) GetPrefixesByRegionRole(region, role string) ([]models.Prefix
 	return i.GetPrefixesByRegionRoleFunc(region, role)
 }
 
+func (i *IPAMMock) GetPrefixesByPrefix(prefix string) ([]models.Prefix, error) {
+	i.GetPrefixesByPrefixesCalls++
+	return i.GetPrefixesByPrefixesFunc(prefix)
+}
+
+func (i *IPAMMock) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+	i.UpdateIPAddressCalls++
+	return i.UpdateIPAddressFunc(addr)
+}
+
 func (i *IPAMMock) DeleteIPAddress(id int) error {
 	i.DeleteIPAddressCalls++
 	return i.DeleteIPAddressFunc(id)
+}
+
+func (i *IPAMMock) CreateIPAddress(params ipam.CreateIPAddressParams) (*models.IPAddress, error) {
+	i.CreateIPAddressCalls++
+	return i.CreateIPAddressFunc(params)
 }
 
 type ExtrasMock struct {
