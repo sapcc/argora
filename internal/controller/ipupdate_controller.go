@@ -118,6 +118,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 		}
 
+		logger.Info("finalizer removed")
 		return ctrl.Result{}, nil
 	}
 
@@ -127,6 +128,8 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			logger.Error(err, "unable to add finalizer")
 			return ctrl.Result{}, err
 		}
+
+		logger.Info("finalizer added")
 
 		return ctrl.Result{}, err
 	}
@@ -298,7 +301,7 @@ func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace stri
 	nbIP, err := r.netBox.IPAM().GetIPAddressByAddress(ipStr)
 	if err != nil {
 		if errors.Is(err, ipam.ErrNoObjectsFound) {
-			logger.V(1).Info("IP not found in NetBox, nothing to delete")
+			logger.Info("IP not found in NetBox, nothing to delete")
 			return nil
 		}
 
@@ -307,12 +310,12 @@ func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace stri
 
 	target, err := r.findNetboxTarget(ctx, namespace, ipAddr)
 	if err != nil {
-		logger.V(1).Info("could not determine expected interface, skipping safety check", "reason", err.Error())
+		logger.Info("could not determine expected interface, skipping safety check", "reason", err.Error())
 		return nil
 	}
 
 	if nbIP.AssignedObjectID != target.iface.ID {
-		logger.V(1).Info("IP is assigned to a different interface in NetBox; skipping deletion to prevent collapse",
+		logger.Info("IP is assigned to a different interface in NetBox; skipping deletion to prevent collapse",
 			"actualInterfaceID", nbIP.AssignedObjectID, "expectedInterfaceID", target.iface.ID, "deviceName", target.device.Name,
 		)
 		return nil
@@ -321,6 +324,8 @@ func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace stri
 	if err = r.netBox.IPAM().DeleteIPAddress(nbIP.ID); err != nil {
 		return fmt.Errorf("delete ip from netbox: %w", err)
 	}
+
+	logger.Info("delete reconciliation was successful")
 
 	return nil
 }
