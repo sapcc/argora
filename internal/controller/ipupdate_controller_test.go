@@ -6,6 +6,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -187,6 +188,16 @@ var _ = Describe("IP Update Controller", func() {
 					Name:       resourceName,
 					Namespace:  resourceNamespace,
 					Finalizers: []string{"ipupdate.argora.cloud.sap.com/finalizer"},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion:         "ipam.cluster.x-k8s.io/v1beta2",
+							Kind:               "IPAddressClaim",
+							Name:               "test-claim",
+							UID:                ipClaim.UID,
+							Controller:         ptr.To(true),
+							BlockOwnerDeletion: ptr.To(true),
+						},
+					},
 				},
 				Spec: ipamv1.IPAddressSpec{
 					Address: ipAddressString,
@@ -241,7 +252,7 @@ var _ = Describe("IP Update Controller", func() {
 			}
 		})
 
-		It("should successfully reconcile the CR and add finalizer", func() {
+		It("should successfully add finalizer", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
@@ -258,9 +269,30 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
+			By("checking if finalizer is added to IPAddress")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
 			Expect(ipAddress.Finalizers).To(ContainElement("ipupdate.argora.cloud.sap.com/finalizer"))
+		})
+
+		It("should successfully reconcile", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
+			// when
+			By("reconciling IPAM IPAddress CR")
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			ipAddress := &ipamv1.IPAddress{}
+			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
+
+			By("verifying netbox metadata annotations")
+			Expect(ipAddress.Annotations).To(HaveKeyWithValue("netbox.argora.cloud.sap/device-id", "321"))
+			Expect(ipAddress.Annotations).To(HaveKeyWithValue("netbox.argora.cloud.sap/interface-id", "123"))
 		})
 
 		It("fails when IPAddressClaim does not exist", func() {
@@ -610,6 +642,15 @@ var _ = Describe("IP Update Controller", func() {
 		})
 
 		Context("Deletion", func() {
+			BeforeEach(func() {
+				ip := &ipamv1.IPAddress{}
+				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
+				ip.SetAnnotations(map[string]string{
+					"netbox.argora.cloud.sap/device-id":    strconv.Itoa(deviceID),
+					"netbox.argora.cloud.sap/interface-id": strconv.Itoa(interfaceID),
+				})
+				Expect(k8sClient.Update(ctx, ip)).To(Succeed())
+			})
 			It("does nothing when IP not found in NetBox", func() {
 				netBoxMock := prepareNetboxMock()
 				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
@@ -707,7 +748,7 @@ var _ = Describe("IP Update Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("skips deletion when findTargetInterface fails if no LAG interface found", func() {
+			It("skips deletion when no annotations found", func() {
 				netBoxMock := prepareNetboxMock()
 				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
 				ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
@@ -728,10 +769,13 @@ var _ = Describe("IP Update Controller", func() {
 
 				ip := &ipamv1.IPAddress{}
 				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
+				ip.Annotations = nil
+				Expect(k8sClient.Update(ctx, ip)).To(Succeed())
 				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
 
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(0))
 			})
 
 			It("skips deletion when IP assigned to different interface", func() {
@@ -827,6 +871,10 @@ var _ = Describe("IP Update Controller", func() {
 					Namespace: resourceNamespace,
 				}, ipClaim)).To(Succeed())
 				Expect(k8sClient.Delete(ctx, ipClaim)).To(Succeed())
+
+				ip := &ipamv1.IPAddress{}
+				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
 
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 				Expect(err).ToNot(HaveOccurred())

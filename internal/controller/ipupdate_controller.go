@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/netip"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/sapcc/argora/internal/credentials"
@@ -37,6 +38,9 @@ var (
 )
 
 const ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
+
+const annotationDeviceKey = "netbox.argora.cloud.sap/device-id"
+const annotationInterfaceKey = "netbox.argora.cloud.sap/interface-id"
 
 // IPUpdateReconciler reconciles a ipam.cluster.x-k8s.io.IPAddress object
 type IPUpdateReconciler struct {
@@ -105,7 +109,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	if !ipAddress.DeletionTimestamp.IsZero() {
-		if err = r.reconcileDelete(ctx, req.Namespace, ipAddress); err != nil {
+		if err = r.reconcileDelete(ctx, ipAddress); err != nil {
 			logger.Error(err, "unable to delete IP Address")
 			return ctrl.Result{}, err
 		}
@@ -149,6 +153,12 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	err = r.updateIPAddressMetadata(ctx, ipAddress, target, logger)
+	if err != nil {
+		logger.Error(err, "unable to update ipaddress metadata")
+		return ctrl.Result{}, err
+	}
+
 	logger.Info("reconcile completed successfully")
 
 	return ctrl.Result{}, nil
@@ -170,6 +180,31 @@ func (r *IPUpdateReconciler) reconcileNetbox(
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (r *IPUpdateReconciler) updateIPAddressMetadata(
+	ctx context.Context,
+	ipAddr *ipamv1.IPAddress,
+	target *netboxTarget,
+	logger logr.Logger,
+) error {
+
+	base := ipAddr.DeepCopy()
+
+	if ipAddr.Annotations == nil {
+		ipAddr.Annotations = make(map[string]string)
+	}
+
+	ipAddr.Annotations[annotationDeviceKey] = strconv.Itoa(target.device.ID)
+	ipAddr.Annotations[annotationInterfaceKey] = strconv.Itoa(target.iface.ID)
+
+	if err := r.k8sClient.Patch(ctx, ipAddr, client.MergeFrom(base)); err != nil {
+		return fmt.Errorf("unable to patch ipaddress with netbox metadata: %w", err)
+	}
+
+	logger.V(1).Info("ipaddress metadata updated", "device-id", target.device.ID, "interface-id", target.iface.ID)
 
 	return nil
 }
@@ -214,16 +249,16 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	}
 
 	if addr.AssignedInterface.ID != iface.ID {
-		return addr, fmt.Errorf("%w, IPAddress with ID %d has already assigned interface with ID %d",
-			ErrIPAssignedToAnotherInterface, addr.ID, addr.AssignedInterface.ID)
+		return addr, fmt.Errorf("%w, IPAddress with ID %d has already assigned interface with ID %d, wanted interface ID was %d",
+			ErrIPAssignedToAnotherInterface, addr.ID, addr.AssignedInterface.ID, iface.ID)
 	}
 
 	logger.V(1).Info("ip is assigned to needed interface")
 
 	currDeviceID := addr.AssignedInterface.Device.ID
 	if neededDevice.ID != currDeviceID {
-		err := fmt.Errorf("%w, IPAddress with ID %d has already assigned device with ID %d",
-			ErrIPAssignToAnotherDevice, addr.ID, neededDevice.ID)
+		err := fmt.Errorf("%w, IPAddress with ID %d has already assigned device with ID %d, wanted device ID was %d",
+			ErrIPAssignToAnotherDevice, addr.ID, currDeviceID, neededDevice.ID)
 		return nil, err
 	}
 
@@ -287,7 +322,7 @@ func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
 
 	return nil
 }
-func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace string, ipAddr *ipamv1.IPAddress) error {
+func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, ipAddr *ipamv1.IPAddress) error {
 	logger := log.FromContext(ctx)
 	logger.Info("deleting IP Address")
 
@@ -308,15 +343,15 @@ func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace stri
 		return fmt.Errorf("unable to find IP in NetBox: %w", err)
 	}
 
-	target, err := r.findNetboxTarget(ctx, namespace, ipAddr)
+	deviceID, interfaceID, err := r.deviceIDAndInterfaceIDFromAnnotations(ipAddr)
 	if err != nil {
-		logger.Info("could not determine expected interface, skipping safety check", "reason", err.Error())
+		logger.Error(err, "failed to get device and interface id from ipaddress annotations")
 		return nil
 	}
 
-	if nbIP.AssignedObjectID != target.iface.ID {
+	if nbIP.AssignedObjectID != interfaceID {
 		logger.Info("IP is assigned to a different interface in NetBox; skipping deletion to prevent collapse",
-			"actualInterfaceID", nbIP.AssignedObjectID, "expectedInterfaceID", target.iface.ID, "deviceName", target.device.Name,
+			"actualInterfaceID", nbIP.AssignedObjectID, "expectedInterfaceID", interfaceID, "deviceID", deviceID,
 		)
 		return nil
 	}
@@ -328,6 +363,33 @@ func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, namespace stri
 	logger.Info("delete reconciliation was successful")
 
 	return nil
+}
+
+func (r *IPUpdateReconciler) deviceIDAndInterfaceIDFromAnnotations(ipAddr *ipamv1.IPAddress) (
+	deviceID int, interfaceID int, err error,
+) {
+
+	deviceIDStr, ok := ipAddr.Annotations[annotationDeviceKey]
+	if !ok {
+		return 0, 0, fmt.Errorf("device annotation %s not found", annotationDeviceKey)
+	}
+
+	interfaceIDStr, ok := ipAddr.Annotations[annotationInterfaceKey]
+	if !ok {
+		return 0, 0, fmt.Errorf("interface annotation %s not found", annotationInterfaceKey)
+	}
+
+	deviceID, err = strconv.Atoi(deviceIDStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid device id in annotation: %w", err)
+	}
+
+	interfaceID, err = strconv.Atoi(interfaceIDStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid interface id in annotation: %w", err)
+	}
+
+	return deviceID, interfaceID, nil
 }
 
 type netboxTarget struct {
