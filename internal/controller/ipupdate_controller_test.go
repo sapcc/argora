@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -785,6 +786,47 @@ var _ = Describe("IP Update Controller", func() {
 				ip := &ipamv1.IPAddress{}
 				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
 				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
+			})
+
+			It("successfully deletes IP when IPAddresClaim obj is deleted", func() {
+				netBoxMock := prepareNetboxMock()
+				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+				ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress:  models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
+						AssignedObjectID: interfaceID,
+					}, nil
+				}
+				ipamMock.DeleteIPAddressFunc = func(id int) error {
+					if id != ipAddressID {
+						return errors.New("unexpected delete id")
+					}
+					return nil
+				}
+
+				dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
+				dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return []models.Interface{
+						{
+							NestedInterface: models.NestedInterface{ID: interfaceID},
+							Name:            "LAG1",
+							Type:            models.InterfaceType{Value: "lag"},
+						},
+					}, nil
+				}
+
+				controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+				ipClaim := &ipamv1.IPAddressClaim{}
+				Expect(k8sClient.Get(ctx, client.ObjectKey{
+					Name:      "test-claim",
+					Namespace: resourceNamespace,
+				}, ipClaim)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ipClaim)).To(Succeed())
 
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 				Expect(err).ToNot(HaveOccurred())
