@@ -836,7 +836,7 @@ var _ = Describe("IP Update Controller", func() {
 				Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			})
 
-			It("successfully deletes IP when IPAddresClaim obj is deleted", func() {
+			It("successfully deletes IP when IPAddressClaim obj is deleted", func() {
 				netBoxMock := prepareNetboxMock()
 				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
 				ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
