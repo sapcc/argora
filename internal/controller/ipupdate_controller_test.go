@@ -756,12 +756,26 @@ var _ = Describe("IP Update Controller", func() {
 						NestedIPAddress: models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
 					}, nil
 				}
-				dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
-				dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
-					return []models.Interface{
-						{
-							Name: "eth0",
-						},
+
+				controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+				ip := &ipamv1.IPAddress{}
+				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
+				ip.Annotations = nil
+				Expect(k8sClient.Update(ctx, ip)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(0))
+			})
+
+			It("skips deletion when annotations are not integers", func() {
+				netBoxMock := prepareNetboxMock()
+				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+				ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress: models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
 					}, nil
 				}
 
@@ -769,7 +783,8 @@ var _ = Describe("IP Update Controller", func() {
 
 				ip := &ipamv1.IPAddress{}
 				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
-				ip.Annotations = nil
+				ip.Annotations["netbox.argora.cloud.sap/device-id"] = "string"
+				ip.Annotations["netbox.argora.cloud.sap/interface-id"] = "string"
 				Expect(k8sClient.Update(ctx, ip)).To(Succeed())
 				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
 
@@ -836,7 +851,7 @@ var _ = Describe("IP Update Controller", func() {
 				Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
 			})
 
-			It("successfully deletes IP when IPAddressClaim obj is deleted", func() {
+			It("successfully deletes IP when IPAddressClaim CR is deleted", func() {
 				netBoxMock := prepareNetboxMock()
 				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
 				ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {

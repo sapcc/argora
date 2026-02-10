@@ -345,7 +345,7 @@ func (r *IPUpdateReconciler) reconcileDelete(ctx context.Context, ipAddr *ipamv1
 
 	deviceID, interfaceID, err := r.deviceIDAndInterfaceIDFromAnnotations(ipAddr)
 	if err != nil {
-		logger.Error(err, "failed to get device and interface id from ipaddress annotations")
+		logger.Info("failed to get device and interface id from ipaddress annotations", "error", err)
 		return nil
 	}
 
