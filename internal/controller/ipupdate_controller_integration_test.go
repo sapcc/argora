@@ -7,20 +7,19 @@ import (
 	"context"
 	"errors"
 
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/credentials"
+	"github.com/sapcc/argora/internal/netbox/ipam"
+	"github.com/sapcc/go-netbox-go/models"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
-	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
-	"github.com/sapcc/argora/internal/controller/mock"
-	"github.com/sapcc/argora/internal/credentials"
-	"github.com/sapcc/argora/internal/netbox/ipam"
-	"github.com/sapcc/go-netbox-go/models"
 )
 
 var _ = Describe("IP Update Controller Envtest Integration", func() {
