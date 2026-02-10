@@ -6,6 +6,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -16,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -186,6 +188,16 @@ var _ = Describe("IP Update Controller", func() {
 					Name:       resourceName,
 					Namespace:  resourceNamespace,
 					Finalizers: []string{"ipupdate.argora.cloud.sap.com/finalizer"},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion:         "ipam.cluster.x-k8s.io/v1beta2",
+							Kind:               "IPAddressClaim",
+							Name:               "test-claim",
+							UID:                ipClaim.UID,
+							Controller:         ptr.To(true),
+							BlockOwnerDeletion: ptr.To(true),
+						},
+					},
 				},
 				Spec: ipamv1.IPAddressSpec{
 					Address: ipAddressString,
@@ -240,7 +252,7 @@ var _ = Describe("IP Update Controller", func() {
 			}
 		})
 
-		It("should successfully reconcile the CR and add finalizer", func() {
+		It("should successfully add finalizer", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
 			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
@@ -257,9 +269,30 @@ var _ = Describe("IP Update Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
 			// then
+			By("checking if finalizer is added to IPAddress")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
 			Expect(ipAddress.Finalizers).To(ContainElement("ipupdate.argora.cloud.sap.com/finalizer"))
+		})
+
+		It("should successfully reconcile", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
+			// when
+			By("reconciling IPAM IPAddress CR")
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			ipAddress := &ipamv1.IPAddress{}
+			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
+
+			By("verifying netbox metadata annotations")
+			Expect(ipAddress.Annotations).To(HaveKeyWithValue("netbox.argora.cloud.sap/device-id", "321"))
+			Expect(ipAddress.Annotations).To(HaveKeyWithValue("netbox.argora.cloud.sap/interface-id", "123"))
 		})
 
 		It("fails when IPAddressClaim does not exist", func() {
@@ -609,6 +642,15 @@ var _ = Describe("IP Update Controller", func() {
 		})
 
 		Context("Deletion", func() {
+			BeforeEach(func() {
+				ip := &ipamv1.IPAddress{}
+				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
+				ip.SetAnnotations(map[string]string{
+					"netbox.argora.cloud.sap/device-id":    strconv.Itoa(deviceID),
+					"netbox.argora.cloud.sap/interface-id": strconv.Itoa(interfaceID),
+				})
+				Expect(k8sClient.Update(ctx, ip)).To(Succeed())
+			})
 			It("does nothing when IP not found in NetBox", func() {
 				netBoxMock := prepareNetboxMock()
 				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
@@ -706,7 +748,7 @@ var _ = Describe("IP Update Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("skips deletion when findTargetInterface fails if no LAG interface found", func() {
+			It("skips deletion when no annotations found", func() {
 				netBoxMock := prepareNetboxMock()
 				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
 				ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
@@ -714,12 +756,26 @@ var _ = Describe("IP Update Controller", func() {
 						NestedIPAddress: models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
 					}, nil
 				}
-				dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
-				dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
-					return []models.Interface{
-						{
-							Name: "eth0",
-						},
+
+				controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+				ip := &ipamv1.IPAddress{}
+				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
+				ip.Annotations = nil
+				Expect(k8sClient.Update(ctx, ip)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(0))
+			})
+
+			It("skips deletion when annotations are not integers", func() {
+				netBoxMock := prepareNetboxMock()
+				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+				ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress: models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
 					}, nil
 				}
 
@@ -727,10 +783,14 @@ var _ = Describe("IP Update Controller", func() {
 
 				ip := &ipamv1.IPAddress{}
 				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
+				ip.Annotations["netbox.argora.cloud.sap/device-id"] = "string"
+				ip.Annotations["netbox.argora.cloud.sap/interface-id"] = "string"
+				Expect(k8sClient.Update(ctx, ip)).To(Succeed())
 				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
 
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(0))
 			})
 
 			It("skips deletion when IP assigned to different interface", func() {
@@ -781,6 +841,51 @@ var _ = Describe("IP Update Controller", func() {
 				}
 
 				controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+				ip := &ipamv1.IPAddress{}
+				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).DeleteIPAddressCalls).To(Equal(1))
+			})
+
+			It("successfully deletes IP when IPAddressClaim CR is deleted", func() {
+				netBoxMock := prepareNetboxMock()
+				ipamMock := netBoxMock.IPAMMock.(*mock.IPAMMock)
+				ipamMock.GetIPAddressByAddressFunc = func(address string) (*models.IPAddress, error) {
+					return &models.IPAddress{
+						NestedIPAddress:  models.NestedIPAddress{ID: ipAddressID, Address: fullIPAddress},
+						AssignedObjectID: interfaceID,
+					}, nil
+				}
+				ipamMock.DeleteIPAddressFunc = func(id int) error {
+					if id != ipAddressID {
+						return errors.New("unexpected delete id")
+					}
+					return nil
+				}
+
+				dcim := netBoxMock.DCIMMock.(*mock.DCIMMock)
+				dcim.GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return []models.Interface{
+						{
+							NestedInterface: models.NestedInterface{ID: interfaceID},
+							Name:            "LAG1",
+							Type:            models.InterfaceType{Value: "lag"},
+						},
+					}, nil
+				}
+
+				controllerReconciler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+				ipClaim := &ipamv1.IPAddressClaim{}
+				Expect(k8sClient.Get(ctx, client.ObjectKey{
+					Name:      "test-claim",
+					Namespace: resourceNamespace,
+				}, ipClaim)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, ipClaim)).To(Succeed())
 
 				ip := &ipamv1.IPAddress{}
 				Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ip)).To(Succeed())
