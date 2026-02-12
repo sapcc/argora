@@ -530,7 +530,7 @@ var _ = Describe("IP Update Controller", func() {
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).UpdateIPAddressCalls).To(Equal(0))
 		})
 
-		It("raise error if ip exists, and assigned to another interface", func() {
+		It("set conflict annotation if ip exists, and assigned to another interface", func() {
 			netBoxMock := prepareNetboxMock()
 			netBoxMock.IPAMMock = &mock.IPAMMock{
 				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
@@ -552,11 +552,15 @@ var _ = Describe("IP Update Controller", func() {
 
 			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+
+			ipAddress := &ipamv1.IPAddress{}
+			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
+			Expect(ipAddress.Annotations).To(HaveKeyWithValue("netbox.argora.cloud.sap/conflicted", "interface"))
 		})
 
-		It("raise error if ip exists, and assigned to another device", func() {
+		It("set conflict annotation if ip exists, and assigned to another device", func() {
 			netBoxMock := prepareNetboxMock()
 			netBoxMock.IPAMMock = &mock.IPAMMock{
 				GetIPAddressByAddressFunc: func(_ string) (*models.IPAddress, error) {
@@ -578,8 +582,12 @@ var _ = Describe("IP Update Controller", func() {
 
 			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
 
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+
+			ipAddress := &ipamv1.IPAddress{}
+			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
+			Expect(ipAddress.Annotations).To(HaveKeyWithValue("netbox.argora.cloud.sap/conflicted", "device"))
 		})
 
 		It("updates device primary ip if is not matching", func() {
