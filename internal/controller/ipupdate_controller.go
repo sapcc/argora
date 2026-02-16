@@ -31,11 +31,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var (
-	ErrIPAssignedAsAnotherDevicePrimaryAddress = errors.New("ip is already assigned as primary to another device")
-	ErrIPAssignToAnotherDevice                 = errors.New("ip assigned to another device")
-	ErrIPAssignedToAnotherInterface            = errors.New("ip assigned to another interface")
-)
+type NetboxConflictError struct {
+	IPAddressID      int
+	ConflictObj      string
+	AssignedNetboxID int
+	NeededNetboxID   int
+}
+
+func (e NetboxConflictError) Error() string {
+	return fmt.Sprintf("netbox conflict: ip address with id %d is currently assigned to %s with id %d, but was expecting id %d",
+		e.IPAddressID, e.ConflictObj, e.AssignedNetboxID, e.NeededNetboxID)
+}
 
 const ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
 
@@ -149,6 +155,16 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	err = r.reconcileNetbox(target.iface, target.device, ipAddress, logger)
 	if err != nil {
+		var netboxConflictErr NetboxConflictError
+		if errors.As(err, &netboxConflictErr) {
+			logger.Info("netbox ipaddress conflict", "error", err)
+			err := r.setConflictAnnotation(ctx, ipAddress, netboxConflictErr)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{}, nil
+		}
 		logger.Error(err, "netbox ip reconciliation failed")
 		return ctrl.Result{}, err
 	}
@@ -249,17 +265,24 @@ func (r *IPUpdateReconciler) reconcileNetboxAddressIP(
 	}
 
 	if addr.AssignedInterface.ID != iface.ID {
-		return addr, fmt.Errorf("%w, IPAddress with ID %d has already assigned interface with ID %d, wanted interface ID was %d",
-			ErrIPAssignedToAnotherInterface, addr.ID, addr.AssignedInterface.ID, iface.ID)
+		return addr, NetboxConflictError{
+			IPAddressID:      addr.ID,
+			ConflictObj:      "interface",
+			AssignedNetboxID: addr.AssignedInterface.ID,
+			NeededNetboxID:   iface.ID,
+		}
 	}
 
 	logger.V(1).Info("ip is assigned to needed interface")
 
 	currDeviceID := addr.AssignedInterface.Device.ID
 	if neededDevice.ID != currDeviceID {
-		err := fmt.Errorf("%w, IPAddress with ID %d has already assigned device with ID %d, wanted device ID was %d",
-			ErrIPAssignToAnotherDevice, addr.ID, currDeviceID, neededDevice.ID)
-		return nil, err
+		return nil, NetboxConflictError{
+			IPAddressID:      addr.ID,
+			ConflictObj:      "device",
+			AssignedNetboxID: currDeviceID,
+			NeededNetboxID:   neededDevice.ID,
+		}
 	}
 
 	logger.V(1).Info("ip is assigned to needed device")
@@ -466,6 +489,21 @@ func getOwnerByKind(owners []metav1.OwnerReference, kind string) string {
 	}
 
 	return ""
+}
+
+func (r *IPUpdateReconciler) setConflictAnnotation(ctx context.Context, ipAddr *ipamv1.IPAddress, conflictErr NetboxConflictError) error {
+	base := ipAddr.DeepCopy()
+	if ipAddr.Annotations == nil {
+		ipAddr.Annotations = make(map[string]string)
+	}
+
+	ipAddr.Annotations["netbox.argora.cloud.sap/conflicted"] = conflictErr.ConflictObj
+
+	if patchErr := r.k8sClient.Patch(ctx, ipAddr, client.MergeFrom(base)); patchErr != nil {
+		return patchErr
+	}
+
+	return nil
 }
 
 func (r *IPUpdateReconciler) findTargetInterface(interfaces []models.Interface) (models.Interface, error) {
