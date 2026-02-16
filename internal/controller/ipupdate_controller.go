@@ -39,7 +39,7 @@ type NetboxConflictError struct {
 }
 
 func (e NetboxConflictError) Error() string {
-	return fmt.Sprintf("netbox conflict: for ip address %d currently assigned %s %d, needed %d",
+	return fmt.Sprintf("netbox conflict: ip address with id %d is currently assigned to %s with id %d, but was expecting id %d",
 		e.IPAddressID, e.ConflictObj, e.AssignedNetboxID, e.NeededNetboxID)
 }
 
