@@ -186,7 +186,7 @@ build-installer: kustomize generate manifests license-headers
 
 .PHONY: helm-chart
 helm-chart: kubebuilder kustomize manifests
-	"$(KUBEBUILDER)" edit --plugins=helm/v1-alpha
+	"$(KUBEBUILDER)" edit --plugins=helm/v2-alpha
 	kustomize build config/default | yq ea 'select(.kind == "Secret")' > dist/chart/templates/secret/secret.yaml
 	yq -i '.metadata.namespace="{{ .Release.Namespace }}"' dist/chart/templates/secret/secret.yaml
 

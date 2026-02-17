@@ -139,7 +139,7 @@ kubectl apply -f ./dist/install.yaml
 1. Build the chart using the optional helm plugin
 
 ```sh
-kubebuilder edit --plugins=helm/v1-alpha
+kubebuilder edit --plugins=helm/v2-alpha
 ```
 
 2. See that a chart was generated under 'dist/chart', and users
