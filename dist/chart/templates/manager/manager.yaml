@@ -1,83 +1,101 @@
-{{- if .Values.controllerManager.enable }}
+{{- if .Values.manager.enable }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: argora-controller-manager
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "chart.labels" . | nindent 4 }}
-    control-plane: controller-manager
-spec:
-  replicas:  {{ .Values.controllerManager.replicas }}
-  selector:
-    matchLabels:
-      {{- include "chart.selectorLabels" . | nindent 6 }}
-      control-plane: controller-manager
-  template:
-    metadata:
-      annotations:
-        kubectl.kubernetes.io/default-container: manager
-      labels:
-        {{- include "chart.labels" . | nindent 8 }}
+    labels:
+        app.kubernetes.io/component: argora-operator
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/name: {{ include "argora.name" . }}
+        helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/part-of: argora-operator
         control-plane: controller-manager
-        {{- if and .Values.controllerManager.pod .Values.controllerManager.pod.labels }}
-        {{- range $key, $value := .Values.controllerManager.pod.labels }}
-        {{ $key }}: {{ $value }}
-        {{- end }}
-        {{- end }}
-    spec:
-      containers:
-        - name: manager
-          args:
-            - --enable-ironcore={{ .Values.ironcore.enable }}
-            - --netbox-url={{ .Values.netboxURL }}
-            {{- range .Values.controllerManager.container.args }}
-            - {{ . }}
+    name: {{ include "argora.resourceName" (dict "suffix" "controller-manager" "context" $) }}
+    namespace: {{ .Release.Namespace }}
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: {{ include "argora.name" . }}
+            control-plane: controller-manager
+    template:
+        metadata:
+            annotations:
+                kubectl.kubernetes.io/default-container: manager
+            labels:
+                app.kubernetes.io/component: argora-operator
+                app.kubernetes.io/managed-by: {{ .Release.Service }}
+                app.kubernetes.io/name: {{ include "argora.name" . }}
+                helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+                app.kubernetes.io/instance: {{ .Release.Name }}
+                app.kubernetes.io/part-of: argora-operator
+                control-plane: controller-manager
+        spec:
+            {{- with .Values.manager.tolerations }}
+            tolerations: {{ toYaml . | nindent 16 }}
             {{- end }}
-          command:
-            - /manager
-          image: {{ .Values.controllerManager.container.image.repository }}:{{ .Values.controllerManager.container.image.tag }}
-          {{- if .Values.controllerManager.container.env }}
-          env:
-            {{- range $key, $value := .Values.controllerManager.container.env }}
-            - name: {{ $key }}
-              value: {{ $value | quote}}
+            {{- with .Values.manager.affinity }}
+            affinity: {{ toYaml . | nindent 16 }}
             {{- end }}
-          {{- end }}
-          livenessProbe:
-            {{- toYaml .Values.controllerManager.container.livenessProbe | nindent 12 }}
-          readinessProbe:
-            {{- toYaml .Values.controllerManager.container.readinessProbe | nindent 12 }}
-          resources:
-            {{- toYaml .Values.controllerManager.container.resources | nindent 12 }}
-          securityContext:
-            {{- toYaml .Values.controllerManager.container.securityContext | nindent 12 }}
-          volumeMounts:
-            - mountPath: /etc/credentials
-              name: secret-volume
-              readOnly: true
-            {{- range $volume := .Values.controllerManager.container.volumes }}
-            - name: {{ $volume.name }}
-              mountPath: {{ $volume.mountPath }}
-              {{- if $volume.readOnly }}
-              readOnly: true
+            {{- with .Values.manager.nodeSelector }}
+            nodeSelector: {{ toYaml . | nindent 16 }}
+            {{- end }}
+            containers:
+                - args:
+                    {{- if .Values.metrics.enable }}
+                    - --metrics-bind-address=:{{ .Values.metrics.port }}
+                    {{- else }}
+                    # Bind to :0 to disable the controller-runtime managed metrics server
+                    - --metrics-bind-address=0
+                    {{- end }}
+                    - --health-probe-bind-address=:8081
+                    {{- range .Values.manager.args }}
+                    - {{ . }}
+                    {{- end }}
+                  command:
+                    - /manager
+                  image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag }}"
+                  imagePullPolicy: {{ .Values.manager.image.pullPolicy }}
+                  livenessProbe:
+                    httpGet:
+                        path: /healthz
+                        port: 8081
+                    initialDelaySeconds: 15
+                    periodSeconds: 20
+                  name: manager
+                  ports: []
+                  readinessProbe:
+                    httpGet:
+                        path: /readyz
+                        port: 8081
+                    initialDelaySeconds: 5
+                    periodSeconds: 10
+                  resources:
+                    {{- if .Values.manager.resources }}
+                    {{- toYaml .Values.manager.resources | nindent 20 }}
+                    {{- else }}
+                    {}
+                    {{- end }}
+                  securityContext:
+                    {{- if .Values.manager.securityContext }}
+                    {{- toYaml .Values.manager.securityContext | nindent 20 }}
+                    {{- else }}
+                    {}
+                    {{- end }}
+                  volumeMounts:
+                    - mountPath: /etc/credentials
+                      name: secret-volume
+                      readOnly: true
+            securityContext:
+              {{- if .Values.manager.podSecurityContext }}
+              {{- toYaml .Values.manager.podSecurityContext | nindent 14 }}
+              {{- else }}
+              {}
               {{- end }}
-            {{- end }}
-      securityContext:
-        {{- toYaml .Values.controllerManager.securityContext | nindent 8 }}
-      serviceAccountName: {{ .Values.controllerManager.serviceAccountName }}
-      terminationGracePeriodSeconds: {{ .Values.controllerManager.terminationGracePeriodSeconds }}
-      volumes:
-        - name: secret-volume
-          secret:
-            secretName: argora-secret
-        {{- if and .Values.certmanager.enable .Values.metrics.enable }}
-        - name: metrics-certs
-          secret:
-            secretName: metrics-server-cert
-        {{- end }}
-        {{- range $volume := .Values.controllerManager.container.volumes }}
-        - name: {{ $volume.name }}
-          {{- toYaml $volume.source | nindent 10 }}
-        {{- end }}
+            serviceAccountName: {{ include "argora.resourceName" (dict "suffix" "controller-manager" "context" $) }}
+            terminationGracePeriodSeconds: 10
+            volumes:
+                - name: secret-volume
+                  secret:
+                    secretName: {{ include "argora.resourceName" (dict "suffix" "secret" "context" $) }}
 {{- end }}

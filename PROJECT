@@ -6,7 +6,9 @@ domain: cloud.sap
 layout:
 - go.kubebuilder.io/v4
 plugins:
-  helm.kubebuilder.io/v1-alpha: {}
+  helm.kubebuilder.io/v2-alpha:
+    manifests: dist/install.yaml
+    output: dist
 projectName: argora
 repo: https://github.com/sapcc/argora
 resources:

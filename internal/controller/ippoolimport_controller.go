@@ -279,11 +279,12 @@ func getLastNIPs(prefix netip.Prefix, n int) []netip.Addr {
 }
 
 // lastAddrInPrefix returns the last address in the given prefix.
+//
+//nolint:gosec
 func lastAddrInPrefix(p netip.Prefix) netip.Addr {
 	p = p.Masked()
 	addr := p.Addr().As4()
 	bits := p.Bits()
-	//nolint:gosec
 	mask := uint32(0xFFFFFFFF) >> uint32(bits)
 	last := (uint32(addr[0])<<24 | uint32(addr[1])<<16 | uint32(addr[2])<<8 | uint32(addr[3])) | mask
 	return netip.AddrFrom4([4]byte{

@@ -1,0 +1,158 @@
+{{- if .Values.rbac.enable }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    labels:
+        app.kubernetes.io/component: argora-operator
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/name: {{ include "argora.name" . }}
+        helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/part-of: argora-operator
+    name: {{ include "argora.resourceName" (dict "suffix" "manager-role" "context" $) }}
+rules:
+    - apiGroups:
+        - ""
+      resources:
+        - events
+      verbs:
+        - create
+        - patch
+    - apiGroups:
+        - ""
+      resources:
+        - secrets
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - apiextensions.k8s.io
+      resources:
+        - customresourcedefinitions
+      verbs:
+        - get
+    - apiGroups:
+        - argora.cloud.sap
+      resources:
+        - clusterimports
+        - ippoolimports
+        - updates
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - argora.cloud.sap
+      resources:
+        - clusterimports/finalizers
+        - ippoolimports/finalizers
+        - updates/finalizers
+      verbs:
+        - update
+    - apiGroups:
+        - argora.cloud.sap
+      resources:
+        - clusterimports/status
+        - ippoolimports/status
+        - updates/status
+      verbs:
+        - get
+        - patch
+        - update
+    - apiGroups:
+        - cluster.x-k8s.io
+      resources:
+        - clusters
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - coordination.k8s.io
+      resources:
+        - leases
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - ipam.cluster.x-k8s.io
+      resources:
+        - globalinclusterippools
+      verbs:
+        - create
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - ipam.cluster.x-k8s.io
+      resources:
+        - ipaddressclaims
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - ipam.cluster.x-k8s.io
+      resources:
+        - ipaddresses
+      verbs:
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - metal.ironcore.dev
+      resources:
+        - bmcs
+        - bmcsecrets
+        - servers
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - metal.ironcore.dev
+      resources:
+        - serverclaims
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - metal3.io
+      resources:
+        - baremetalhosts
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+{{- end }}
