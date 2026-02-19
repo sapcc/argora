@@ -17,6 +17,7 @@ golangciLint:
 githubWorkflow:
   ci:
     enabled: true
+    prepareMakeTarget: generate setup-envtest
     ignorePaths:
       - "**.md" # all Markdown files
   pushContainerToGhcr:
