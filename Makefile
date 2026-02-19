@@ -93,9 +93,10 @@ help-ext: ## Display this help.
 manifests: controller-gen
 	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-.PHONY: gen
-gen: controller-gen
-	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
+.PHONY: generate
+generate: controller-gen goimports ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(GOIMPORTS) -w .
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -106,7 +107,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests gen fmt vet setup-envtest ## Run tests.
+test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -Ev "/e2e|/test/utils|/api/|/internal/networkdata|/internal/controller/mock") -coverprofile cover.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
@@ -115,7 +116,7 @@ test: manifests gen fmt vet setup-envtest ## Run tests.
 # - PROMETHEUS_INSTALL_SKIP=true
 # - CERT_MANAGER_INSTALL_SKIP=true
 .PHONY: test-e2e
-test-e2e: manifests gen fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
+test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
 	@command -v kind >/dev/null 2>&1 || { \
 	  echo "Kind is not installed. Please install Kind manually."; \
 	  exit 1; \
@@ -141,11 +142,11 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 ##@ Build
 
 .PHONY: build-manager
-build-manager: manifests gen fmt vet ## Build manager binary.
+build-manager: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/manager/main.go
 
 .PHONY: run
-run: manifests gen fmt vet ## Run a controller from your host.
+run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/manager/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
@@ -239,6 +240,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 HELM ?= $(LOCALBIN)/helm
 KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
+GOIMPORTS ?= $(LOCALBIN)/goimports
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.8.1
@@ -250,6 +252,7 @@ ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -
 GOLANGCI_LINT_VERSION ?= v2.10.1
 HELM_VERSION ?= v4.1.1
 KUBEBUILDER_VERSION ?= v4.12.0
+GOIMPORTS_VERSION ?= v0.38.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -278,6 +281,11 @@ $(ENVTEST): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+.PHONY: goimports
+goimports: $(GOIMPORTS) ## Download goimports locally if necessary.
+$(GOIMPORTS): $(LOCALBIN)
+	$(call go-install-tool,$(GOIMPORTS),golang.org/x/tools/cmd/goimports,$(GOIMPORTS_VERSION))
 
 .PHONY: helm
 helm: $(HELM)
@@ -375,12 +383,6 @@ install-reuse: FORCE
 
 prepare-static-check: FORCE install-goimports install-golangci-lint install-shellcheck install-typos install-go-licence-detector install-addlicense install-reuse
 
-install-controller-gen: FORCE
-	@if ! hash controller-gen 2>/dev/null; then printf "\e[1;36m>> Installing controller-gen (this may take a while)...\e[0m\n"; go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest; fi
-
-install-setup-envtest: FORCE
-	@if ! hash setup-envtest 2>/dev/null; then printf "\e[1;36m>> Installing setup-envtest (this may take a while)...\e[0m\n"; go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest; fi
-
 # To add additional flags or values (before the default ones), specify the variable in the environment, e.g. `GO_BUILDFLAGS='-tags experimental' make`.
 # To override the default flags or values, specify the variable on the command line, e.g. `make GO_BUILDFLAGS='-tags experimental'`.
 GO_BUILDFLAGS +=
@@ -397,7 +399,7 @@ BININFO_BUILD_DATE  ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 build-all: build/manager
 
-build/manager: FORCE generate
+build/manager: FORCE
 	env $(GO_BUILDENV) go build $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=manager -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' -o build/manager ./cmd/manager/
 
 DESTDIR =
@@ -426,12 +428,6 @@ comma := ,
 check: FORCE static-check build/cover.html build-all
 	@printf "\e[1;32m>> All checks successful.\e[0m\n"
 
-generate: install-controller-gen
-	@printf "\e[1;36m>> controller-gen\e[0m\n"
-	@controller-gen crd rbac:roleName=argora webhook paths="./..." output:crd:artifacts:config=crd
-	@controller-gen object paths="./..."
-	@controller-gen applyconfiguration paths="./..."
-
 run-golangci-lint: FORCE install-golangci-lint
 	@printf "\e[1;36m>> golangci-lint\e[0m\n"
 	@golangci-lint config verify
@@ -445,9 +441,9 @@ run-typos: FORCE install-typos
 	@printf "\e[1;36m>> typos\e[0m\n"
 	@typos
 
-build/cover.out: FORCE generate install-setup-envtest | build
+build/cover.out: FORCE | build
 	@printf "\e[1;36m>> Running tests\e[0m\n"
-	KUBEBUILDER_ASSETS=$$(setup-envtest use 1.34 -p path) go run github.com/onsi/ginkgo/v2/ginkgo run --randomize-all -output-dir=build $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=argora -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' -covermode=count -coverpkg=$(subst $(space),$(comma),$(GO_COVERPKGS)) $(GO_TESTFLAGS) $(GO_TESTPKGS)
+	@env $(GO_TESTENV) go run github.com/onsi/ginkgo/v2/ginkgo run --randomize-all -output-dir=build $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=argora -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' -covermode=count -coverpkg=$(subst $(space),$(comma),$(GO_COVERPKGS)) $(GO_TESTFLAGS) $(GO_TESTPKGS)
 	@awk < build/coverprofile.out '$$1 != "mode:" { is_filename[$$1] = true; counts1[$$1]+=$$2; counts2[$$1]+=$$3 } END { for (filename in is_filename) { printf "%s %d %d\n", filename, counts1[filename], counts2[filename]; } }' | sort | $(SED) '1s/^/mode: count\n/' > $@
 
 build/cover.html: build/cover.out
@@ -505,6 +501,7 @@ vars: FORCE
 	@printf "GO_BUILDFLAGS=$(GO_BUILDFLAGS)\n"
 	@printf "GO_COVERPKGS=$(GO_COVERPKGS)\n"
 	@printf "GO_LDFLAGS=$(GO_LDFLAGS)\n"
+	@printf "GO_TESTENV=$(GO_TESTENV)\n"
 	@printf "GO_TESTFLAGS=$(GO_TESTFLAGS)\n"
 	@printf "GO_TESTPKGS=$(GO_TESTPKGS)\n"
 	@printf "MAKE=$(MAKE)\n"
@@ -531,8 +528,6 @@ help: FORCE
 	@printf "  \e[36minstall-addlicense\e[0m           Install addlicense required by check-license-headers/license-headers/static-check\n"
 	@printf "  \e[36minstall-reuse\e[0m                Install reuse required by license-headers/check-reuse\n"
 	@printf "  \e[36mprepare-static-check\e[0m         Install any tools required by static-check. This is used in CI before dropping privileges, you should probably install all the tools using your package manager\n"
-	@printf "  \e[36minstall-controller-gen\e[0m       Install controller-gen required by static-check and build-all. This is used in CI before dropping privileges, you should probably install all the tools using your package manager\n"
-	@printf "  \e[36minstall-setup-envtest\e[0m        Install setup-envtest required by check. This is used in CI before dropping privileges, you should probably install all the tools using your package manager\n"
 	@printf "\n"
 	@printf "\e[1mBuild\e[0m\n"
 	@printf "  \e[36mbuild-all\e[0m                    Build all binaries.\n"
@@ -541,7 +536,6 @@ help: FORCE
 	@printf "\n"
 	@printf "\e[1mTest\e[0m\n"
 	@printf "  \e[36mcheck\e[0m                        Run the test suite (unit tests and golangci-lint).\n"
-	@printf "  \e[36mgenerate\e[0m                     Generate code for Kubernetes CRDs and deepcopy.\n"
 	@printf "  \e[36mrun-golangci-lint\e[0m            Install and run golangci-lint. Installing is used in CI, but you should probably install golangci-lint using your package manager.\n"
 	@printf "  \e[36mrun-shellcheck\e[0m               Install and run shellcheck. Installing is used in CI, but you should probably install shellcheck using your package manager.\n"
 	@printf "  \e[36mrun-typos\e[0m                    Check for spelling errors using typos.\n"
