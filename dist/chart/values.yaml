@@ -12,7 +12,6 @@
 ## Configure the controller manager deployment
 ##
 manager:
-  enable: true
   replicas: 1
 
   image:
@@ -72,11 +71,6 @@ manager:
   ## Manager pod's tolerations
   ##
   tolerations: []
-
-## RBAC roles and bindings
-##
-rbac:
-  enable: true
 
 ## Custom Resource Definitions
 ##

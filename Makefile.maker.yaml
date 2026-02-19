@@ -73,6 +73,9 @@ typos:
     Reponse: Reponse # typo in the module
     Adress: Adress # typo in the module
 
+controllerGen:
+  enabled: false
+
 verbatim: |
   kind-up:
     kind get clusters | grep kind || kind create cluster -n kind
@@ -134,9 +137,10 @@ verbatim: |
   manifests: controller-gen
     "$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-  .PHONY: gen
-  gen: controller-gen
-    "$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
+  .PHONY: generate
+  generate: controller-gen goimports ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+    $(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+    $(GOIMPORTS) -w .
 
   .PHONY: fmt
   fmt: ## Run go fmt against code.
@@ -147,7 +151,7 @@ verbatim: |
     go vet ./...
 
   .PHONY: test
-  test: manifests gen fmt vet setup-envtest ## Run tests.
+  test: manifests generate fmt vet setup-envtest ## Run tests.
     KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -Ev "/e2e|/test/utils|/api/|/internal/networkdata|/internal/controller/mock") -coverprofile cover.out
 
   # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
@@ -156,7 +160,7 @@ verbatim: |
   # - PROMETHEUS_INSTALL_SKIP=true
   # - CERT_MANAGER_INSTALL_SKIP=true
   .PHONY: test-e2e
-  test-e2e: manifests gen fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
+  test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
     @command -v kind >/dev/null 2>&1 || { \
       echo "Kind is not installed. Please install Kind manually."; \
       exit 1; \
@@ -182,11 +186,11 @@ verbatim: |
   ##@ Build
 
   .PHONY: build-manager
-  build-manager: manifests gen fmt vet ## Build manager binary.
+  build-manager: manifests generate fmt vet ## Build manager binary.
     go build -o bin/manager cmd/manager/main.go
 
   .PHONY: run
-  run: manifests gen fmt vet ## Run a controller from your host.
+  run: manifests generate fmt vet ## Run a controller from your host.
     go run ./cmd/manager/main.go
 
   # If you wish to build the manager image targeting other platforms you can use the --platform flag.
@@ -280,6 +284,7 @@ verbatim: |
   GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
   HELM ?= $(LOCALBIN)/helm
   KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
+  GOIMPORTS ?= $(LOCALBIN)/goimports
 
   ## Tool Versions
   KUSTOMIZE_VERSION ?= v5.8.1
@@ -291,6 +296,7 @@ verbatim: |
   GOLANGCI_LINT_VERSION ?= v2.10.1
   HELM_VERSION ?= v4.1.1
   KUBEBUILDER_VERSION ?= v4.12.0
+  GOIMPORTS_VERSION ?= v0.38.0
 
   .PHONY: kustomize
   kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -319,6 +325,11 @@ verbatim: |
   golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
   $(GOLANGCI_LINT): $(LOCALBIN)
     $(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+  .PHONY: goimports
+  goimports: $(GOIMPORTS) ## Download goimports locally if necessary.
+  $(GOIMPORTS): $(LOCALBIN)
+    $(call go-install-tool,$(GOIMPORTS),golang.org/x/tools/cmd/goimports,$(GOIMPORTS_VERSION))
 
   .PHONY: helm
   helm: $(HELM)
