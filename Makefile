@@ -36,10 +36,10 @@ default: build-all
 kind-up:
 	kind get clusters | grep kind || kind create cluster -n kind
 
-tilt: FORCE generate license-headers helm-build-local-image kind-up
+tilt: FORCE manifests generate license-headers helm-build-local-image kind-up
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
-tilt-debug: FORCE generate license-headers helm-build-local-image kind-up
+tilt-debug: FORCE manifests generate license-headers helm-build-local-image kind-up
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE) --TARGET debug
 
 ##@ kubebuilder
