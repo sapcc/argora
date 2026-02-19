@@ -24,8 +24,6 @@ manager:
   ##
   args:
     - --leader-elect
-    - --metrics-bind-address=:8443
-    - --health-probe-bind-address=:8081
     #- --enable-ironcore=false
     #- --netbox-url=https://netbox-url
     #- --zap-log-level=debug
