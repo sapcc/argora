@@ -73,12 +73,6 @@ manager:
   ##
   tolerations: []
 
-  ## Service account name for the manager deployment
-  ##
-  serviceAccount:
-    name: argora-controller-manager
-    annotations: []
-
 ## RBAC roles and bindings
 ##
 rbac:
