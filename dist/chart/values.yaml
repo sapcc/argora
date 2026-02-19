@@ -77,7 +77,6 @@ manager:
 ##
 rbac:
   enable: true
-
 ## Custom Resource Definitions
 ##
 crd:
@@ -105,6 +104,10 @@ certManager:
 ##
 prometheus:
   enable: false
+  
+prometheusRules:
+  create: true
+
 
 ironcore:
   enable: true
