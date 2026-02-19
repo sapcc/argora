@@ -11,10 +11,8 @@ mkShell {
     go-licence-detector
     go_1_25
     gotools # goimports
-    kubernetes-controller-tools # controller-gen
     renovate
     reuse
-    setup-envtest
     typos
     # keep this line if you use bash
     bashInteractive
