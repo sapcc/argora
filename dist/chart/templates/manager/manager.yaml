@@ -1,3 +1,4 @@
+{{- if .Values.manager.enable }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -97,3 +98,4 @@ spec:
                 - name: secret-volume
                   secret:
                     secretName: {{ include "argora.resourceName" (dict "suffix" "secret" "context" $) }}
+{{- end }}
