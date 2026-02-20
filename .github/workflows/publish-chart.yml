@@ -60,7 +60,11 @@ jobs:
 
       - name: Make Helm chart
         run: |
-          make helm-chart
+          echo $PATH
+          echo $GOPATH
+          go install github.com/google/addlicense@latest
+          which addlicense
+          PATH="$PATH:$GOPATH/bin" make helm-chart
 
       - name: Install yq
         run: |
