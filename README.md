@@ -34,9 +34,6 @@ credentials:
   bmcUser: "<user>"
   bmcPassword: "<password>"
   netboxToken: "<token>"
-
-crd:
-  enable: true
 ```
 
 **Run on dev cluster**
