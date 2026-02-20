@@ -99,6 +99,20 @@ certManager:
 ##
 prometheus:
   enable: false
+  
+## Create rules for Argora monitoring. 
+## Requires prometheus-operator to be installed in the cluster.
+##
+prometheusRules:
+  ## Enables PrometheusRule resources to be created
+  create: false
+  ## Labels for PrometheusRules
+  labels: {}
+  
+  ## Annotations for PrometheusRules
+  annotations: {}
+
+
 
 ironcore:
   enable: true

@@ -1,0 +1,13 @@
+groups:
+- name: netbox.alerts
+  rules:
+  - alert: ArgoraIPAddressConflict
+    expr: >
+      kube_customresource_netbox_ipaddress{customresource_kind="IPAddress",customresource_group="ipam.cluster.x-k8s.io",conflict!~""}
+      == 1
+    for: {{ dig "ArgoraIPAddressConflict" "for" "10m" .Values.prometheusRules }}
+    labels:
+      severity: {{ dig "ArgoraIPAddressConflict" "severity" "warning" .Values.prometheusRules }}
+    annotations:
+      description: "IPaddress has conflict with netbox IP address"
+      summary: "IPAddress conflict detected"
