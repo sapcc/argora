@@ -23,8 +23,8 @@ manager:
   ##
   args:
     - --leader-elect
-    #- --enable-ironcore=false
-    #- --netbox-url=https://netbox-url
+    - --enable-ironcore=true
+    - --netbox-url=https://netbox-url
     #- --zap-log-level=debug
 
   ## Environment variables
@@ -113,11 +113,6 @@ prometheusRules:
   annotations: {}
 
 
-
-ironcore:
-  enable: true
-
-netboxURL: "https://netbox-url"
 
 credentials:
   bmcUser: "_"

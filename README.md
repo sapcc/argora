@@ -26,6 +26,10 @@ Argora is a Kubernetes operator designed to manage Metal3 and IronCore resources
 Helm is used to Template manifest of the operators. You need to provide additional `helm` values under `dist/chart/values.yaml` in the following format:
 
 ```yaml
+  args:
+    ...
+    - --netbox-url=https://<netbox-url-here>
+
 credentials:
   bmcUser: "<user>"
   bmcPassword: "<password>"
@@ -33,8 +37,6 @@ credentials:
 
 crd:
   enable: true
-
-netboxURL: <netbox-url>
 ```
 
 **Run on dev cluster**

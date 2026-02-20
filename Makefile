@@ -36,10 +36,10 @@ default: build-all
 kind-up:
 	kind get clusters | grep kind || kind create cluster -n kind
 
-tilt: FORCE generate license-headers helm-build-local-image kind-up
+tilt: FORCE helm-build-local-image kind-up prepare-deploy
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
-tilt-debug: FORCE generate license-headers helm-build-local-image kind-up
+tilt-debug: FORCE helm-build-local-image kind-up prepare-deploy
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE) --TARGET debug
 
 ##@ kubebuilder
@@ -94,9 +94,8 @@ manifests: controller-gen
 	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
-generate: controller-gen goimports ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
-	$(GOIMPORTS) -w .
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -186,8 +185,9 @@ build-installer: kustomize generate license-headers manifests
 ##@ Deployment
 
 .PHONY: helm-chart
-helm-chart: kubebuilder kustomize manifests
+helm-chart: kubebuilder
 	"$(KUBEBUILDER)" edit --plugins=helm/v2-alpha
+	sed -i 's#credentials\.json: ""#credentials.json: {{ toJson .Values.credentials | quote }}#' dist/chart/templates/extras/secret.yaml # to replace the placeholder in the generated chart with the actual value from values.yaml
 
 .PHONY: helm-lint
 helm-lint: helm helm-chart
@@ -199,15 +199,16 @@ set-image:
 	yq -i '.controllerManager.container.image.tag="$(IMG_TAG)"' dist/chart/values.yaml
 
 .PHONY: prepare-deploy
-prepare-deploy: helm-chart helm-lint
-	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
-	kubectl create namespace argora-system || true
+prepare-deploy: install-crd
+	"$(KUBECTL)" create namespace argora-system || true
 
 .PHONY: helm-build-local-image
-helm-build-local-image: prepare-deploy
+helm-build-local-image: helm-chart helm-lint
+	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
 
 .PHONY: helm-build
-helm-build: set-image prepare-deploy
+helm-build: set-image helm-chart helm-lint
+	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
 
 .PHONY: install-crd
 install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -240,7 +241,6 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 HELM ?= $(LOCALBIN)/helm
 KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
-GOIMPORTS ?= $(LOCALBIN)/goimports
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.8.1
@@ -252,7 +252,6 @@ ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -
 GOLANGCI_LINT_VERSION ?= v2.10.1
 HELM_VERSION ?= v4.1.1
 KUBEBUILDER_VERSION ?= v4.12.0
-GOIMPORTS_VERSION ?= v0.38.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -281,11 +280,6 @@ $(ENVTEST): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
-
-.PHONY: goimports
-goimports: $(GOIMPORTS) ## Download goimports locally if necessary.
-$(GOIMPORTS): $(LOCALBIN)
-	$(call go-install-tool,$(GOIMPORTS),golang.org/x/tools/cmd/goimports,$(GOIMPORTS_VERSION))
 
 .PHONY: helm
 helm: $(HELM)

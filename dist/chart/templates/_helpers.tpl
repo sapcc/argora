@@ -83,7 +83,6 @@ app.kubernetes.io/name: {{ include "chart.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-
 {{- define "chart.hasMutatingWebhooks" -}}
 {{- $hasMutating := false }}
 {{- range . }}
@@ -91,7 +90,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
     $hasMutating = true }}{{- end }}
 {{- end }}
 {{ $hasMutating }}}}{{- end }}
-
 
 {{- define "chart.hasValidatingWebhooks" -}}
 {{- $hasValidating := false }}
