@@ -62,7 +62,7 @@ jobs:
         run: |
           echo $PATH
           echo $GOPATH
-          go install github.com/google/addlicense@latest
+          make install-addlicense
           which addlicense
           PATH="$PATH:$GOPATH/bin" make helm-chart
 
