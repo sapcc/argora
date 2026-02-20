@@ -36,10 +36,10 @@ default: build-all
 kind-up:
 	kind get clusters | grep kind || kind create cluster -n kind
 
-tilt: FORCE generate license-headers helm-build-local-image kind-up prepare-deploy
+tilt: FORCE helm-build-local-image kind-up prepare-deploy
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
-tilt-debug: FORCE generate license-headers helm-build-local-image kind-up prepare-deploy
+tilt-debug: FORCE helm-build-local-image kind-up prepare-deploy
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE) --TARGET debug
 
 ##@ kubebuilder
@@ -185,8 +185,9 @@ build-installer: kustomize generate license-headers manifests
 ##@ Deployment
 
 .PHONY: helm-chart
-helm-chart: kubebuilder kustomize manifests
+helm-chart: kubebuilder
 	"$(KUBEBUILDER)" edit --plugins=helm/v2-alpha
+	sed -i 's#credentials\.json: ""#credentials.json: {{ toJson .Values.credentials | quote }}#' dist/chart/templates/extras/secret.yaml # to replace the placeholder in the generated chart with the actual value from values.yaml
 
 .PHONY: helm-lint
 helm-lint: helm helm-chart
