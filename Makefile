@@ -36,10 +36,10 @@ default: build-all
 kind-up:
 	kind get clusters | grep kind || kind create cluster -n kind
 
-tilt: FORCE generate license-headers helm-build-local-image kind-up
+tilt: FORCE generate license-headers helm-build-local-image kind-up prepare-deploy
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE)
 
-tilt-debug: FORCE generate license-headers helm-build-local-image kind-up
+tilt-debug: FORCE generate license-headers helm-build-local-image kind-up prepare-deploy
 	tilt up --stream -- --BININFO_VERSION $(BININFO_VERSION) --BININFO_COMMIT_HASH $(BININFO_COMMIT_HASH) --BININFO_BUILD_DATE $(BININFO_BUILD_DATE) --TARGET debug
 
 ##@ kubebuilder
@@ -198,15 +198,16 @@ set-image:
 	yq -i '.controllerManager.container.image.tag="$(IMG_TAG)"' dist/chart/values.yaml
 
 .PHONY: prepare-deploy
-prepare-deploy: helm-chart helm-lint install-crd
-	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
+prepare-deploy: install-crd
 	"$(KUBECTL)" create namespace argora-system || true
 
 .PHONY: helm-build-local-image
-helm-build-local-image: prepare-deploy
+helm-build-local-image: helm-chart helm-lint
+	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
 
 .PHONY: helm-build
-helm-build: set-image prepare-deploy
+helm-build: set-image helm-chart helm-lint
+	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
 
 .PHONY: install-crd
 install-crd: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
