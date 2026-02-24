@@ -75,11 +75,6 @@ manager:
   ##
   volumes: []
 
-## Manager Deployment
-##
-manager:
-  enable: true
-
 ## RBAC configuration
 ##
 rbac:

@@ -46,7 +46,7 @@ spec:
           #- --enable-ironcore=false
           #- --netbox-url=https://netbox-url
           #- --zap-log-level=debug
-        image: controller:latest #"{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: controller:latest
         name: manager
         ports: []
         securityContext:
