@@ -75,6 +75,11 @@ manager:
   ##
   volumes: []
 
+  ## Service account name for the manager deployment
+  ## If not set, a new service account will be created with the same name as the release.
+  ##
+  serviceAccountName: ""
+
 ## RBAC configuration
 ##
 rbac:

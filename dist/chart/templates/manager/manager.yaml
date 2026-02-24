@@ -111,7 +111,7 @@ spec:
               {{- else }}
               {}
               {{- end }}
-            serviceAccountName: {{ include "argora.resourceName" (dict "suffix" "controller-manager" "context" $) }}
+            serviceAccountName: {{ .Values.manager.serviceAccountName | default (include "argora.resourceName" (dict "suffix" "controller-manager" "context" $)) }}
             terminationGracePeriodSeconds: 10
             volumes:
                 - name: secret-volume
