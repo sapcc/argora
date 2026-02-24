@@ -1,3 +1,4 @@
+{{- if .Values.manager.enable }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,6 +30,9 @@ spec:
                 app.kubernetes.io/instance: {{ .Release.Name }}
                 app.kubernetes.io/part-of: argora-operator
                 control-plane: controller-manager
+                {{- range $key, $value := .Values.manager.podLabels }}
+                {{ $key }}: {{ $value }}
+                {{- end }}
         spec:
             {{- with .Values.manager.tolerations }}
             tolerations: {{ toYaml . | nindent 16 }}
@@ -48,6 +52,8 @@ spec:
                     - --metrics-bind-address=0
                     {{- end }}
                     - --health-probe-bind-address=:8081
+                    - --enable-ironcore={{ .Values.ironcore.enable }}
+                    - --netbox-url={{ .Values.netboxURL }}
                     {{- range .Values.manager.args }}
                     - {{ . }}
                     {{- end }}
@@ -62,6 +68,13 @@ spec:
                     initialDelaySeconds: 15
                     periodSeconds: 20
                   name: manager
+                  {{- if .Values.manager.env }}
+                  env:
+                    {{- range $key, $value := .Values.manager.env }}
+                    - name: {{ $key }}
+                      value: {{ $value | quote}}
+                    {{- end }}
+                  {{- end }}
                   ports: []
                   readinessProbe:
                     httpGet:
@@ -85,15 +98,27 @@ spec:
                     - mountPath: /etc/credentials
                       name: secret-volume
                       readOnly: true
+                    {{- range $volume := .Values.manager.volumes }}
+                    - mountPath: {{ $volume.mountPath }}
+                      name: {{ $volume.name }}
+                      {{- if $volume.readOnly }}
+                      readOnly: true
+                      {{- end }}
+                    {{- end }}
             securityContext:
               {{- if .Values.manager.podSecurityContext }}
               {{- toYaml .Values.manager.podSecurityContext | nindent 14 }}
               {{- else }}
               {}
               {{- end }}
-            serviceAccountName: {{ include "argora.resourceName" (dict "suffix" "controller-manager" "context" $) }}
+            serviceAccountName: {{ .Values.manager.serviceAccountName | default (include "argora.resourceName" (dict "suffix" "controller-manager" "context" $)) }}
             terminationGracePeriodSeconds: 10
             volumes:
                 - name: secret-volume
                   secret:
                     secretName: {{ include "argora.resourceName" (dict "suffix" "secret" "context" $) }}
+                {{- range $volume := .Values.manager.volumes }}
+                - name: {{ $volume.name }}
+                  {{- toYaml $volume.source | nindent 18 }}
+                {{- end }}
+{{- end }}

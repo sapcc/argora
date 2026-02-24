@@ -12,6 +12,7 @@
 ## Configure the controller manager deployment
 ##
 manager:
+  enable: true
   replicas: 1
 
   image:
@@ -23,17 +24,11 @@ manager:
   ##
   args:
     - --leader-elect
-    - --enable-ironcore=true
-    - --netbox-url=https://netbox-url
     #- --zap-log-level=debug
 
   ## Environment variables
   ##
-  env: []
-
-  ## Image pull secrets
-  ##
-  imagePullSecrets: []
+  env: {}
 
   ## Pod-level security settings
   ##
@@ -72,6 +67,24 @@ manager:
   ##
   tolerations: []
 
+  ## Additional labels for the manager pod
+  ##
+  podLabels: {}
+
+  ## Additional volumes for the manager pod
+  ##
+  volumes: []
+
+  ## Service account name for the manager deployment
+  ## If not set, a new service account will be created with the same name as the release.
+  ##
+  serviceAccountName: ""
+
+## RBAC configuration
+##
+rbac:
+  enable: true
+
 ## Custom Resource Definitions
 ##
 crd:
@@ -99,8 +112,8 @@ certManager:
 ##
 prometheus:
   enable: false
-  
-## Create rules for Argora monitoring. 
+
+## Create rules for Argora monitoring.
 ## Requires prometheus-operator to be installed in the cluster.
 ##
 prometheusRules:
@@ -108,11 +121,14 @@ prometheusRules:
   create: false
   ## Labels for PrometheusRules
   labels: {}
-  
+
   ## Annotations for PrometheusRules
   annotations: {}
 
+ironcore:
+  enable: true
 
+netboxURL: "https://netbox-url"
 
 credentials:
   bmcUser: "_"

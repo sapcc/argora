@@ -53,14 +53,17 @@ jobs:
           fi
           echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Install Kustomize
-        run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          mv kustomize /usr/local/bin
+      # - name: Install Kustomize
+      #   run: |
+      #     curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+      #     mv kustomize /usr/local/bin
 
-      - name: Make Helm chart
-        run: |
-          make helm-chart
+      # after changes to kustomize configuration run it manually locally and commit the generated chart to the repository after reviewing changes
+      # reason is, with helm/v2-alpha it replaces quite a lot of generated template files and we need more customization
+      #
+      # - name: Make Helm chart
+      #   run: |
+      #     make helm-chart
 
       - name: Install yq
         run: |
@@ -68,8 +71,8 @@ jobs:
 
       - name: Set container image repository and tag
         run: |
-          yq -i '.controllerManager.container.image.repository = "keppel.global.cloud.sap/ccloud-ghcr-io-mirror/sapcc/argora"' dist/chart/values.yaml
-          yq -i '.controllerManager.container.image.tag = "sha-${{ github.sha }}"' dist/chart/values.yaml
+          yq -i '.manager.image.repository = "keppel.global.cloud.sap/ccloud-ghcr-io-mirror/sapcc/argora"' dist/chart/values.yaml
+          yq -i '.manager.image.tag = "sha-${{ github.sha }}"' dist/chart/values.yaml
 
       - name: Package Helm chart with crds folder in template
         run: |

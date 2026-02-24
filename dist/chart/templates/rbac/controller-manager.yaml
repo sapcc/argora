@@ -1,3 +1,4 @@
+{{- if .Values.rbac.enable }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -10,3 +11,4 @@ metadata:
         app.kubernetes.io/part-of: argora-operator
     name: {{ include "argora.resourceName" (dict "suffix" "controller-manager" "context" $) }}
     namespace: {{ .Release.Namespace }}
+{{- end }}
