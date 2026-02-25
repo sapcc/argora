@@ -199,7 +199,7 @@ set-image:
 	yq -i '.controllerManager.container.image.tag="$(IMG_TAG)"' dist/chart/values.yaml
 
 .PHONY: prepare-deploy
-prepare-deploy: install-crd
+prepare-deploy:
 	"$(KUBECTL)" create namespace argora-system || true
 
 .PHONY: helm-build-local-image
