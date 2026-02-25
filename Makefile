@@ -190,7 +190,7 @@ helm-chart: kubebuilder
 	sed -i 's#credentials\.json: ""#credentials.json: {{ toJson .Values.credentials | quote }}#' dist/chart/templates/extras/secret.yaml # to replace the placeholder in the generated chart with the actual value from values.yaml
 
 .PHONY: helm-lint
-helm-lint: helm helm-chart
+helm-lint: helm
 	"$(HELM)" lint dist/chart
 
 .PHONY: set-image
@@ -199,15 +199,15 @@ set-image:
 	yq -i '.controllerManager.container.image.tag="$(IMG_TAG)"' dist/chart/values.yaml
 
 .PHONY: prepare-deploy
-prepare-deploy: install-crd
+prepare-deploy:
 	"$(KUBECTL)" create namespace argora-system || true
 
 .PHONY: helm-build-local-image
-helm-build-local-image: helm-chart helm-lint
+helm-build-local-image: helm-lint
 	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
 
 .PHONY: helm-build
-helm-build: set-image helm-chart helm-lint
+helm-build: set-image helm-lint
 	"$(HELM)" template -n argora-system dist/chart > dist/install.yaml
 
 .PHONY: install-crd
