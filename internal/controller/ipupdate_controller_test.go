@@ -590,6 +590,28 @@ var _ = Describe("IP Update Controller", func() {
 			Expect(ipAddress.Annotations).To(HaveKeyWithValue("netbox.argora.cloud.sap/conflicted", "device"))
 		})
 
+		It("delete conflicted annotation, in case if conflict ended", func() {
+			ipAddress := &ipamv1.IPAddress{}
+			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
+
+			ipAddress.Annotations = map[string]string{
+				"netbox.argora.cloud.sap/conflicted": "interface",
+			}
+			Expect(k8sClient.Update(ctx, ipAddress)).To(Succeed())
+
+			netBoxMock := prepareNetboxMock()
+
+			controllerRecociler := createIPUpdateReconciler(netBoxMock, fileReaderMock)
+
+			_, err := controllerRecociler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressByAddressCalls).To(Equal(1))
+
+			Expect(k8sClient.Get(ctx, typeNamespacedUpdateName, ipAddress)).To(Succeed())
+			Expect(ipAddress.Annotations).To(Not(HaveKey("netbox.argora.cloud.sap/conflicted")))
+			Expect(err).To(Succeed())
+		})
+
 		It("updates device primary ip if is not matching", func() {
 			netBoxMock := prepareNetboxMock()
 			dcimMock := netBoxMock.DCIMMock.(*mock.DCIMMock)

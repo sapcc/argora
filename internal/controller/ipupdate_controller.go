@@ -43,10 +43,13 @@ func (e NetboxConflictError) Error() string {
 		e.IPAddressID, e.ConflictObj, e.AssignedNetboxID, e.NeededNetboxID)
 }
 
-const ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
+const (
+	ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
 
-const annotationDeviceKey = "netbox.argora.cloud.sap/device-id"
-const annotationInterfaceKey = "netbox.argora.cloud.sap/interface-id"
+	annotationDeviceKey     = "netbox.argora.cloud.sap/device-id"
+	annotationInterfaceKey  = "netbox.argora.cloud.sap/interface-id"
+	annotationConflictedKey = "netbox.argora.cloud.sap/conflicted"
+)
 
 // IPUpdateReconciler reconciles a ipam.cluster.x-k8s.io.IPAddress object
 type IPUpdateReconciler struct {
@@ -155,8 +158,7 @@ func (r *IPUpdateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	err = r.reconcileNetbox(target.iface, target.device, ipAddress, logger)
 	if err != nil {
-		var netboxConflictErr NetboxConflictError
-		if errors.As(err, &netboxConflictErr) {
+		if netboxConflictErr, ok := errors.AsType[NetboxConflictError](err); ok {
 			logger.Info("netbox ipaddress conflict", "error", err)
 			err := r.setConflictAnnotation(ctx, ipAddress, netboxConflictErr)
 			if err != nil {
@@ -213,6 +215,7 @@ func (r *IPUpdateReconciler) updateIPAddressMetadata(
 		ipAddr.Annotations = make(map[string]string)
 	}
 
+	delete(ipAddr.Annotations, annotationConflictedKey)
 	ipAddr.Annotations[annotationDeviceKey] = strconv.Itoa(target.device.ID)
 	ipAddr.Annotations[annotationInterfaceKey] = strconv.Itoa(target.iface.ID)
 
@@ -497,7 +500,7 @@ func (r *IPUpdateReconciler) setConflictAnnotation(ctx context.Context, ipAddr *
 		ipAddr.Annotations = make(map[string]string)
 	}
 
-	ipAddr.Annotations["netbox.argora.cloud.sap/conflicted"] = conflictErr.ConflictObj
+	ipAddr.Annotations[annotationConflictedKey] = conflictErr.ConflictObj
 
 	if patchErr := r.k8sClient.Patch(ctx, ipAddr, client.MergeFrom(base)); patchErr != nil {
 		return patchErr
