@@ -50,26 +50,18 @@ var (
 	testEnv       *envtest.Environment
 	cfg           *rest.Config
 	k8sClient     client.Client
-	k8sManager    interface{}
-	mgrCtx        context.Context
-	mgrCancel     context.CancelFunc
 	testNamespace *corev1.Namespace
 )
 
 const (
-	// reconciliation timing used by controllers in unit tests
 	reconcileInterval        = 50 * time.Millisecond
 	reconcileIntervalDefault = 1 * time.Minute
-
-	// gomega defaults for integration tests
-	pollingInterval      = 50 * time.Millisecond
-	eventuallyTimeout    = 5 * time.Second
-	consistentlyDuration = 1 * time.Second
+	pollingInterval          = 50 * time.Millisecond
+	eventuallyTimeout        = 5 * time.Second
+	consistentlyDuration     = 1 * time.Second
 )
 
 func TestControllers(t *testing.T) {
-	// configure gomega's default polling/timeout intervals so individual
-	// specs don't need to repeat WithTimeout/WithPolling arguments.
 	SetDefaultConsistentlyPollingInterval(pollingInterval)
 	SetDefaultEventuallyPollingInterval(pollingInterval)
 	SetDefaultEventuallyTimeout(eventuallyTimeout)
