@@ -57,11 +57,24 @@ var (
 )
 
 const (
+	// reconciliation timing used by controllers in unit tests
 	reconcileInterval        = 50 * time.Millisecond
 	reconcileIntervalDefault = 1 * time.Minute
+
+	// gomega defaults for integration tests
+	pollingInterval      = 50 * time.Millisecond
+	eventuallyTimeout    = 5 * time.Second
+	consistentlyDuration = 1 * time.Second
 )
 
 func TestControllers(t *testing.T) {
+	// configure gomega's default polling/timeout intervals so individual
+	// specs don't need to repeat WithTimeout/WithPolling arguments.
+	SetDefaultConsistentlyPollingInterval(pollingInterval)
+	SetDefaultEventuallyPollingInterval(pollingInterval)
+	SetDefaultEventuallyTimeout(eventuallyTimeout)
+	SetDefaultConsistentlyDuration(consistentlyDuration)
+
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controller Suite")
 }
@@ -140,68 +153,43 @@ func getFirstFoundEnvTestBinaryDir() string {
 	return ""
 }
 
-func SetupTest(_ interface{}) *corev1.Namespace {
-	var err error
-	k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:     scheme.Scheme,
-		Metrics:    metricsserver.Options{BindAddress: "0"},
-		Controller: config.Controller{SkipNameValidation: ptr.To(true)},
-	})
-	Expect(err).ToNot(HaveOccurred())
+func SetupTest(fileReaderMock *mock.FileReaderMock, netBoxMock *mock.NetBoxMock) *corev1.Namespace {
+	ns := &corev1.Namespace{}
 
-	mgrCtx, mgrCancel = context.WithCancel(context.Background())
-	go func() {
-		defer GinkgoRecover()
-		Expect(k8sManager.(ctrl.Manager).Start(mgrCtx)).To(Succeed())
-	}()
+	BeforeEach(func(ctx SpecContext) {
+		var mgrCtx context.Context
+		mgrCtx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
 
-	testNamespace = &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "test-ipupdate-",
-		},
-	}
-	Expect(k8sClient.Create(ctx, testNamespace)).To(Succeed())
+		*ns = corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-ipupdate-",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
+		DeferCleanup(k8sClient.Delete, ns)
 
-	return testNamespace
-}
-
-// SetupManagerForIntegrationTest creates a new Manager and registers the IPUpdateReconciler
-// for a single test. Returns the manager, context, and cancel function for proper cleanup.
-func SetupManagerForIntegrationTest(fileReaderMock *mock.FileReaderMock, netBoxMock *mock.NetBoxMock) (ctrl.Manager, context.Context, context.CancelFunc) {
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:     scheme.Scheme,
-		Metrics:    metricsserver.Options{BindAddress: "0"},
-		Controller: config.Controller{SkipNameValidation: ptr.To(true)},
-	})
-	Expect(err).ToNot(HaveOccurred())
-
-	// Create credentials and register reconciler
-	creds := credentials.NewDefaultCredentials(fileReaderMock)
-	r := NewIPUpdateReconciler(mgr, creds, netBoxMock)
-	if err := r.SetupWithManager(mgr); err != nil {
+		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+			Scheme:     scheme.Scheme,
+			Metrics:    metricsserver.Options{BindAddress: "0"},
+			Controller: config.Controller{SkipNameValidation: ptr.To(true)},
+		})
 		Expect(err).ToNot(HaveOccurred())
-	}
 
-	// Start manager in goroutine
-	mgrCtx, mgrCancel := context.WithCancel(context.Background())
-	go func() {
-		defer GinkgoRecover()
-		Expect(mgr.Start(mgrCtx)).To(Succeed())
-	}()
+		// Create credentials and register reconciler
+		creds := credentials.NewDefaultCredentials(fileReaderMock)
+		r := NewIPUpdateReconciler(mgr, creds, netBoxMock)
+		if err := r.SetupWithManager(mgr); err != nil {
+			Expect(err).ToNot(HaveOccurred())
+		}
 
-	return mgr, mgrCtx, mgrCancel
-}
+		go func() {
+			defer GinkgoRecover()
+			Expect(mgr.Start(mgrCtx)).To(Succeed())
+		}()
+	})
 
-// CreateTestNamespace creates an isolated test namespace for a single test.
-// The namespace is automatically cleaned up when EnsureCleanState is called.
-func CreateTestNamespace() *corev1.Namespace {
-	testNamespace = &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "test-ipupdate-",
-		},
-	}
-	Expect(k8sClient.Create(ctx, testNamespace)).To(Succeed())
-	return testNamespace
+	return ns
 }
 
 func EnsureCleanState() {

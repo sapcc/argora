@@ -37,48 +37,36 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 		testIPAddressID           = 456
 	)
 
+	fileReaderMock := &mock.FileReaderMock{
+		FileContent: map[string]string{
+			"/etc/credentials/credentials.json": `{
+				"bmcUser": "user",
+				"bmcPassword": "password",
+				"netboxToken": "token"
+			}`,
+		},
+		ReturnError: false,
+	}
+
+	netBoxMock := createDefaultNetBoxMockForEnvtest(testDeviceID, testInterfaceID, testIPAddressID)
+
+	ns := SetupTest(fileReaderMock, netBoxMock)
+
 	var (
 		testCtx            context.Context
-		netBoxMock         *mock.NetBoxMock
-		fileReaderMock     *mock.FileReaderMock
 		testIPAddress      *ipamv1.IPAddress
 		testIPAddressClaim *ipamv1.IPAddressClaim
 		testServerClaim    *metalv1alpha1.ServerClaim
 		testServer         *metalv1alpha1.Server
-		namespace          *v1.Namespace
-		localMgrCancel     context.CancelFunc
 	)
 
 	BeforeEach(func() {
 		testCtx = context.Background()
-
-		fileReaderMock = &mock.FileReaderMock{
-			FileContent: map[string]string{
-				"/etc/credentials/credentials.json": `{
-					"bmcUser": "user",
-					"bmcPassword": "password",
-					"netboxToken": "token"
-				}`,
-			},
-			ReturnError: false,
-		}
-
-		netBoxMock = createDefaultNetBoxMockForEnvtest(testDeviceID, testInterfaceID, testIPAddressID)
-
-		// Set up manager and reconciler for this test
-		_, _, localMgrCancel = SetupManagerForIntegrationTest(fileReaderMock, netBoxMock)
-
-		// Create a fresh namespace for each test
-		namespace = CreateTestNamespace()
-		testNamespace = namespace
+		testNamespace = ns
 	})
 
 	AfterEach(func() {
-		// Clean up resources in the test namespace
 		EnsureCleanState()
-		if localMgrCancel != nil {
-			localMgrCancel()
-		}
 	})
 
 	Context("with real Kubernetes API", func() {
@@ -87,7 +75,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 			testServer = &metalv1alpha1.Server{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testServerName,
-					Namespace: namespace.Name,
+					Namespace: ns.Name,
 				},
 				Spec: metalv1alpha1.ServerSpec{
 					SystemUUID: "test_uuid_123",
@@ -102,7 +90,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 			testServerClaim = &metalv1alpha1.ServerClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testServerClaimName,
-					Namespace: namespace.Name,
+					Namespace: ns.Name,
 				},
 				Spec: metalv1alpha1.ServerClaimSpec{
 					ServerRef: &v1.LocalObjectReference{
@@ -118,7 +106,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 			testIPAddressClaim = &ipamv1.IPAddressClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testClaimName,
-					Namespace: namespace.Name,
+					Namespace: ns.Name,
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion: "metal.ironcore.dev/v1alpha1",
@@ -142,7 +130,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 			testIPAddress = &ipamv1.IPAddress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testIPName,
-					Namespace:  namespace.Name,
+					Namespace:  ns.Name,
 					Finalizers: []string{ipAddressFinalizer},
 				},
 				Spec: ipamv1.IPAddressSpec{
@@ -183,7 +171,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 			Eventually(func() (string, error) {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: ns.Name}, ip); err != nil {
 					return "", err
 				}
 				if v, ok := ip.Annotations[annotationDeviceKey]; ok {
@@ -211,7 +199,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 			Eventually(func() error {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: ns.Name}, ip); err != nil {
 					return err
 				}
 				if _, ok := ip.Annotations[annotationDeviceKey]; !ok {
@@ -265,12 +253,12 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 		It("should fail when IPAddressClaim is missing", func() {
 			ipClaim := &ipamv1.IPAddressClaim{}
-			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: testClaimName, Namespace: namespace.Name}, ipClaim)).To(Succeed())
+			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: testClaimName, Namespace: ns.Name}, ipClaim)).To(Succeed())
 			Expect(k8sClient.Delete(testCtx, ipClaim)).To(Succeed())
 
 			Eventually(func() error {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: ns.Name}, ip); err != nil {
 					return err
 				}
 				_, hasAnnotation := ip.Annotations[annotationDeviceKey]
@@ -283,12 +271,12 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 		It("should fail when ServerClaim is missing", func() {
 			sc := &metalv1alpha1.ServerClaim{}
-			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: testServerClaimName, Namespace: namespace.Name}, sc)).To(Succeed())
+			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: testServerClaimName, Namespace: ns.Name}, sc)).To(Succeed())
 			Expect(k8sClient.Delete(testCtx, sc)).To(Succeed())
 
 			Eventually(func() error {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: ns.Name}, ip); err != nil {
 					return err
 				}
 				_, hasAnnotation := ip.Annotations[annotationDeviceKey]
@@ -301,12 +289,12 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 		It("should fail when Server is missing", func() {
 			s := &metalv1alpha1.Server{}
-			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: testServerName, Namespace: namespace.Name}, s)).To(Succeed())
+			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: testServerName, Namespace: ns.Name}, s)).To(Succeed())
 			Expect(k8sClient.Delete(testCtx, s)).To(Succeed())
 
 			Eventually(func() error {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: ns.Name}, ip); err != nil {
 					return err
 				}
 				_, hasAnnotation := ip.Annotations[annotationDeviceKey]
@@ -319,13 +307,13 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 		It("should fail when ServerClaim is not bound to Server", func() {
 			sc := &metalv1alpha1.ServerClaim{}
-			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: testServerClaimName, Namespace: namespace.Name}, sc)).To(Succeed())
+			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: testServerClaimName, Namespace: ns.Name}, sc)).To(Succeed())
 			Expect(k8sClient.Delete(testCtx, sc)).To(Succeed())
 
 			sc = &metalv1alpha1.ServerClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testServerClaimName,
-					Namespace: namespace.Name,
+					Namespace: ns.Name,
 				},
 				Spec: metalv1alpha1.ServerClaimSpec{
 					Image: "gardenlinux:latest",
@@ -336,7 +324,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 			Eventually(func() error {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: ns.Name}, ip); err != nil {
 					return err
 				}
 				_, hasAnnotation := ip.Annotations[annotationDeviceKey]
@@ -352,7 +340,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 			newIP := &ipamv1.IPAddress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      newIPName,
-					Namespace: namespace.Name,
+					Namespace: ns.Name,
 				},
 				Spec: ipamv1.IPAddressSpec{
 					Address: testIPAddressStr,
@@ -389,7 +377,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 			Eventually(func() bool {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: newIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: newIPName, Namespace: ns.Name}, ip); err != nil {
 					return false
 				}
 				for _, finalizer := range ip.Finalizers {
@@ -401,7 +389,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 			}, 5*time.Second, 250*time.Millisecond).Should(BeTrue())
 
 			ip := &ipamv1.IPAddress{}
-			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: newIPName, Namespace: namespace.Name}, ip)).To(Succeed())
+			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: newIPName, Namespace: ns.Name}, ip)).To(Succeed())
 			ip.Finalizers = nil
 			k8sClient.Update(testCtx, ip)
 			k8sClient.Delete(testCtx, ip)
@@ -416,7 +404,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 			Eventually(func() error {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: ns.Name}, ip); err != nil {
 					return err
 				}
 				_, hasAnnotation := ip.Annotations[annotationDeviceKey]
@@ -442,7 +430,7 @@ var _ = Describe("IP Update Controller Envtest Integration", func() {
 
 			Eventually(func() error {
 				ip := &ipamv1.IPAddress{}
-				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: namespace.Name}, ip); err != nil {
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: testIPName, Namespace: ns.Name}, ip); err != nil {
 					return err
 				}
 				_, hasAnnotation := ip.Annotations[annotationDeviceKey]
