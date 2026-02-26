@@ -43,11 +43,13 @@ func (e NetboxConflictError) Error() string {
 		e.IPAddressID, e.ConflictObj, e.AssignedNetboxID, e.NeededNetboxID)
 }
 
-const ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
+const (
+	ipAddressFinalizer = "ipupdate.argora.cloud.sap.com/finalizer"
 
-const annotationDeviceKey = "netbox.argora.cloud.sap/device-id"
-const annotationInterfaceKey = "netbox.argora.cloud.sap/interface-id"
-const annotationConflictedKey = "netbox.argora.cloud.sap/conflicted"
+	annotationDeviceKey     = "netbox.argora.cloud.sap/device-id"
+	annotationInterfaceKey  = "netbox.argora.cloud.sap/interface-id"
+	annotationConflictedKey = "netbox.argora.cloud.sap/conflicted"
+)
 
 // IPUpdateReconciler reconciles a ipam.cluster.x-k8s.io.IPAddress object
 type IPUpdateReconciler struct {
