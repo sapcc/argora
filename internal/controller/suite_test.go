@@ -21,14 +21,23 @@ import (
 
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
+	"github.com/sapcc/argora/internal/controller/mock"
+	"github.com/sapcc/argora/internal/credentials"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -36,19 +45,28 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var (
-	ctx       context.Context
-	cancel    context.CancelFunc
-	testEnv   *envtest.Environment
-	cfg       *rest.Config
-	k8sClient client.Client
+	ctx           context.Context
+	cancel        context.CancelFunc
+	testEnv       *envtest.Environment
+	cfg           *rest.Config
+	k8sClient     client.Client
+	testNamespace *corev1.Namespace
 )
 
 const (
 	reconcileInterval        = 50 * time.Millisecond
 	reconcileIntervalDefault = 1 * time.Minute
+	pollingInterval          = 50 * time.Millisecond
+	eventuallyTimeout        = 5 * time.Second
+	consistentlyDuration     = 1 * time.Second
 )
 
 func TestControllers(t *testing.T) {
+	SetDefaultConsistentlyPollingInterval(pollingInterval)
+	SetDefaultEventuallyPollingInterval(pollingInterval)
+	SetDefaultEventuallyTimeout(eventuallyTimeout)
+	SetDefaultConsistentlyDuration(consistentlyDuration)
+
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controller Suite")
 }
@@ -125,6 +143,91 @@ func getFirstFoundEnvTestBinaryDir() string {
 		}
 	}
 	return ""
+}
+
+func SetupTest(fileReaderMock *mock.FileReaderMock, netBoxMock *mock.NetBoxMock) *corev1.Namespace {
+	ns := &corev1.Namespace{}
+
+	BeforeEach(func(ctx SpecContext) {
+		var mgrCtx context.Context
+		mgrCtx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+
+		*ns = corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-ipupdate-",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
+		DeferCleanup(k8sClient.Delete, ns)
+
+		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+			Scheme:     scheme.Scheme,
+			Metrics:    metricsserver.Options{BindAddress: "0"},
+			Controller: config.Controller{SkipNameValidation: ptr.To(true)},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Create credentials and register reconciler
+		creds := credentials.NewDefaultCredentials(fileReaderMock)
+		r := NewIPUpdateReconciler(mgr, creds, netBoxMock)
+		if err := r.SetupWithManager(mgr); err != nil {
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		go func() {
+			defer GinkgoRecover()
+			Expect(mgr.Start(mgrCtx)).To(Succeed())
+		}()
+	})
+
+	return ns
+}
+
+func EnsureCleanState() {
+	if testNamespace == nil {
+		return
+	}
+
+	By("Cleaning up test resources from namespace: " + testNamespace.Name)
+
+	ipList := &ipamv1.IPAddressList{}
+	if err := k8sClient.List(ctx, ipList, &client.ListOptions{Namespace: testNamespace.Name}); err == nil {
+		for _, ip := range ipList.Items {
+			ip.Finalizers = nil
+			k8sClient.Update(ctx, &ip)
+			k8sClient.Delete(ctx, &ip)
+		}
+	}
+
+	claimList := &ipamv1.IPAddressClaimList{}
+	if err := k8sClient.List(ctx, claimList, &client.ListOptions{Namespace: testNamespace.Name}); err == nil {
+		for _, claim := range claimList.Items {
+			claim.Finalizers = nil
+			k8sClient.Update(ctx, &claim)
+			k8sClient.Delete(ctx, &claim)
+		}
+	}
+
+	scList := &metalv1alpha1.ServerClaimList{}
+	if err := k8sClient.List(ctx, scList, &client.ListOptions{Namespace: testNamespace.Name}); err == nil {
+		for _, sc := range scList.Items {
+			sc.Finalizers = nil
+			k8sClient.Update(ctx, &sc)
+			k8sClient.Delete(ctx, &sc)
+		}
+	}
+
+	serverList := &metalv1alpha1.ServerList{}
+	if err := k8sClient.List(ctx, serverList, &client.ListOptions{Namespace: testNamespace.Name}); err == nil {
+		for _, server := range serverList.Items {
+			server.Finalizers = nil
+			k8sClient.Update(ctx, &server)
+			k8sClient.Delete(ctx, &server)
+		}
+	}
+
+	Expect(k8sClient.Delete(ctx, testNamespace)).Should(Succeed())
 }
 
 func createFakeClient(objects ...client.Object) client.Client {
