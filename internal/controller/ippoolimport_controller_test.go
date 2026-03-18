@@ -331,7 +331,8 @@ var _ = Describe("IPPoolImport Controller", func() {
 			excludeMask = 27
 			excludePrefix := "10.10.10.0/27"
 			excludedLastNAddress := 3
-			excludedLastAddresses := []string{"10.10.10.253", "10.10.10.254", "10.10.10.255"}
+			excludedLastAddresses := make([]string, 0, 4)
+			excludedLastAddresses = append(excludedLastAddresses, "10.10.10.253", "10.10.10.254", "10.10.10.255")
 			excludePrefixes := append(excludedLastAddresses, excludePrefix)
 
 			By("update IPPoolImport CR to add ExcludedLastNAddresses")
