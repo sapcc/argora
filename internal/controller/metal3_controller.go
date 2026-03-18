@@ -45,7 +45,7 @@ var (
 		"poweredge-r7615":            "BOSS",
 		"dell-poweredge-r7715":       "BOSS",
 		"thinksystem-sr650":          "ThinkSystem M.2 VD",
-		"sr655-v3":                   "NVMe 2-Bay",
+		"thinksystem-sr655-v3":       "NVMe 2-Bay",
 		"thinksystem-sr650-v3":       "NVMe 2-Bay",
 		"proliant-dl320-gen11":       "HPE NS204i-u Gen11 Boot Controller",
 		"hpe-proliant-dl345-gen11v2": "HPE NS204i-u Gen11 Boot Controller",
