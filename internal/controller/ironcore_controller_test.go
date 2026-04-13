@@ -152,7 +152,11 @@ var _ = Describe("Ironcore Controller", func() {
 		}
 
 		expectLabels := func(labels map[string]string, bmcName string, clusterName string) {
-			bb, _ := strings.CutPrefix(bmcName, "device-")
+			parts := strings.Split(bmcName, "-")
+			Expect(parts).To(HaveLen(2))
+
+			nodename := parts[0]
+			bb := parts[1]
 			Expect(labels).To(SatisfyAll(
 				HaveKeyWithValue("topology.kubernetes.io/region", "region1"),
 				HaveKeyWithValue("topology.kubernetes.io/zone", "site1"),
@@ -160,6 +164,7 @@ var _ = Describe("Ironcore Controller", func() {
 				HaveKeyWithValue("kubernetes.metal.cloud.sap/cluster-type", clusterType1),
 				HaveKeyWithValue("kubernetes.metal.cloud.sap/name", bmcName),
 				HaveKeyWithValue("kubernetes.metal.cloud.sap/bb", bb),
+				HaveKeyWithValue("kubernetes.metal.cloud.sap/nodename", nodename),
 				HaveKeyWithValue("kubernetes.metal.cloud.sap/type", "type1"),
 				HaveKeyWithValue("kubernetes.metal.cloud.sap/role", "role1"),
 				HaveKeyWithValue("kubernetes.metal.cloud.sap/platform", "platform1"),
@@ -711,6 +716,34 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).To(MatchError("unable to read credentials.json: error"))
 
 				expectStatus(argorav1alpha1.Error, "unable to read credentials.json: error")
+			})
+
+			It("should fail if device name format is invalid", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDFunc = func(clusterID int) ([]models.Device, error) {
+					return []models.Device{
+						{
+							ID:     1,
+							Name:   "invalidname", // no "-"
+							Status: models.DeviceStatus{Value: "active"},
+						},
+					}, nil
+				}
+
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedClusterImportName,
+				})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError("unable to split in two device name: invalidname"))
+
+				expectStatus(argorav1alpha1.Error, "unable to reconcile device invalidname (1) on cluster cluster1 (1): unable to split in two device name: invalidname")
 			})
 
 			It("should return an error if netbox reload fails", func() {

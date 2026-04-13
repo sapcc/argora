@@ -217,6 +217,7 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		"kubernetes.metal.cloud.sap/cluster":      cluster.Name,
 		"kubernetes.metal.cloud.sap/cluster-type": cluster.Type.Slug,
 		"kubernetes.metal.cloud.sap/name":         device.Name,
+		"kubernetes.metal.cloud.sap/nodename":     deviceNameParts[0],
 		"kubernetes.metal.cloud.sap/bb":           deviceNameParts[1],
 		"kubernetes.metal.cloud.sap/type":         device.DeviceType.Slug,
 		"kubernetes.metal.cloud.sap/role":         device.DeviceRole.Slug,
