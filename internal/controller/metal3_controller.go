@@ -52,7 +52,7 @@ var (
 	}
 
 	linkHintMapCeph = map[string]string{
-		"ThinkSystem SR650":      "en*f0np*",
+		"ThinkSystem SR650":      "en*f*np*",
 		"ThinkSystem SR650 v3":   "en*1f*np*",
 		"ThinkSystem SR655 v3":   "en*f*np*",
 		"PowerEdge R640":         "en*f1np*",
