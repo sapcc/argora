@@ -147,6 +147,21 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(device.Name).To(BeElementOf("device-name1", "device-name2"))
 				return "region1", nil
 			}
+			netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceFunc = func(device *models.Device, ifaceName string) (*models.Interface, error) {
+				Expect(ifaceName).To(Equal("remoteboard"))
+				return &models.Interface{
+					NestedInterface: models.NestedInterface{
+						ID:   100,
+						Name: "remoteboard",
+					},
+				}, nil
+			}
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(interfaceID int) (*models.IPAddress, error) {
+				Expect(interfaceID).To(Equal(100))
+				return &models.IPAddress{
+					DNSName: "bmc1.example.com",
+				}, nil
+			}
 
 			return netBoxMock
 		}
@@ -197,6 +212,8 @@ var _ = Describe("Ironcore Controller", func() {
 			Expect(bmc.Spec.Protocol.Name).To(Equal(metalv1alpha1.ProtocolNameRedfish))
 			Expect(bmc.Spec.Protocol.Port).To(Equal(int32(443)))
 			Expect(bmc.Spec.BMCSecretRef.Name).To(Equal(bmcName))
+			Expect(bmc.Spec.Hostname).ToNot(BeNil())
+			Expect(*bmc.Spec.Hostname).To(Equal("bmc1.example.com"))
 		}
 
 		expectBMCResources := func(clusterNames []string) {
@@ -958,6 +975,56 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError("unable to create bmc: unable to create BMC: intentionally failing client on client.Create for BMC"))
 				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+			})
+
+			It("should create BMC without hostname when remoteboard interface retrieval fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceFunc = func(device *models.Device, ifaceName string) (*models.Interface, error) {
+					return nil, errors.New("remoteboard interface not found")
+				}
+
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify BMC was created without hostname
+				// BMC is cluster-scoped, so we use client.ObjectKey with just the name
+				bmc := &metalv1alpha1.BMC{}
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1}, bmc)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmc.Spec.Hostname).To(BeNil())
+			})
+
+			It("should create BMC without hostname when IP address retrieval fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(interfaceID int) (*models.IPAddress, error) {
+					return nil, errors.New("IP address not found")
+				}
+
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify BMC was created without hostname
+				// BMC is cluster-scoped, so we use client.ObjectKey with just the name
+				bmc := &metalv1alpha1.BMC{}
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1}, bmc)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmc.Spec.Hostname).To(BeNil())
 			})
 		})
 	})

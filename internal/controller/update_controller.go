@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/go-netbox-go/models"
 	"golang.org/x/time/rate"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/status"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -199,6 +201,10 @@ func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 		return fmt.Errorf("unable to remove vmk interfaces and IPs for device %s: %w", device.Name, err)
 	}
 
+	if err := r.updateBMCHostname(ctx, netBox, device); err != nil {
+		return fmt.Errorf("unable to update BMC hostname for device %s: %w", device.Name, err)
+	}
+
 	return nil
 }
 
@@ -310,5 +316,42 @@ func (r *UpdateReconciler) removeVMKInterfacesAndIPs(ctx context.Context, netBox
 		logger.Info("device do not have vmk interfaces", "device", device.Name, "ID", device.ID)
 	}
 
+	return nil
+}
+
+func (r *UpdateReconciler) updateBMCHostname(ctx context.Context, netBox netbox.Netbox, device *models.Device) error {
+	logger := log.FromContext(ctx)
+
+	hostname, err := getRemoteboardHostname(netBox, device)
+	if err != nil {
+		logger.Info("Unable to get remoteboard hostname, skipping BMC hostname update", "error", err)
+		return nil
+	}
+
+	// Get the BMC resource
+	bmc := &metalv1alpha1.BMC{}
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name}, bmc); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("BMC resource not found, skipping hostname update", "device", device.Name)
+			return nil
+		}
+		return fmt.Errorf("unable to get BMC resource: %w", err)
+	}
+
+	// Check if hostname needs to be updated
+	if bmc.Spec.Hostname != nil && *bmc.Spec.Hostname == hostname {
+		logger.V(1).Info("BMC hostname already up to date", "device", device.Name, "hostname", hostname)
+		return nil
+	}
+
+	// Patch the BMC with the new hostname
+	bmcBase := bmc.DeepCopy()
+	bmc.Spec.Hostname = &hostname
+
+	if err := r.k8sClient.Patch(ctx, bmc, client.MergeFrom(bmcBase)); err != nil {
+		return fmt.Errorf("unable to patch BMC hostname: %w", err)
+	}
+
+	logger.Info("Updated BMC hostname", "device", device.Name, "hostname", hostname)
 	return nil
 }

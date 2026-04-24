@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -192,9 +193,9 @@ var _ = Describe("Update Controller", func() {
 
 			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
-			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2)) // called twice: once for the device and once for the remoteboard interface
-			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(1))
-			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2))   // called twice: once for the device and once for the remoteboard interface
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(2))    // called twice: once for updateDeviceData and once for updateBMCHostname
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(2)) // called twice: once for updateDeviceData and once for updateBMCHostname
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(1))
 
 			expectStatus(argorav1alpha1.Ready, "")
@@ -237,9 +238,9 @@ var _ = Describe("Update Controller", func() {
 
 			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
-			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2)) // called twice: once for the device and once for the remoteboard interface
-			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(1))
-			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2))   // called twice: once for the device and once for the remoteboard interface
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(2))    // called twice: once for updateDeviceData and once for updateBMCHostname
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(2)) // called twice: once for updateDeviceData and once for updateBMCHostname
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(1))
 
 			expectStatus(argorav1alpha1.Ready, "")
@@ -286,8 +287,8 @@ var _ = Describe("Update Controller", func() {
 			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(2))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(2))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(4)) // called twice: once for the device and once for the remoteboard interface
-			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(2))
-			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(2))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(4))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(4))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(2))
 
 			expectStatus(argorav1alpha1.Ready, "")
@@ -421,8 +422,8 @@ var _ = Describe("Update Controller", func() {
 			Expect(netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetDevicesByClusterIDCalls).To(Equal(1))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(2)) // called twice: once for the device and once for the remoteboard interface
-			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(1))
-			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(1))
+			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfaceForDeviceCalls).To(Equal(2))
+			Expect(netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceCalls).To(Equal(2))
 			Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetPlatformByNameCalls).To(Equal(1))
 
 			expectStatus(argorav1alpha1.Ready, "")
@@ -790,6 +791,202 @@ var _ = Describe("Update Controller", func() {
 			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 			expectStatus(argorav1alpha1.Error, "unable to reconcile device device1 (1) on cluster cluster1 (1): unable to remove vmk interfaces and IPs for device device1: unable to delete vmk0 interface: failed to delete interface (2)")
+		})
+
+		It("should update BMC hostname when DNSName is available", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+
+			// Override GetIPAddressForInterface to return a DNS name
+			callCount := 0
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
+				callCount++
+				Expect(ifaceID).To(Equal(1))
+				return &models.IPAddress{
+					NestedIPAddress: models.NestedIPAddress{
+						ID: 1,
+					},
+					DNSName: "bmc-device1.example.com",
+				}, nil
+			}
+
+			// Create the BMC resource
+			bmc := &metalv1alpha1.BMC{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "device1",
+				},
+				Spec: metalv1alpha1.BMCSpec{
+					Endpoint: &metalv1alpha1.InlineEndpoint{
+						IP: metalv1alpha1.MustParseIP("192.168.1.1"),
+					},
+					Protocol: metalv1alpha1.Protocol{
+						Name: metalv1alpha1.ProtocolNameRedfish,
+						Port: 443,
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, bmc)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, bmc)
+			})
+
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			// Verify the BMC hostname was updated
+			updatedBMC := &metalv1alpha1.BMC{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "device1"}, updatedBMC)).To(Succeed())
+			Expect(updatedBMC.Spec.Hostname).ToNot(BeNil())
+			Expect(*updatedBMC.Spec.Hostname).To(Equal("bmc-device1.example.com"))
+
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should skip BMC hostname update when hostname already matches", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+
+			// Override GetIPAddressForInterface to return a DNS name
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
+				Expect(ifaceID).To(Equal(1))
+				return &models.IPAddress{
+					NestedIPAddress: models.NestedIPAddress{
+						ID: 1,
+					},
+					DNSName: "bmc-device1.example.com",
+				}, nil
+			}
+
+			// Create the BMC resource with hostname already set
+			hostname := "bmc-device1.example.com"
+			bmc := &metalv1alpha1.BMC{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "device1",
+				},
+				Spec: metalv1alpha1.BMCSpec{
+					Endpoint: &metalv1alpha1.InlineEndpoint{
+						IP: metalv1alpha1.MustParseIP("192.168.1.1"),
+					},
+					Protocol: metalv1alpha1.Protocol{
+						Name: metalv1alpha1.ProtocolNameRedfish,
+						Port: 443,
+					},
+					Hostname: &hostname,
+				},
+			}
+			Expect(k8sClient.Create(ctx, bmc)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, bmc)
+			})
+
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			// Get resource version before reconcile
+			existingBMC := &metalv1alpha1.BMC{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "device1"}, existingBMC)).To(Succeed())
+			originalResourceVersion := existingBMC.ResourceVersion
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			// Verify the BMC was not patched (resource version unchanged)
+			updatedBMC := &metalv1alpha1.BMC{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "device1"}, updatedBMC)).To(Succeed())
+			Expect(updatedBMC.ResourceVersion).To(Equal(originalResourceVersion))
+
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should skip BMC hostname update when BMC resource not found", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+
+			// Override GetIPAddressForInterface to return a DNS name
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetIPAddressForInterfaceFunc = func(ifaceID int) (*models.IPAddress, error) {
+				Expect(ifaceID).To(Equal(1))
+				return &models.IPAddress{
+					NestedIPAddress: models.NestedIPAddress{
+						ID: 1,
+					},
+					DNSName: "bmc-device1.example.com",
+				}, nil
+			}
+
+			// Don't create a BMC resource - it should be skipped gracefully
+
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			expectStatus(argorav1alpha1.Ready, "")
+		})
+
+		It("should skip BMC hostname update when DNSName is empty", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+
+			// GetIPAddressForInterfaceFunc already returns empty DNSName by default in prepareNetboxMock
+
+			// Create the BMC resource
+			bmc := &metalv1alpha1.BMC{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "device1",
+				},
+				Spec: metalv1alpha1.BMCSpec{
+					Endpoint: &metalv1alpha1.InlineEndpoint{
+						IP: metalv1alpha1.MustParseIP("192.168.1.1"),
+					},
+					Protocol: metalv1alpha1.Protocol{
+						Name: metalv1alpha1.ProtocolNameRedfish,
+						Port: 443,
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, bmc)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, bmc)
+			})
+
+			controllerReconciler := createUpdateReconciler(netBoxMock, fileReaderMock)
+
+			// Get resource version before reconcile
+			existingBMC := &metalv1alpha1.BMC{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "device1"}, existingBMC)).To(Succeed())
+			originalResourceVersion := existingBMC.ResourceVersion
+
+			// when
+			By("reconciling Update CR")
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedUpdateName})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+			// Verify the BMC was not patched (resource version unchanged)
+			updatedBMC := &metalv1alpha1.BMC{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "device1"}, updatedBMC)).To(Succeed())
+			Expect(updatedBMC.ResourceVersion).To(Equal(originalResourceVersion))
+			Expect(updatedBMC.Spec.Hostname).To(BeNil())
+
+			expectStatus(argorav1alpha1.Ready, "")
 		})
 	})
 

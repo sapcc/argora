@@ -162,6 +162,9 @@ spec:
                 - name
                 - port
                 type: object
+              hostname:
+                description: Hostname is the hostname of the BMC.
+                type: string
             required:
             - bmcSecretRef
             - protocol

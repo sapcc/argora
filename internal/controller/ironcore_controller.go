@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	bmcProtocolRedfish = "Redfish"
-	bmcPort            = 443
+	bmcProtocolRedfish       = "Redfish"
+	bmcPort                  = 443
+	remoteboardInterfaceName = "remoteboard"
 )
 
 type IronCoreReconciler struct {
@@ -241,7 +242,14 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 
 	logger.Info("created BMC Secret", "name", bmcSecret.Name)
 
-	bmc, err := r.createBmc(ctx, device, oobIP, bmcSecret, commonLabels)
+	hostname, err := getRemoteboardHostname(netBox, device)
+	if err != nil {
+		logger.Info("Unable to get BMC hostname, will continue without it", "error", err)
+	} else {
+		logger.Info("Got BMC hostname from netbox", "hostname", hostname)
+	}
+
+	bmc, err := r.createBmc(ctx, device, oobIP, hostname, bmcSecret, commonLabels)
 	if err != nil {
 		return fmt.Errorf("unable to create bmc: %w", err)
 	}
@@ -290,7 +298,7 @@ func (r *IronCoreReconciler) createBmcSecret(ctx context.Context, device *models
 	return bmcSecret, nil
 }
 
-func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Device, oobIP string, bmcSecret *metalv1alpha1.BMCSecret, labels map[string]string) (*metalv1alpha1.BMC, error) {
+func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Device, oobIP, hostname string, bmcSecret *metalv1alpha1.BMCSecret, labels map[string]string) (*metalv1alpha1.BMC, error) {
 	logger := log.FromContext(ctx)
 
 	ip, err := metalv1alpha1.ParseIP(oobIP)
@@ -321,9 +329,14 @@ func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Devic
 		},
 	}
 
+	if hostname != "" {
+		logger.Info("Setting hostname on BMC", "hostname", hostname, "bmcName", bmc.Name)
+		bmc.Spec.Hostname = &hostname
+	}
+
 	if err := r.k8sClient.Create(ctx, bmc); err != nil {
-		if apierrors.IsAlreadyExists(err) { // TODO: if its already exists, can we assume that the BMC is correct?
-			logger.Info("BMC already exists", "BMC", bmc.Name)
+		if apierrors.IsAlreadyExists(err) {
+			logger.Info("BMC already exists", "bmc", bmc.Name)
 			return bmc, nil
 		}
 		return nil, fmt.Errorf("unable to create BMC: %w", err)
@@ -354,6 +367,24 @@ func getOobIP(device *models.Device) (string, error) {
 	}
 
 	return ip.String(), nil
+}
+
+func getRemoteboardHostname(netBox netbox.Netbox, device *models.Device) (string, error) {
+	iface, err := netBox.DCIM().GetInterfaceForDevice(device, remoteboardInterfaceName)
+	if err != nil {
+		return "", fmt.Errorf("unable to get remoteboard interface: %w", err)
+	}
+
+	ipAddress, err := netBox.IPAM().GetIPAddressForInterface(iface.ID)
+	if err != nil {
+		return "", fmt.Errorf("unable to get IP address for remoteboard interface: %w", err)
+	}
+
+	if ipAddress.DNSName == "" {
+		return "", errors.New("no DNS name found for remoteboard IP")
+	}
+
+	return ipAddress.DNSName, nil
 }
 
 func (r *IronCoreReconciler) patchBMCLabels(ctx context.Context, bmc *metalv1alpha1.BMC, labels map[string]string) error {
