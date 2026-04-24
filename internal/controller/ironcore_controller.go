@@ -24,6 +24,7 @@ import (
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -46,9 +47,10 @@ type IronCoreReconciler struct {
 	statusHandler     status.ClusterImportStatus
 	netBox            netbox.Netbox
 	reconcileInterval time.Duration
+	namespace         string
 }
 
-func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
+func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration, namespace string) *IronCoreReconciler {
 	return &IronCoreReconciler{
 		k8sClient:         mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
@@ -56,6 +58,7 @@ func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, sta
 		statusHandler:     statusHandler,
 		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
+		namespace:         namespace,
 	}
 }
 
@@ -85,6 +88,7 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servernetworkconfigs,verbs=get;list;watch;create;update;patch
 
 func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -230,6 +234,10 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 			return fmt.Errorf("unable to patch BMC labels: %w", err)
 		}
 
+		if err := r.updateServerNetworkConfig(ctx, device, commonLabels); err != nil {
+			return fmt.Errorf("unable to update ServerNetworkConfig: %w", err)
+		}
+
 		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
 		return nil
 	}
@@ -247,6 +255,10 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 	}
 
 	logger.Info("created BMC CR", "name", bmc.Name)
+
+	if err := r.createServerNetworkConfig(ctx, device, commonLabels); err != nil {
+		return fmt.Errorf("unable to create ServerNetworkConfig: %w", err)
+	}
 
 	if err := r.patchOwnerReference(ctx, bmc, bmcSecret); err != nil {
 		return err
@@ -342,6 +354,97 @@ func (r *IronCoreReconciler) patchOwnerReference(ctx context.Context, bmc *metal
 		return fmt.Errorf("unable to patch object: %w", err)
 	}
 
+	return nil
+}
+
+func (r *IronCoreReconciler) buildExpectedInterfaces(device *models.Device) ([]metalv1alpha1.ExpectedNetworkInterface, error) {
+	ifaces, err := r.netBox.DCIM().GetInterfacesForDevice(device)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get interfaces for device %s: %w", device.Name, err)
+	}
+
+	var expected []metalv1alpha1.ExpectedNetworkInterface
+	for _, iface := range ifaces {
+		if iface.MacAddress == "" {
+			continue
+		}
+		if iface.Type.Value == "lag" {
+			continue
+		}
+		if iface.MgmtOnly {
+			continue
+		}
+		if len(iface.ConnectedEndpoints) == 0 {
+			continue
+		}
+
+		endpoint := iface.ConnectedEndpoints[0]
+		if endpoint.Device.Name == "" {
+			continue
+		}
+
+		expected = append(expected, metalv1alpha1.ExpectedNetworkInterface{
+			Name:       iface.Name,
+			MACAddress: iface.MacAddress,
+			Switch:     endpoint.Device.Name,
+			Port:       endpoint.Name,
+		})
+	}
+	return expected, nil
+}
+
+func (r *IronCoreReconciler) createServerNetworkConfig(ctx context.Context, device *models.Device, labels map[string]string) error {
+	ifaces, err := r.buildExpectedInterfaces(device)
+	if err != nil {
+		return err
+	}
+
+	snc := &metalv1alpha1.ServerNetworkConfig{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: metalv1alpha1.GroupVersion.String(),
+			Kind:       "ServerNetworkConfig",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      device.Name,
+			Namespace: r.namespace,
+			Labels:    labels,
+		},
+		Spec: metalv1alpha1.ServerNetworkConfigSpec{
+			ServerRef:  corev1.LocalObjectReference{Name: device.Name},
+			Interfaces: ifaces,
+		},
+	}
+
+	if err := r.k8sClient.Create(ctx, snc); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create ServerNetworkConfig for %s: %w", device.Name, err)
+	}
+	return nil
+}
+
+func (r *IronCoreReconciler) updateServerNetworkConfig(ctx context.Context, device *models.Device, labels map[string]string) error {
+	ifaces, err := r.buildExpectedInterfaces(device)
+	if err != nil {
+		return err
+	}
+
+	snc := &metalv1alpha1.ServerNetworkConfig{}
+	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: r.namespace}, snc); err != nil {
+		if apierrors.IsNotFound(err) {
+			return r.createServerNetworkConfig(ctx, device, labels)
+		}
+		return fmt.Errorf("failed to get ServerNetworkConfig for %s: %w", device.Name, err)
+	}
+
+	sncBase := snc.DeepCopy()
+	snc.Spec.Interfaces = ifaces
+	if snc.Labels == nil {
+		snc.Labels = make(map[string]string)
+	}
+	maps.Copy(snc.Labels, labels)
+
+	if err := r.k8sClient.Patch(ctx, snc, client.MergeFrom(sncBase)); err != nil {
+		return fmt.Errorf("failed to patch ServerNetworkConfig for %s: %w", device.Name, err)
+	}
 	return nil
 }
 
