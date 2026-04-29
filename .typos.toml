@@ -6,7 +6,6 @@
 Adress = "Adress"
 HPE = "HPE"
 Reponse = "Reponse"
-Writeable = "Writeable"
 nd = "nd"
 
 [files]
