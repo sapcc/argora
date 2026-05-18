@@ -72,6 +72,7 @@ typos:
     nd: nd
     HPE: HPE
     Reponse: Reponse # typo in the module
+    Writeable: Writeable # typo in the netbox-go module
     Adress: Adress # typo in the module
 
 controllerGen:
