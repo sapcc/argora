@@ -65,6 +65,7 @@ type FlagVariables struct {
 	probeAddr               string
 	leaderElectionNamespace string
 	netboxURL               string
+	ironCoreNamespace       string
 
 	enableLeaderElection bool
 	secureMetrics        bool
@@ -165,7 +166,7 @@ func main() {
 	setupLog.Info("argora", "version", bininfo.Version())
 
 	if flagVar.enableIronCore {
-		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval, flagVar.ironCoreNamespace).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ironcore")
 			os.Exit(1)
 		}
@@ -226,6 +227,7 @@ func getFlagVariables() *FlagVariables {
 	flag.StringVar(&flagVariables.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&flagVariables.leaderElectionNamespace, "leader-elect-ns", "kube-system", "The namespace in which the leader election resource will be created. This is only used if --leader-elect is set to true. Defaults to kube-system.")
 	flag.StringVar(&flagVariables.netboxURL, "netbox-url", "https://netbox-url", "The URL of the NetBox instance to connect to. If not set, the default value will be used.")
+	flag.StringVar(&flagVariables.ironCoreNamespace, "ironcore-namespace", "default", "The namespace in which IronCore resources (e.g. ServerNetworkConfig) are created.")
 
 	flag.BoolVar(&flagVariables.enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If true (default), the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
