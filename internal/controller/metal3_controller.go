@@ -60,7 +60,7 @@ var (
 		"PowerEdge R7615":        "en*f*np*",
 		"PowerEdge R7715":        "eno*np*",
 		"Proliant DL320 Gen11":   "en*f1np*",
-		"ProLiant DL345 Gen11v2": "en*f1np*",
+		"ProLiant DL345 Gen11v2": "en*f*np*",
 	}
 
 	linkHintMapKvm = map[string]string{
