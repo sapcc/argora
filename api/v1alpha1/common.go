@@ -3,6 +3,8 @@
 
 package v1alpha1
 
+const AnnotationIgnore = "argora.cloud.sap/ignore"
+
 type ClusterSelector struct {
 	// +kubebuilder:validation:Optional
 	Name string `json:"name,omitempty"`

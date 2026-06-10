@@ -22,6 +22,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -30,6 +31,7 @@ import (
 	"github.com/sapcc/go-netbox-go/models"
 	"gopkg.in/yaml.v3"
 
+	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/networkdata"
@@ -209,16 +211,10 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, cluster *cluster
 		return fmt.Errorf("unable to get region for device: %w", err)
 	}
 
-	bmcSecret, err := r.createBmcSecret(cluster, device)
+	bmcSecret, _, err := r.reconcileBmcSecret(ctx, cluster, device)
 	if err != nil {
-		return fmt.Errorf("unable to create bmc secret: %w", err)
+		return fmt.Errorf("unable to reconcile bmc secret: %w", err)
 	}
-
-	if err = r.k8sClient.Create(ctx, bmcSecret); err != nil {
-		return fmt.Errorf("unable to upload bmc secret: %w", err)
-	}
-
-	logger.Info("created BMC Secret", "name", bmcSecret.Name)
 
 	role, err := getRoleFromTags(device)
 	if err != nil {
@@ -358,24 +354,49 @@ func (r *Metal3Reconciler) createNetworkDataSecret(ctx context.Context, bareMeta
 	return r.k8sClient.Create(ctx, nwDataSecret)
 }
 
-func (r *Metal3Reconciler) createBmcSecret(cluster *clusterv1.Cluster, device *models.Device) (*corev1.Secret, error) {
+func (r *Metal3Reconciler) reconcileBmcSecret(ctx context.Context, cluster *clusterv1.Cluster, device *models.Device) (*corev1.Secret, bool, error) {
+	logger := log.FromContext(ctx)
+
 	user := r.credentials.BMCUser
 	password := r.credentials.BMCPassword
 
 	if user == "" || password == "" {
-		return nil, errors.New("bmc user or password not set")
+		return nil, false, errors.New("bmc user or password not set")
 	}
 
-	return &corev1.Secret{
+	bmcSecret := &corev1.Secret{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:      "bmc-secret-" + device.Name,
 			Namespace: cluster.Namespace,
 		},
-		StringData: map[string]string{
+	}
+
+	if err := r.k8sClient.Get(ctx, client.ObjectKeyFromObject(bmcSecret), bmcSecret); err == nil {
+		if bmcSecret.Annotations[argorav1alpha1.AnnotationIgnore] == "true" {
+			logger.Info("BMCSecret has ignore annotation, skipping reconciliation", "name", bmcSecret.Name)
+			return bmcSecret, true, nil
+		}
+	}
+
+	result, err := controllerutil.CreateOrUpdate(ctx, r.k8sClient, bmcSecret, func() error {
+		bmcSecret.StringData = map[string]string{
 			"username": user,
 			"password": password,
-		},
-	}, nil
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, false, err
+	}
+
+	switch result {
+	case controllerutil.OperationResultCreated:
+		logger.Info("created BMC Secret", "name", bmcSecret.Name)
+	case controllerutil.OperationResultUpdated:
+		logger.Info("BMC Secret credentials updated", "name", bmcSecret.Name)
+	}
+
+	return bmcSecret, false, nil
 }
 
 func createRedFishURL(device *models.Device) (string, error) {
