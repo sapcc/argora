@@ -41,11 +41,11 @@ const ClusterRoleLabel = "discovery.inf.sap.cloud/clusterRole"
 
 var (
 	rootHintMap = map[string]string{
-		"poweredge-r660":             "BOSS",
-		"poweredge-r640":             "BOSS",
-		"poweredge-r840":             "BOSS",
-		"poweredge-r7615":            "BOSS",
-		"dell-poweredge-r7715":       "BOSS",
+		"poweredge-r660":             rootHintBOSS,
+		"poweredge-r640":             rootHintBOSS,
+		"poweredge-r840":             rootHintBOSS,
+		"poweredge-r7615":            rootHintBOSS,
+		"dell-poweredge-r7715":       rootHintBOSS,
 		"thinksystem-sr650":          "ThinkSystem M.2 VD",
 		"thinksystem-sr655-v3":       "NVMe 2-Bay",
 		"thinksystem-sr650-v3":       "NVMe 2-Bay",
@@ -174,7 +174,7 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, cluster *cluster
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
-	if device.Status.Value != "active" {
+	if device.Status.Value != deviceStatusActive {
 		logger.Info("device is not active", "status", device.Status.Value)
 		return nil
 	}
@@ -372,7 +372,7 @@ func (r *Metal3Reconciler) reconcileBmcSecret(ctx context.Context, cluster *clus
 	}
 
 	if err := r.k8sClient.Get(ctx, client.ObjectKeyFromObject(bmcSecret), bmcSecret); err == nil {
-		if bmcSecret.Annotations[argorav1alpha1.AnnotationIgnore] == "true" {
+		if bmcSecret.Annotations[argorav1alpha1.AnnotationIgnore] == annotationValueTrue {
 			logger.Info("BMCSecret has ignore annotation, skipping reconciliation", "name", bmcSecret.Name)
 			return bmcSecret, true, nil
 		}

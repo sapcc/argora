@@ -35,9 +35,8 @@ import (
 )
 
 const (
-	bmcProtocolRedfish       = "Redfish"
-	bmcPort                  = 443
-	remoteboardInterfaceName = "remoteboard"
+	bmcProtocolRedfish = "Redfish"
+	bmcPort            = 443
 )
 
 type IronCoreReconciler struct {
@@ -192,7 +191,7 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
-	if device.Status.Value != "active" {
+	if device.Status.Value != deviceStatusActive {
 		logger.Info("device is not active, will skip", "status", device.Status.Value)
 		return nil
 	}
@@ -279,7 +278,7 @@ func (r *IronCoreReconciler) reconcileBmcSecret(ctx context.Context, device *mod
 	}
 
 	if err := r.k8sClient.Get(ctx, client.ObjectKeyFromObject(bmcSecret), bmcSecret); err == nil {
-		if bmcSecret.Annotations[argorav1alpha1.AnnotationIgnore] == "true" {
+		if bmcSecret.Annotations[argorav1alpha1.AnnotationIgnore] == annotationValueTrue {
 			logger.Info("BMCSecret has ignore annotation, skipping reconciliation", "name", bmcSecret.Name)
 			return bmcSecret, true, nil
 		}
