@@ -922,6 +922,216 @@ var _ = Describe("Ironcore Controller", func() {
 
 				expectStatus(argorav1alpha1.Ready, "")
 			})
+
+			It("should update BMCSecret when credentials change", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// first reconcile creates BMCSecret with original credentials
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify original credentials
+				bmcSecret := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretUsernameKeyName]).To(Equal([]byte("user")))
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretPasswordKeyName]).To(Equal([]byte("password")))
+
+				// simulate credential rotation
+				rotatedFileReaderMock := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: false,
+				}
+				rotatedFileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
+					"bmcUser": "new-user",
+					"bmcPassword": "new-password",
+					"netboxToken": "token"
+				}`
+				controllerReconciler = createIronCoreReconciler(k8sClient, netBoxMock, rotatedFileReaderMock)
+
+				// when - second reconcile with rotated credentials
+				res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify credentials were updated
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretUsernameKeyName]).To(Equal([]byte("new-user")))
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretPasswordKeyName]).To(Equal([]byte("new-password")))
+
+				expectStatus(argorav1alpha1.Ready, "")
+			})
+
+			It("should not update BMCSecret when credentials are unchanged", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// first reconcile creates BMCSecret
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// get the resource version after first reconcile
+				bmcSecret := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				resourceVersionAfterCreate := bmcSecret.ResourceVersion
+
+				// when - second reconcile with same credentials
+				res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify no update occurred (resource version unchanged)
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.ResourceVersion).To(Equal(resourceVersionAfterCreate))
+
+				expectStatus(argorav1alpha1.Ready, "")
+			})
+
+			It("should update BMCSecret labels when they change", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// first reconcile creates BMCSecret
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify original labels
+				bmcSecret := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.Labels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/cluster", "cluster1"))
+
+				// simulate cluster change
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+					return []models.Cluster{
+						{
+							ID:   1,
+							Name: "cluster-new",
+							Type: models.NestedClusterType{
+								Slug: clusterType1,
+							},
+						},
+					}, nil
+				}
+
+				// when - second reconcile with different labels
+				res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify labels were updated
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.Labels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/cluster", "cluster-new"))
+
+				expectStatus(argorav1alpha1.Ready, "")
+			})
+
+			It("should skip BMCSecret with ignore annotation", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// first reconcile creates BMCSecret
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// add ignore annotation to BMCSecret
+				bmcSecret := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				originalData := bmcSecret.Data
+				originalLabels := bmcSecret.Labels
+
+				bmcSecretBase := bmcSecret.DeepCopy()
+				bmcSecret.Annotations = map[string]string{
+					argorav1alpha1.AnnotationIgnore: "true",
+				}
+				Expect(k8sClient.Patch(ctx, bmcSecret, client.MergeFrom(bmcSecretBase))).To(Succeed())
+
+				// simulate credential rotation
+				rotatedFileReaderMock := &mock.FileReaderMock{
+					FileContent: make(map[string]string),
+					ReturnError: false,
+				}
+				rotatedFileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
+					"bmcUser": "rotated-user",
+					"bmcPassword": "rotated-password",
+					"netboxToken": "token"
+				}`
+				controllerReconciler = createIronCoreReconciler(k8sClient, netBoxMock, rotatedFileReaderMock)
+
+				// when - second reconcile with rotated credentials
+				res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify BMCSecret was NOT updated
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.Data).To(Equal(originalData))
+				Expect(bmcSecret.Labels).To(Equal(originalLabels))
+
+				expectStatus(argorav1alpha1.Ready, "")
+			})
+
+			It("should skip patchOwnerReference when BMCSecret is ignored", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// pre-create BMCSecret with ignore annotation (no owner ref)
+				bmcSecret := &metalv1alpha1.BMCSecret{
+					ObjectMeta: ctrl.ObjectMeta{
+						Name: bmcName1,
+						Annotations: map[string]string{
+							argorav1alpha1.AnnotationIgnore: "true",
+						},
+					},
+					Data: map[string][]byte{
+						metalv1alpha1.BMCSecretUsernameKeyName: []byte("manual-user"),
+						metalv1alpha1.BMCSecretPasswordKeyName: []byte("manual-password"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, bmcSecret)).To(Succeed())
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify BMCSecret has no owner reference (patchOwnerReference was skipped)
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.OwnerReferences).To(BeEmpty())
+
+				// verify credentials were NOT updated
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretUsernameKeyName]).To(Equal([]byte("manual-user")))
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretPasswordKeyName]).To(Equal([]byte("manual-password")))
+
+				expectStatus(argorav1alpha1.Ready, "")
+			})
 		})
 
 		Context("Fake Client", func() {
@@ -941,7 +1151,7 @@ var _ = Describe("Ironcore Controller", func() {
 				},
 			}
 
-			It("should return an error if createBmcSecret fails", func() {
+			It("should return an error if reconcileBmcSecret fails", func() {
 				// given
 				netBoxMock := prepareNetboxMock()
 
@@ -955,7 +1165,7 @@ var _ = Describe("Ironcore Controller", func() {
 
 				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError("unable to create bmc secret: intentionally failing client on client.Create for BMCSecret"))
+				Expect(err).To(MatchError("unable to reconcile bmc secret: intentionally failing client on client.Create for BMCSecret"))
 				Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 			})
 
@@ -1047,7 +1257,14 @@ type shouldFailClient struct {
 }
 
 func (p *shouldFailClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-	if obj.GetObjectKind().GroupVersionKind().Kind == p.FailOnCreateKind {
+	kind := obj.GetObjectKind().GroupVersionKind().Kind
+	if kind == "" {
+		gvks, _, _ := p.Scheme().ObjectKinds(obj)
+		if len(gvks) > 0 {
+			kind = gvks[0].Kind
+		}
+	}
+	if kind == p.FailOnCreateKind {
 		return errors.New("intentionally failing client on client.Create for " + p.FailOnCreateKind)
 	}
 	return p.Client.Create(ctx, obj, opts...)

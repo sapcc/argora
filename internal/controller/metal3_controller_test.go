@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 	"github.com/sapcc/argora/internal/controller/mock"
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/networkdata"
@@ -545,6 +546,102 @@ var _ = Describe("Metal3 Controller", func() {
 			// then
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.RequeueAfter).To(Equal(reconcileIntervalDefault))
+		})
+
+		It("should update BMC Secret when credentials change", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
+
+			// first reconcile creates the secret
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileIntervalDefault))
+
+			// verify original credentials
+			bmcSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, typeNamespacedSecretName, bmcSecret)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(bmcSecret.Data["username"]).To(Equal([]byte("user")))
+			Expect(bmcSecret.Data["password"]).To(Equal([]byte("password")))
+
+			// delete BareMetalHost so next reconcile goes through full path
+			bmh := &v1alpha1.BareMetalHost{}
+			err = k8sClient.Get(ctx, typeNamespacedBareMetalHostName, bmh)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(k8sClient.Delete(ctx, bmh)).To(Succeed())
+
+			// delete network data secret
+			ndSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, typeNamespacedNDSecretName, ndSecret)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(k8sClient.Delete(ctx, ndSecret)).To(Succeed())
+
+			// simulate credential rotation
+			rotatedFileReaderMock := &mock.FileReaderMock{
+				FileContent: make(map[string]string),
+				ReturnError: false,
+			}
+			rotatedFileReaderMock.FileContent["/etc/credentials/credentials.json"] = `{
+				"bmcUser": "new-user",
+				"bmcPassword": "new-password",
+				"netboxToken": "token"
+			}`
+			controllerReconciler = createMetal3Reconciler(k8sClient, netBoxMock, rotatedFileReaderMock)
+
+			// when - second reconcile with rotated credentials
+			res, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
+
+			// then
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileIntervalDefault))
+
+			// verify credentials were updated
+			err = k8sClient.Get(ctx, typeNamespacedSecretName, bmcSecret)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(bmcSecret.Data["username"]).To(Equal([]byte("new-user")))
+			Expect(bmcSecret.Data["password"]).To(Equal([]byte("new-password")))
+		})
+
+		It("should skip corev1.Secret with ignore annotation", func() {
+			// given
+			netBoxMock := prepareNetboxMock()
+			controllerReconciler := createMetal3Reconciler(k8sClient, netBoxMock, fileReaderMock)
+
+			// pre-create BMC secret with ignore annotation
+			bmcSecret := &corev1.Secret{
+				ObjectMeta: ctrl.ObjectMeta{
+					Name:      "bmc-secret-" + deviceName,
+					Namespace: clusterNamespace,
+					Annotations: map[string]string{
+						argorav1alpha1.AnnotationIgnore: "true",
+					},
+				},
+				StringData: map[string]string{
+					"username": "manual-user",
+					"password": "manual-password",
+				},
+			}
+			Expect(k8sClient.Create(ctx, bmcSecret)).To(Succeed())
+
+			// when
+			res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedClusterName,
+			})
+
+			// then - reconcile succeeds (BareMetalHost is still created)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(reconcileIntervalDefault))
+
+			// verify secret was NOT updated
+			err = k8sClient.Get(ctx, typeNamespacedSecretName, bmcSecret)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(bmcSecret.Data["username"]).To(Equal([]byte("manual-user")))
+			Expect(bmcSecret.Data["password"]).To(Equal([]byte("manual-password")))
 		})
 	})
 })

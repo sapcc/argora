@@ -35,9 +35,8 @@ import (
 )
 
 const (
-	bmcProtocolRedfish       = "Redfish"
-	bmcPort                  = 443
-	remoteboardInterfaceName = "remoteboard"
+	bmcProtocolRedfish = "Redfish"
+	bmcPort            = 443
 )
 
 type IronCoreReconciler struct {
@@ -192,7 +191,7 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
-	if device.Status.Value != "active" {
+	if device.Status.Value != deviceStatusActive {
 		logger.Info("device is not active, will skip", "status", device.Status.Value)
 		return nil
 	}
@@ -225,6 +224,11 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		"kubernetes.metal.cloud.sap/platform":     device.Platform.Slug,
 	}
 
+	bmcSecret, skipped, err := r.reconcileBmcSecret(ctx, device, commonLabels)
+	if err != nil {
+		return fmt.Errorf("unable to reconcile bmc secret: %w", err)
+	}
+
 	bmcObj := &metalv1alpha1.BMC{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name}, bmcObj); err == nil {
 		if err := r.patchBMCLabels(ctx, bmcObj, commonLabels); err != nil {
@@ -234,13 +238,6 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
 		return nil
 	}
-
-	bmcSecret, err := r.createBmcSecret(ctx, device, commonLabels)
-	if err != nil {
-		return fmt.Errorf("unable to create bmc secret: %w", err)
-	}
-
-	logger.Info("created BMC Secret", "name", bmcSecret.Name)
 
 	hostname, err := getRemoteboardHostname(netBox, device)
 	if err != nil {
@@ -256,46 +253,57 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 
 	logger.Info("created BMC CR", "name", bmc.Name)
 
-	if err := r.patchOwnerReference(ctx, bmc, bmcSecret); err != nil {
-		return err
+	if !skipped {
+		if err := r.patchOwnerReference(ctx, bmc, bmcSecret); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (r *IronCoreReconciler) createBmcSecret(ctx context.Context, device *models.Device, labels map[string]string) (*metalv1alpha1.BMCSecret, error) {
+func (r *IronCoreReconciler) reconcileBmcSecret(ctx context.Context, device *models.Device, labels map[string]string) (*metalv1alpha1.BMCSecret, bool, error) {
 	logger := log.FromContext(ctx)
 
 	user := r.credentials.BMCUser
 	password := r.credentials.BMCPassword
 
 	if user == "" || password == "" {
-		return nil, errors.New("bmc user or password not set")
+		return nil, false, errors.New("bmc user or password not set")
 	}
 
 	bmcSecret := &metalv1alpha1.BMCSecret{
-		TypeMeta: ctrl.TypeMeta{
-			APIVersion: metalv1alpha1.GroupVersion.String(),
-			Kind:       "BMCSecret",
-		},
 		ObjectMeta: ctrl.ObjectMeta{
-			Name:   device.Name,
-			Labels: labels,
+			Name: device.Name,
 		},
-		Data: map[string][]byte{
+	}
+
+	if err := r.k8sClient.Get(ctx, client.ObjectKeyFromObject(bmcSecret), bmcSecret); err == nil {
+		if bmcSecret.Annotations[argorav1alpha1.AnnotationIgnore] == annotationValueTrue {
+			logger.Info("BMCSecret has ignore annotation, skipping reconciliation", "name", bmcSecret.Name)
+			return bmcSecret, true, nil
+		}
+	}
+
+	result, err := controllerutil.CreateOrUpdate(ctx, r.k8sClient, bmcSecret, func() error {
+		bmcSecret.Labels = labels
+		bmcSecret.Data = map[string][]byte{
 			metalv1alpha1.BMCSecretUsernameKeyName: []byte(user),
 			metalv1alpha1.BMCSecretPasswordKeyName: []byte(password),
-		},
-	}
-
-	if err := r.k8sClient.Create(ctx, bmcSecret); err != nil {
-		if apierrors.IsAlreadyExists(err) { // TODO: if its already exists, can we assume that the secret is correct?
-			logger.Info("bmc secret already exists", "bmcSecret", bmcSecret.Name)
-			return bmcSecret, nil
 		}
-		return nil, err
+		return nil
+	})
+	if err != nil {
+		return nil, false, err
 	}
 
-	return bmcSecret, nil
+	switch result {
+	case controllerutil.OperationResultCreated:
+		logger.Info("created BMCSecret", "name", bmcSecret.Name)
+	case controllerutil.OperationResultUpdated:
+		logger.Info("BMCSecret credentials updated", "name", bmcSecret.Name)
+	}
+
+	return bmcSecret, false, nil
 }
 
 func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Device, oobIP, hostname string, bmcSecret *metalv1alpha1.BMCSecret, labels map[string]string) (*metalv1alpha1.BMC, error) {
@@ -400,26 +408,6 @@ func (r *IronCoreReconciler) patchBMCLabels(ctx context.Context, bmc *metalv1alp
 	if err := r.k8sClient.Patch(ctx, bmc, client.MergeFrom(bmcBase)); err != nil {
 		logger.Error(err, "failed to patch BMC labels")
 		return err
-	}
-
-	if bmc.Spec.BMCSecretRef.Name != "" {
-		bmcSecret := &metalv1alpha1.BMCSecret{}
-
-		if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: bmc.Spec.BMCSecretRef.Name}, bmcSecret); err != nil {
-			logger.Error(err, "failed to get BMC secret")
-			return err
-		}
-
-		bmcSecretBase := bmcSecret.DeepCopy()
-		if bmcSecret.Labels == nil {
-			bmcSecret.Labels = make(map[string]string)
-		}
-		maps.Copy(bmcSecret.Labels, labels)
-
-		if err := r.k8sClient.Patch(ctx, bmcSecret, client.MergeFrom(bmcSecretBase)); err != nil {
-			logger.Error(err, "failed to patch BMC secret labels")
-			return err
-		}
 	}
 
 	return nil

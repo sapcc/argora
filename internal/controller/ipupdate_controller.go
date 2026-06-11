@@ -516,7 +516,7 @@ func (r *IPUpdateReconciler) findTargetInterface(interfaces []models.Interface) 
 	re := regexp.MustCompile(`^LAG(\d)$`)
 
 	for _, iface := range interfaces {
-		if strings.ToLower(iface.Type.Value) != "lag" {
+		if strings.ToLower(iface.Type.Value) != interfaceTypeLag {
 			continue
 		}
 

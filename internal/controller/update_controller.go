@@ -184,7 +184,7 @@ func (r *UpdateReconciler) reconcileDevice(ctx context.Context, netBox netbox.Ne
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
-	if !slices.Contains([]string{"active", "staged"}, device.Status.Value) {
+	if !slices.Contains([]string{deviceStatusActive, deviceStatusStaged}, device.Status.Value) {
 		logger.Info("device is neither active or staged, will skip", "status", device.Status.Value)
 		return nil
 	}
@@ -219,7 +219,7 @@ func (r *UpdateReconciler) renameRemoteboardInterface(ctx context.Context, netBo
 	for _, iface := range ifaces {
 		if slices.Contains(interfacesToRename, iface.Name) {
 			wIface := models.WritableInterface{
-				Name:   "remoteboard",
+				Name:   remoteboardInterfaceName,
 				Device: device.ID,
 				Type:   iface.Type.Value,
 			}
@@ -239,7 +239,7 @@ func (r *UpdateReconciler) renameRemoteboardInterface(ctx context.Context, netBo
 func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox netbox.Netbox, device *models.Device) error {
 	logger := log.FromContext(ctx)
 
-	iface, err := netBox.DCIM().GetInterfaceForDevice(device, "remoteboard")
+	iface, err := netBox.DCIM().GetInterfaceForDevice(device, remoteboardInterfaceName)
 	if err != nil {
 		return err
 	}
