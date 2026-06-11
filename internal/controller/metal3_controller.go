@@ -179,6 +179,11 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, cluster *cluster
 		return nil
 	}
 
+	bmcSecret, _, err := r.reconcileBmcSecret(ctx, cluster, device)
+	if err != nil {
+		return fmt.Errorf("unable to reconcile bmc secret: %w", err)
+	}
+
 	bmh := &bmov1alpha1.BareMetalHost{}
 	if err := r.k8sClient.Get(ctx, client.ObjectKey{Name: device.Name, Namespace: cluster.Namespace}, bmh); err == nil {
 		logger.Info("BareMetalHost custom resource already exists, will skip", "host", bmh.Name)
@@ -209,11 +214,6 @@ func (r *Metal3Reconciler) reconcileDevice(ctx context.Context, cluster *cluster
 	region, err := r.netBox.DCIM().GetRegionForDevice(device)
 	if err != nil {
 		return fmt.Errorf("unable to get region for device: %w", err)
-	}
-
-	bmcSecret, _, err := r.reconcileBmcSecret(ctx, cluster, device)
-	if err != nil {
-		return fmt.Errorf("unable to reconcile bmc secret: %w", err)
 	}
 
 	role, err := getRoleFromTags(device)
@@ -379,9 +379,9 @@ func (r *Metal3Reconciler) reconcileBmcSecret(ctx context.Context, cluster *clus
 	}
 
 	result, err := controllerutil.CreateOrUpdate(ctx, r.k8sClient, bmcSecret, func() error {
-		bmcSecret.StringData = map[string]string{
-			"username": user,
-			"password": password,
+		bmcSecret.Data = map[string][]byte{
+			"username": []byte(user),
+			"password": []byte(password),
 		}
 		return nil
 	})
