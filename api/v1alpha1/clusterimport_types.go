@@ -4,6 +4,8 @@
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/runtime"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,5 +46,8 @@ type ClusterImportList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterImport{}, &ClusterImportList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(GroupVersion, &ClusterImport{}, &ClusterImportList{})
+		return nil
+	})
 }
