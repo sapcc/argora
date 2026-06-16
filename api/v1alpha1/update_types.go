@@ -4,6 +4,8 @@
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/runtime"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,5 +46,8 @@ type UpdateList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&Update{}, &UpdateList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(GroupVersion, &Update{}, &UpdateList{})
+		return nil
+	})
 }
