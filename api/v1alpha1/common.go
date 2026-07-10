@@ -3,6 +3,8 @@
 
 package v1alpha1
 
+import corev1 "k8s.io/api/core/v1"
+
 const AnnotationIgnore = "argora.cloud.sap/ignore"
 
 type ClusterSelector struct {
@@ -12,6 +14,8 @@ type ClusterSelector struct {
 	Region string `json:"region,omitempty"`
 	// +kubebuilder:validation:Optional
 	Type string `json:"type,omitempty"`
+	// +kubebuilder:validation:Optional
+	BMCCredentialsRef *corev1.LocalObjectReference `json:"bmcCredentialsRef,omitempty"`
 }
 
 // IPPoolSelector defines the selection criteria for an IP pool to be imported.

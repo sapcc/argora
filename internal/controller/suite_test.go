@@ -233,6 +233,7 @@ func EnsureCleanState() {
 func createFakeClient(objects ...client.Object) client.Client {
 	scheme := runtime.NewScheme()
 
+	Expect(corev1.AddToScheme(scheme)).Should(Succeed())
 	Expect(argorav1alpha1.AddToScheme(scheme)).Should(Succeed())
 	Expect(metalv1alpha1.AddToScheme(scheme)).Should(Succeed())
 	Expect(ipamv1alpha2.AddToScheme(scheme)).Should(Succeed())

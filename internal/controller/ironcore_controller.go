@@ -170,7 +170,7 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clus
 		}
 
 		for _, device := range devices {
-			err = r.reconcileDevice(ctx, r.netBox, &cluster, &device)
+			err = r.reconcileDevice(ctx, clusterImportCR, clusterSelector, r.netBox, &cluster, &device)
 			if err != nil {
 				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
 
@@ -187,7 +187,7 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clus
 	return nil
 }
 
-func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster *models.Cluster, device *models.Device) error {
+func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, clusterSelector *argorav1alpha1.ClusterSelector, netBox netbox.Netbox, cluster *models.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
@@ -224,7 +224,7 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		"kubernetes.metal.cloud.sap/platform":     device.Platform.Slug,
 	}
 
-	bmcSecret, skipped, err := r.reconcileBmcSecret(ctx, device, commonLabels)
+	bmcSecret, skipped, err := r.reconcileBmcSecret(ctx, clusterImportCR, clusterSelector, device, commonLabels)
 	if err != nil {
 		return fmt.Errorf("unable to reconcile bmc secret: %w", err)
 	}
@@ -261,14 +261,12 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 	return nil
 }
 
-func (r *IronCoreReconciler) reconcileBmcSecret(ctx context.Context, device *models.Device, labels map[string]string) (*metalv1alpha1.BMCSecret, bool, error) {
+func (r *IronCoreReconciler) reconcileBmcSecret(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, clusterSelector *argorav1alpha1.ClusterSelector, device *models.Device, labels map[string]string) (*metalv1alpha1.BMCSecret, bool, error) {
 	logger := log.FromContext(ctx)
 
-	user := r.credentials.BMCUser
-	password := r.credentials.BMCPassword
-
-	if user == "" || password == "" {
-		return nil, false, errors.New("bmc user or password not set")
+	user, password, err := r.resolveBMCCredentials(ctx, clusterImportCR, clusterSelector)
+	if err != nil {
+		return nil, false, fmt.Errorf("unable to resolve BMC credentials: %w", err)
 	}
 
 	bmcSecret := &metalv1alpha1.BMCSecret{
@@ -304,6 +302,34 @@ func (r *IronCoreReconciler) reconcileBmcSecret(ctx context.Context, device *mod
 	}
 
 	return bmcSecret, false, nil
+}
+
+func (r *IronCoreReconciler) resolveBMCCredentials(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, clusterSelector *argorav1alpha1.ClusterSelector) (user, password string, err error) {
+	if clusterSelector.BMCCredentialsRef == nil {
+		user = r.credentials.BMCUser
+		password = r.credentials.BMCPassword
+		if user == "" || password == "" {
+			return "", "", errors.New("bmc user or password not set")
+		}
+		return user, password, nil
+	}
+
+	secret := &corev1.Secret{}
+	key := client.ObjectKey{
+		Namespace: clusterImportCR.Namespace,
+		Name:      clusterSelector.BMCCredentialsRef.Name,
+	}
+	if err = r.k8sClient.Get(ctx, key, secret); err != nil {
+		return "", "", fmt.Errorf("unable to get BMC credentials secret %q: %w", key.Name, err)
+	}
+
+	user = string(secret.Data["bmcUser"])
+	password = string(secret.Data["bmcPassword"])
+	if user == "" || password == "" {
+		return "", "", fmt.Errorf("BMC credentials secret %q is missing required keys (bmcUser, bmcPassword)", key.Name)
+	}
+
+	return user, password, nil
 }
 
 func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Device, oobIP, hostname string, bmcSecret *metalv1alpha1.BMCSecret, labels map[string]string) (*metalv1alpha1.BMC, error) {
