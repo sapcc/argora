@@ -7,6 +7,8 @@ import corev1 "k8s.io/api/core/v1"
 
 const AnnotationIgnore = "argora.cloud.sap/ignore"
 
+// ClusterSelector is intentionally shared between ClusterImport and Update CRDs.
+// Controller-specific fields (e.g. BMCCredentialsRef) are simply ignored by controllers that don't need them.
 type ClusterSelector struct {
 	// +kubebuilder:validation:Optional
 	Name string `json:"name,omitempty"`
@@ -14,6 +16,9 @@ type ClusterSelector struct {
 	Region string `json:"region,omitempty"`
 	// +kubebuilder:validation:Optional
 	Type string `json:"type,omitempty"`
+	// BMCCredentialsRef optionally references a Secret (same namespace) containing
+	// bmcUser and bmcPassword keys to override central BMC credentials.
+	// Used by the ironcore controller; ignored by others.
 	// +kubebuilder:validation:Optional
 	BMCCredentialsRef *corev1.LocalObjectReference `json:"bmcCredentialsRef,omitempty"`
 }
