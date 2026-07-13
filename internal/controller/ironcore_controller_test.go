@@ -14,6 +14,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -1132,6 +1133,136 @@ var _ = Describe("Ironcore Controller", func() {
 
 				expectStatus(argorav1alpha1.Ready, "")
 			})
+
+			It("should use override credentials from bmcCredentialsRef", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// create override credentials secret
+				overrideSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "override-bmc-creds",
+						Namespace: resourceNamespace,
+					},
+					Data: map[string][]byte{
+						"bmcUser":     []byte("override-user"),
+						"bmcPassword": []byte("override-password"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, overrideSecret)).To(Succeed())
+
+				// update ClusterImport with bmcCredentialsRef
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+					{
+						Name:   "name1",
+						Region: "region1",
+						Type:   "type1",
+						BMCCredentialsRef: &corev1.LocalObjectReference{
+							Name: "override-bmc-creds",
+						},
+					},
+				}
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify BMCSecret uses override credentials
+				bmcSecret := &metalv1alpha1.BMCSecret{}
+				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretUsernameKeyName]).To(Equal([]byte("override-user")))
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretPasswordKeyName]).To(Equal([]byte("override-password")))
+
+				expectStatus(argorav1alpha1.Ready, "")
+
+				// cleanup
+				Expect(k8sClient.Delete(ctx, overrideSecret)).To(Succeed())
+			})
+
+			It("should fail when bmcCredentialsRef points to non-existent secret", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// update ClusterImport with bmcCredentialsRef pointing to missing secret
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+					{
+						Name:   "name1",
+						Region: "region1",
+						Type:   "type1",
+						BMCCredentialsRef: &corev1.LocalObjectReference{
+							Name: "non-existent-secret",
+						},
+					},
+				}
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
+
+				// when
+				_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to resolve BMC credentials"))
+				Expect(err.Error()).To(ContainSubstring("non-existent-secret"))
+
+				expectStatus(argorav1alpha1.Error, "unable to reconcile device device-name1 (1) on cluster cluster1 (1): unable to reconcile bmc secret: unable to resolve BMC credentials: unable to get BMC credentials secret \"non-existent-secret\": secrets \"non-existent-secret\" not found")
+			})
+
+			It("should fail when bmcCredentialsRef secret is missing required keys", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+
+				// create secret with missing keys
+				incompleteSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "incomplete-bmc-creds",
+						Namespace: resourceNamespace,
+					},
+					Data: map[string][]byte{
+						"bmcUser": []byte("user-only"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, incompleteSecret)).To(Succeed())
+
+				// update ClusterImport with bmcCredentialsRef
+				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
+				Expect(err).ToNot(HaveOccurred())
+
+				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
+					{
+						Name:   "name1",
+						Region: "region1",
+						Type:   "type1",
+						BMCCredentialsRef: &corev1.LocalObjectReference{
+							Name: "incomplete-bmc-creds",
+						},
+					},
+				}
+				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
+
+				// when
+				_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("missing required keys"))
+
+				// cleanup
+				Expect(k8sClient.Delete(ctx, incompleteSecret)).To(Succeed())
+			})
 		})
 
 		Context("Fake Client", func() {
@@ -1235,6 +1366,93 @@ var _ = Describe("Ironcore Controller", func() {
 				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1}, bmc)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(bmc.Spec.Hostname).To(BeNil())
+			})
+
+			It("should use override credentials from bmcCredentialsRef with fake client", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+
+				overrideSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "override-bmc-creds",
+						Namespace: resourceNamespace,
+					},
+					Data: map[string][]byte{
+						"bmcUser":     []byte("override-user"),
+						"bmcPassword": []byte("override-password"),
+					},
+				}
+
+				clusterImportWithRef := &argorav1alpha1.ClusterImport{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      resourceName,
+						Namespace: resourceNamespace,
+					},
+					Spec: argorav1alpha1.ClusterImportSpec{
+						Clusters: []*argorav1alpha1.ClusterSelector{
+							{
+								Name:   "name1",
+								Region: "region1",
+								Type:   "type1",
+								BMCCredentialsRef: &corev1.LocalObjectReference{
+									Name: "override-bmc-creds",
+								},
+							},
+						},
+					},
+				}
+
+				fakeClient := createFakeClient(clusterImportWithRef, overrideSecret)
+				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+
+				// verify BMCSecret uses override credentials
+				bmcSecret := &metalv1alpha1.BMCSecret{}
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1}, bmcSecret)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretUsernameKeyName]).To(Equal([]byte("override-user")))
+				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretPasswordKeyName]).To(Equal([]byte("override-password")))
+			})
+
+			It("should fail when bmcCredentialsRef secret does not exist with fake client", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+
+				clusterImportWithMissingRef := &argorav1alpha1.ClusterImport{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      resourceName,
+						Namespace: resourceNamespace,
+					},
+					Spec: argorav1alpha1.ClusterImportSpec{
+						Clusters: []*argorav1alpha1.ClusterSelector{
+							{
+								Name:   "name1",
+								Region: "region1",
+								Type:   "type1",
+								BMCCredentialsRef: &corev1.LocalObjectReference{
+									Name: "missing-secret",
+								},
+							},
+						},
+					},
+				}
+
+				fakeClient := createFakeClient(clusterImportWithMissingRef)
+				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to resolve BMC credentials"))
+				Expect(err.Error()).To(ContainSubstring("missing-secret"))
 			})
 		})
 	})
