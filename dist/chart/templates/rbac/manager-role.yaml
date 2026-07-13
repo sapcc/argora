@@ -155,4 +155,15 @@ rules:
         - patch
         - update
         - watch
+    - apiGroups:
+        - readiness.metal.ironcore.dev
+      resources:
+        - serverwirings
+      verbs:
+        - create
+        - get
+        - list
+        - patch
+        - update
+        - watch
 {{- end }}
