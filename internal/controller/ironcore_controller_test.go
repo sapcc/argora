@@ -14,9 +14,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,6 +29,19 @@ import (
 	"github.com/sapcc/argora/internal/controller/mock"
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/status"
+)
+
+var (
+	serverWiringGVK = schema.GroupVersionKind{
+		Group:   "readiness.metal.ironcore.dev",
+		Version: "v1alpha1",
+		Kind:    "ServerWiring",
+	}
+	serverWiringListGVK = schema.GroupVersionKind{
+		Group:   "readiness.metal.ironcore.dev",
+		Version: "v1alpha1",
+		Kind:    "ServerWiringList",
+	}
 )
 
 var _ = Describe("Ironcore Controller", func() {
@@ -1133,136 +1147,6 @@ var _ = Describe("Ironcore Controller", func() {
 
 				expectStatus(argorav1alpha1.Ready, "")
 			})
-
-			It("should use override credentials from bmcCredentialsRef", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
-
-				// create override credentials secret
-				overrideSecret := &corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "override-bmc-creds",
-						Namespace: resourceNamespace,
-					},
-					Data: map[string][]byte{
-						"bmcUser":     []byte("override-user"),
-						"bmcPassword": []byte("override-password"),
-					},
-				}
-				Expect(k8sClient.Create(ctx, overrideSecret)).To(Succeed())
-
-				// update ClusterImport with bmcCredentialsRef
-				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
-				Expect(err).ToNot(HaveOccurred())
-
-				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
-					{
-						Name:   "name1",
-						Region: "region1",
-						Type:   "type1",
-						BMCCredentialsRef: &corev1.LocalObjectReference{
-							Name: "override-bmc-creds",
-						},
-					},
-				}
-				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
-
-				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
-
-				// then
-				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
-
-				// verify BMCSecret uses override credentials
-				bmcSecret := &metalv1alpha1.BMCSecret{}
-				err = k8sClient.Get(ctx, typeNamespacedBMCName1, bmcSecret)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretUsernameKeyName]).To(Equal([]byte("override-user")))
-				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretPasswordKeyName]).To(Equal([]byte("override-password")))
-
-				expectStatus(argorav1alpha1.Ready, "")
-
-				// cleanup
-				Expect(k8sClient.Delete(ctx, overrideSecret)).To(Succeed())
-			})
-
-			It("should fail when bmcCredentialsRef points to non-existent secret", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
-
-				// update ClusterImport with bmcCredentialsRef pointing to missing secret
-				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
-				Expect(err).ToNot(HaveOccurred())
-
-				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
-					{
-						Name:   "name1",
-						Region: "region1",
-						Type:   "type1",
-						BMCCredentialsRef: &corev1.LocalObjectReference{
-							Name: "non-existent-secret",
-						},
-					},
-				}
-				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
-
-				// when
-				_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unable to resolve BMC credentials"))
-				Expect(err.Error()).To(ContainSubstring("non-existent-secret"))
-
-				expectStatus(argorav1alpha1.Error, "unable to reconcile device device-name1 (1) on cluster cluster1 (1): unable to reconcile bmc secret: unable to resolve BMC credentials: unable to get BMC credentials secret \"non-existent-secret\": secrets \"non-existent-secret\" not found")
-			})
-
-			It("should fail when bmcCredentialsRef secret is missing required keys", func() {
-				// given
-				netBoxMock := prepareNetboxMock()
-				controllerReconciler := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
-
-				// create secret with missing keys
-				incompleteSecret := &corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "incomplete-bmc-creds",
-						Namespace: resourceNamespace,
-					},
-					Data: map[string][]byte{
-						"bmcUser": []byte("user-only"),
-					},
-				}
-				Expect(k8sClient.Create(ctx, incompleteSecret)).To(Succeed())
-
-				// update ClusterImport with bmcCredentialsRef
-				err := k8sClient.Get(ctx, typeNamespacedClusterImportName, clusterImport)
-				Expect(err).ToNot(HaveOccurred())
-
-				clusterImport.Spec.Clusters = []*argorav1alpha1.ClusterSelector{
-					{
-						Name:   "name1",
-						Region: "region1",
-						Type:   "type1",
-						BMCCredentialsRef: &corev1.LocalObjectReference{
-							Name: "incomplete-bmc-creds",
-						},
-					},
-				}
-				Expect(k8sClient.Update(ctx, clusterImport)).To(Succeed())
-
-				// when
-				_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
-
-				// then
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("missing required keys"))
-
-				// cleanup
-				Expect(k8sClient.Delete(ctx, incompleteSecret)).To(Succeed())
-			})
 		})
 
 		Context("Fake Client", func() {
@@ -1367,92 +1251,158 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(bmc.Spec.Hostname).To(BeNil())
 			})
+		})
 
-			It("should use override credentials from bmcCredentialsRef with fake client", func() {
-				// given
+		Context("ServerWiring", func() {
+
+			clusterImportCR := &argorav1alpha1.ClusterImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: resourceNamespace,
+				},
+				Spec: argorav1alpha1.ClusterImportSpec{
+					Clusters: []*argorav1alpha1.ClusterSelector{
+						{Name: "name1", Region: "region1", Type: "type1"},
+					},
+				},
+			}
+
+			dataInterface := models.Interface{
+				Name:       "enp0s2",
+				MacAddress: "52:54:00:de:59:65",
+				Type:       models.InterfaceType{Value: "1000base-t"},
+				MgmtOnly:   false,
+			}
+
+			prepareNetboxMockWithInterfaces := func(ifaces []models.Interface) *mock.NetBoxMock {
 				netBoxMock := prepareNetboxMock()
-
-				overrideSecret := &corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "override-bmc-creds",
-						Namespace: resourceNamespace,
-					},
-					Data: map[string][]byte{
-						"bmcUser":     []byte("override-user"),
-						"bmcPassword": []byte("override-password"),
-					},
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return ifaces, nil
 				}
+				return netBoxMock
+			}
 
-				clusterImportWithRef := &argorav1alpha1.ClusterImport{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: resourceNamespace,
-					},
-					Spec: argorav1alpha1.ClusterImportSpec{
-						Clusters: []*argorav1alpha1.ClusterSelector{
-							{
-								Name:   "name1",
-								Region: "region1",
-								Type:   "type1",
-								BMCCredentialsRef: &corev1.LocalObjectReference{
-									Name: "override-bmc-creds",
-								},
-							},
-						},
-					},
-				}
-
-				fakeClient := createFakeClient(clusterImportWithRef, overrideSecret)
-				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
-
-				// when
-				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
-
-				// then
-				Expect(err).ToNot(HaveOccurred())
-				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
-
-				// verify BMCSecret uses override credentials
-				bmcSecret := &metalv1alpha1.BMCSecret{}
-				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1}, bmcSecret)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretUsernameKeyName]).To(Equal([]byte("override-user")))
-				Expect(bmcSecret.Data[metalv1alpha1.BMCSecretPasswordKeyName]).To(Equal([]byte("override-password")))
-			})
-
-			It("should fail when bmcCredentialsRef secret does not exist with fake client", func() {
+			It("should not create ServerWiring when readiness checks are not enabled", func() {
 				// given
-				netBoxMock := prepareNetboxMock()
-
-				clusterImportWithMissingRef := &argorav1alpha1.ClusterImport{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: resourceNamespace,
-					},
-					Spec: argorav1alpha1.ClusterImportSpec{
-						Clusters: []*argorav1alpha1.ClusterSelector{
-							{
-								Name:   "name1",
-								Region: "region1",
-								Type:   "type1",
-								BMCCredentialsRef: &corev1.LocalObjectReference{
-									Name: "missing-secret",
-								},
-							},
-						},
-					},
-				}
-
-				fakeClient := createFakeClient(clusterImportWithMissingRef)
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
 				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
 
 				// when
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
 
 				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(0))
+
+				srcList := &unstructured.UnstructuredList{}
+				srcList.SetGroupVersionKind(serverWiringListGVK)
+				err = fakeClient.List(ctx, srcList)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(srcList.Items).To(BeEmpty())
+			})
+
+			It("should create ServerWiring with data interfaces when readiness checks are enabled", func() {
+				// given
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"network"})
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(1))
+
+				src := &unstructured.Unstructured{}
+				src.SetGroupVersionKind(serverWiringGVK)
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-network", Namespace: resourceNamespace}, src)
+				Expect(err).ToNot(HaveOccurred())
+
+				ifaces, _, _ := unstructured.NestedSlice(src.Object, "spec", "network", "interfaces")
+				Expect(ifaces).To(HaveLen(1))
+				iface := ifaces[0].(map[string]interface{})
+				Expect(iface["macAddress"]).To(Equal("52:54:00:de:59:65"))
+				Expect(iface["carrierStatus"]).To(Equal("up"))
+
+				serverRefName, _, _ := unstructured.NestedString(src.Object, "spec", "serverRef", "name")
+				Expect(serverRefName).To(Equal(bmcName1 + "-system-0"))
+			})
+
+			It("should filter out mgmt-only, LAG, no-MAC, and remoteboard interfaces", func() {
+				// given
+				ifaces := []models.Interface{
+					dataInterface,
+					{Name: "mgmt0", MacAddress: "52:54:00:aa:bb:01", MgmtOnly: true},
+					{Name: "bond0", MacAddress: "52:54:00:aa:bb:02", Type: models.InterfaceType{Value: interfaceTypeLag}},
+					{Name: "eth0", MacAddress: ""},
+					{Name: remoteboardInterfaceName, MacAddress: "52:54:00:aa:bb:04"},
+				}
+				netBoxMock := prepareNetboxMockWithInterfaces(ifaces)
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"network"})
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+
+				src := &unstructured.Unstructured{}
+				src.SetGroupVersionKind(serverWiringGVK)
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-network", Namespace: resourceNamespace}, src)
+				Expect(err).ToNot(HaveOccurred())
+
+				ifaces2, _, _ := unstructured.NestedSlice(src.Object, "spec", "network", "interfaces")
+				Expect(ifaces2).To(HaveLen(1))
+				Expect(ifaces2[0].(map[string]interface{})["macAddress"]).To(Equal("52:54:00:de:59:65"))
+			})
+
+			It("should patch existing ServerWiring when interfaces change", func() {
+				// given
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"network"})
+
+				// first reconcile creates SRC
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+
+				// second interface appears in Netbox
+				newIface := models.Interface{Name: "enp0s3", MacAddress: "52:54:00:de:59:66", Type: models.InterfaceType{Value: "1000base-t"}}
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return []models.Interface{dataInterface, newIface}, nil
+				}
+
+				// when - second reconcile
+				_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+
+				// then - SRC has two interfaces
+				src := &unstructured.Unstructured{}
+				src.SetGroupVersionKind(serverWiringGVK)
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-network", Namespace: resourceNamespace}, src)
+				Expect(err).ToNot(HaveOccurred())
+				ifaces2, _, _ := unstructured.NestedSlice(src.Object, "spec", "network", "interfaces")
+				Expect(ifaces2).To(HaveLen(2))
+			})
+
+			It("should return error when GetInterfacesForDevice fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return nil, errors.New("netbox unavailable")
+				}
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"network"})
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unable to resolve BMC credentials"))
-				Expect(err.Error()).To(ContainSubstring("missing-secret"))
+				Expect(err.Error()).To(ContainSubstring("unable to get interfaces for device"))
 			})
 		})
 	})
@@ -1467,6 +1417,13 @@ func createIronCoreReconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMo
 		netBox:            netBoxMock,
 		reconcileInterval: reconcileInterval,
 	}
+}
+
+func createIronCoreReconcilerWithReadiness(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock credentials.FileReader, readinessChecks []string) *IronCoreReconciler {
+	r := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+	r.readinessChecks = readinessChecks
+	r.readinessCheckNS = "default"
+	return r
 }
 
 type shouldFailClient struct {
