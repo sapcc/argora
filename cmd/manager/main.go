@@ -76,6 +76,9 @@ type FlagVariables struct {
 	rateLimiterFrequency int
 	rateLimiterBurst     int
 	reconcileInterval    time.Duration
+
+	readinessChecks  string
+	readinessCheckNS string
 }
 
 func init() {
@@ -165,7 +168,7 @@ func main() {
 	setupLog.Info("argora", "version", bininfo.Version())
 
 	if flagVar.enableIronCore {
-		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval, flagVar.readinessChecks, flagVar.readinessCheckNS).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ironcore")
 			os.Exit(1)
 		}
@@ -237,6 +240,8 @@ func getFlagVariables() *FlagVariables {
 	flag.DurationVar(&flagVariables.failureBaseDelay, "failure-base-delay", failureBaseDelayDefault, "Indicates the failure base delay for rate limiter.")
 	flag.DurationVar(&flagVariables.failureMaxDelay, "failure-max-delay", failureMaxDelayDefault, "Indicates the failure max delay.")
 	flag.DurationVar(&flagVariables.reconcileInterval, "reconcile-interval", reconcileIntervalDefault, "Indicates the time based reconcile interval.")
+	flag.StringVar(&flagVariables.readinessChecks, "readiness-checks", "", "Comma-separated list of readiness check types to enable (supported: network).")
+	flag.StringVar(&flagVariables.readinessCheckNS, "readiness-check-namespace", "metal-maintenance-operator-system", "Namespace in which ServerReadinessCheck objects are created.")
 
 	return flagVariables
 }
