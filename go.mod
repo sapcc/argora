@@ -5,8 +5,8 @@ go 1.26.0
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/metal3-io/baremetal-operator/apis v0.9.1
-	github.com/sapcc/go-api-declarations v1.18.0
-	github.com/sapcc/go-netbox-go v0.0.0-20260116110245-ae1897937f74
+	github.com/sapcc/go-api-declarations v1.24.0
+	github.com/sapcc/go-netbox-go v0.0.0-20260723170252-a46434aa6ed2
 	k8s.io/api v0.36.1
 	sigs.k8s.io/cluster-api v1.12.2
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -56,7 +56,6 @@ require (
 	github.com/go-openapi/swag/yamlutils v0.25.1 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
-	github.com/google/btree v1.1.3 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83 // indirect
