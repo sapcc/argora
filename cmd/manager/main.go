@@ -240,8 +240,8 @@ func getFlagVariables() *FlagVariables {
 	flag.DurationVar(&flagVariables.failureBaseDelay, "failure-base-delay", failureBaseDelayDefault, "Indicates the failure base delay for rate limiter.")
 	flag.DurationVar(&flagVariables.failureMaxDelay, "failure-max-delay", failureMaxDelayDefault, "Indicates the failure max delay.")
 	flag.DurationVar(&flagVariables.reconcileInterval, "reconcile-interval", reconcileIntervalDefault, "Indicates the time based reconcile interval.")
-	flag.StringVar(&flagVariables.readinessChecks, "readiness-checks", "", "Comma-separated list of readiness check types to enable (supported: network).")
-	flag.StringVar(&flagVariables.readinessCheckNS, "readiness-check-namespace", "metal-maintenance-operator-system", "Namespace in which ServerReadinessCheck objects are created.")
+	flag.StringVar(&flagVariables.readinessChecks, "readiness-checks", "", "Comma-separated list of readiness check types to enable (supported: serverwiring).")
+	flag.StringVar(&flagVariables.readinessCheckNS, "readiness-check-namespace", "metal-maintenance-operator-system", "Namespace in which readiness check objects are created.")
 
 	return flagVariables
 }

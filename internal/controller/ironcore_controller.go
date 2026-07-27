@@ -25,6 +25,7 @@ import (
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,9 +39,9 @@ import (
 )
 
 const (
-	bmcProtocolRedfish        = "Redfish"
-	bmcPort                   = 443
-	readinessCheckTypeNetwork = "network"
+	bmcProtocolRedfish             = "Redfish"
+	bmcPort                        = 443
+	readinessCheckTypeServerWiring = "serverwiring"
 )
 
 type IronCoreReconciler struct {
@@ -97,7 +98,7 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=readiness.metal.ironcore.dev,resources=serverwirings,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=readiness.metal.ironcore.dev,resources=serverwirings,verbs=get;list;watch;create;update;patch;delete
 
 func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -183,7 +184,7 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clus
 		}
 
 		for _, device := range devices {
-			err = r.reconcileDevice(ctx, r.netBox, &cluster, &device)
+			err = r.reconcileDevice(ctx, clusterImportCR, clusterSelector, r.netBox, &cluster, &device)
 			if err != nil {
 				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
 
@@ -200,7 +201,7 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clus
 	return nil
 }
 
-func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.Netbox, cluster *models.Cluster, device *models.Device) error {
+func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, clusterSelector *argorav1alpha1.ClusterSelector, netBox netbox.Netbox, cluster *models.Cluster, device *models.Device) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling device", "device", device.Name, "ID", device.ID)
 
@@ -237,7 +238,7 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		"kubernetes.metal.cloud.sap/platform":     device.Platform.Slug,
 	}
 
-	bmcSecret, skipped, err := r.reconcileBmcSecret(ctx, device, commonLabels)
+	bmcSecret, skipped, err := r.reconcileBmcSecret(ctx, clusterImportCR, clusterSelector, device, commonLabels)
 	if err != nil {
 		return fmt.Errorf("unable to reconcile bmc secret: %w", err)
 	}
@@ -250,8 +251,8 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 
 		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
 
-		if slices.Contains(r.readinessChecks, readinessCheckTypeNetwork) {
-			if err := r.reconcileServerWiring(ctx, device); err != nil {
+		if slices.Contains(r.readinessChecks, readinessCheckTypeServerWiring) {
+			if err := r.reconcileServerWiring(ctx, device, bmcObj); err != nil {
 				return fmt.Errorf("unable to reconcile ServerWiring: %w", err)
 			}
 		}
@@ -278,22 +279,20 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, netBox netbox.
 		}
 	}
 
-	if slices.Contains(r.readinessChecks, readinessCheckTypeNetwork) {
-		if err := r.reconcileServerWiring(ctx, device); err != nil {
+	if slices.Contains(r.readinessChecks, readinessCheckTypeServerWiring) {
+		if err := r.reconcileServerWiring(ctx, device, bmc); err != nil {
 			return fmt.Errorf("unable to reconcile ServerWiring: %w", err)
 		}
 	}
 	return nil
 }
 
-func (r *IronCoreReconciler) reconcileBmcSecret(ctx context.Context, device *models.Device, labels map[string]string) (*metalv1alpha1.BMCSecret, bool, error) {
+func (r *IronCoreReconciler) reconcileBmcSecret(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, clusterSelector *argorav1alpha1.ClusterSelector, device *models.Device, labels map[string]string) (*metalv1alpha1.BMCSecret, bool, error) {
 	logger := log.FromContext(ctx)
 
-	user := r.credentials.BMCUser
-	password := r.credentials.BMCPassword
-
-	if user == "" || password == "" {
-		return nil, false, errors.New("bmc user or password not set")
+	user, password, err := r.resolveBMCCredentials(ctx, clusterImportCR, clusterSelector)
+	if err != nil {
+		return nil, false, fmt.Errorf("unable to resolve BMC credentials: %w", err)
 	}
 
 	bmcSecret := &metalv1alpha1.BMCSecret{
@@ -329,6 +328,34 @@ func (r *IronCoreReconciler) reconcileBmcSecret(ctx context.Context, device *mod
 	}
 
 	return bmcSecret, false, nil
+}
+
+func (r *IronCoreReconciler) resolveBMCCredentials(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, clusterSelector *argorav1alpha1.ClusterSelector) (user, password string, err error) {
+	if clusterSelector.BMCCredentialsRef == nil {
+		user = r.credentials.BMCUser
+		password = r.credentials.BMCPassword
+		if user == "" || password == "" {
+			return "", "", errors.New("bmc user or password not set")
+		}
+		return user, password, nil
+	}
+
+	secret := &corev1.Secret{}
+	key := client.ObjectKey{
+		Namespace: clusterImportCR.Namespace,
+		Name:      clusterSelector.BMCCredentialsRef.Name,
+	}
+	if err = r.k8sClient.Get(ctx, key, secret); err != nil {
+		return "", "", fmt.Errorf("unable to get BMC credentials secret %q: %w", key.Name, err)
+	}
+
+	user = string(secret.Data["bmcUser"])
+	password = string(secret.Data["bmcPassword"])
+	if user == "" || password == "" {
+		return "", "", fmt.Errorf("BMC credentials secret %q is missing required keys (bmcUser, bmcPassword)", key.Name)
+	}
+
+	return user, password, nil
 }
 
 func (r *IronCoreReconciler) createBmc(ctx context.Context, device *models.Device, oobIP, hostname string, bmcSecret *metalv1alpha1.BMCSecret, labels map[string]string) (*metalv1alpha1.BMC, error) {
@@ -438,7 +465,7 @@ func (r *IronCoreReconciler) patchBMCLabels(ctx context.Context, bmc *metalv1alp
 	return nil
 }
 
-func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *models.Device) error {
+func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *models.Device, bmc *metalv1alpha1.BMC) error {
 	logger := log.FromContext(ctx)
 
 	ifaces, err := r.netBox.DCIM().GetInterfacesForDevice(device)
@@ -446,12 +473,12 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 		return fmt.Errorf("unable to get interfaces for device %s: %w", device.Name, err)
 	}
 
-	var interfaces []interface{}
+	interfaces := make([]interface{}, 0)
 	for _, iface := range ifaces {
 		if iface.MgmtOnly {
 			continue
 		}
-		if iface.Type.Value == interfaceTypeLag {
+		if strings.ToLower(iface.Type.Value) == interfaceTypeLag {
 			continue
 		}
 		if iface.MacAddress == "" {
@@ -461,12 +488,12 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 			continue
 		}
 		interfaces = append(interfaces, map[string]interface{}{
-			"macAddress":    iface.MacAddress,
+			"macAddress":    strings.ToLower(iface.MacAddress),
 			"carrierStatus": "up",
 		})
 	}
 
-	name := device.Name + "-network"
+	name := device.Name + "-serverwiring"
 	// Only single-system BMCs are supported. Netbox models a device as a single unit with no
 	// per-system interface split, so we cannot correctly assign interfaces to individual Redfish
 	// systems. Multi-system BMCs must be flagged in Netbox and excluded until proper support is added.
@@ -482,7 +509,7 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 			"serverRef": map[string]interface{}{
 				"name": serverName,
 			},
-			readinessCheckTypeNetwork: map[string]interface{}{
+			"network": map[string]interface{}{
 				"interfaces": interfaces,
 			},
 		},
@@ -495,13 +522,40 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("unable to get ServerWiring %s: %w", name, err)
 		}
+		if err := controllerutil.SetControllerReference(bmc, obj, r.scheme); err != nil {
+			return fmt.Errorf("unable to set owner reference on ServerWiring %s: %w", name, err)
+		}
 		logger.Info("Creating ServerWiring", "name", name, "namespace", r.readinessCheckNS)
-		return r.k8sClient.Create(ctx, obj)
+		if err := r.k8sClient.Create(ctx, obj); err != nil {
+			return fmt.Errorf("unable to create ServerWiring %s: %w", name, err)
+		}
+		return nil
 	}
 
 	base := existing.DeepCopy()
-	spec, _ := obj.Object["spec"].(map[string]interface{})
-	existing.Object["spec"] = spec
+	existingSpec, _ := existing.Object["spec"].(map[string]interface{})
+	if existingSpec == nil {
+		existingSpec = make(map[string]interface{})
+	}
+	newSpec, _ := obj.Object["spec"].(map[string]interface{})
+	existingSpec["serverRef"] = newSpec["serverRef"]
+	existingSpec["network"] = newSpec["network"]
+	existing.Object["spec"] = existingSpec
+
+	if current := metav1.GetControllerOf(existing); current == nil || current.UID != bmc.UID {
+		owners := existing.GetOwnerReferences()
+		filtered := make([]metav1.OwnerReference, 0, len(owners))
+		for _, ref := range owners {
+			if ref.Controller == nil || !*ref.Controller {
+				filtered = append(filtered, ref)
+			}
+		}
+		existing.SetOwnerReferences(filtered)
+		if err := controllerutil.SetControllerReference(bmc, existing, r.scheme); err != nil {
+			return fmt.Errorf("unable to set owner reference on ServerWiring %s: %w", name, err)
+		}
+	}
+
 	if err := r.k8sClient.Patch(ctx, existing, client.MergeFrom(base)); err != nil {
 		return fmt.Errorf("unable to patch ServerWiring %s: %w", name, err)
 	}
