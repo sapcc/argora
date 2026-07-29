@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	mmov1alpha1 "github.com/ironcore-dev/metal-maintenance-operator/api/readiness/v1alpha1"
 	ironcorev1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -90,6 +91,7 @@ func init() {
 	utilruntime.Must(ipamv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ironcorev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(mmov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ipamv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/status"
 
+	mmov1alpha1 "github.com/ironcore-dev/metal-maintenance-operator/api/readiness/v1alpha1"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/go-netbox-go/models"
 
@@ -26,9 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -473,7 +472,7 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 		return fmt.Errorf("unable to get interfaces for device %s: %w", device.Name, err)
 	}
 
-	interfaces := make([]interface{}, 0)
+	var interfaces []mmov1alpha1.ExpectedInterface
 	for _, iface := range ifaces {
 		if iface.MgmtOnly {
 			continue
@@ -487,9 +486,9 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 		if iface.Name == remoteboardInterfaceName {
 			continue
 		}
-		interfaces = append(interfaces, map[string]interface{}{
-			"macAddress":    strings.ToLower(iface.MacAddress),
-			"carrierStatus": "up",
+		interfaces = append(interfaces, mmov1alpha1.ExpectedInterface{
+			MACAddress:    strings.ToLower(iface.MacAddress),
+			CarrierStatus: "up",
 		})
 	}
 
@@ -498,26 +497,21 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 	// per-system interface split, so we cannot correctly assign interfaces to individual Redfish
 	// systems. Multi-system BMCs must be flagged in Netbox and excluded until proper support is added.
 	serverName := device.Name + "-system-0"
-	obj := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "readiness.metal.ironcore.dev/v1alpha1",
-		"kind":       "ServerWiring",
-		"metadata": map[string]interface{}{
-			"name":      name,
-			"namespace": r.readinessCheckNS,
+	obj := &mmov1alpha1.ServerWiring{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: r.readinessCheckNS,
 		},
-		"spec": map[string]interface{}{
-			"serverRef": map[string]interface{}{
-				"name": serverName,
-			},
-			"network": map[string]interface{}{
-				"interfaces": interfaces,
+		Spec: mmov1alpha1.ServerWiringSpec{
+			ServerRef: corev1.LocalObjectReference{Name: serverName},
+			Network: mmov1alpha1.ExpectedNetworkSpec{
+				Interfaces: interfaces,
 			},
 		},
-	}}
+	}
 
-	existing := &unstructured.Unstructured{}
-	existing.SetGroupVersionKind(obj.GroupVersionKind())
-	err = r.k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: r.readinessCheckNS}, existing)
+	existing := &mmov1alpha1.ServerWiring{}
+	err = r.k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: r.readinessCheckNS}, existing)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("unable to get ServerWiring %s: %w", name, err)
@@ -533,14 +527,8 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 	}
 
 	base := existing.DeepCopy()
-	existingSpec, _ := existing.Object["spec"].(map[string]interface{})
-	if existingSpec == nil {
-		existingSpec = make(map[string]interface{})
-	}
-	newSpec, _ := obj.Object["spec"].(map[string]interface{})
-	existingSpec["serverRef"] = newSpec["serverRef"]
-	existingSpec["network"] = newSpec["network"]
-	existing.Object["spec"] = existingSpec
+	existing.Spec.ServerRef = obj.Spec.ServerRef
+	existing.Spec.Network = obj.Spec.Network
 
 	if current := metav1.GetControllerOf(existing); current == nil || current.UID != bmc.UID {
 		owners := existing.GetOwnerReferences()

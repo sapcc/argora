@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	mmov1alpha1 "github.com/ironcore-dev/metal-maintenance-operator/api/readiness/v1alpha1"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -17,8 +18,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,19 +29,6 @@ import (
 	"github.com/sapcc/argora/internal/controller/mock"
 	"github.com/sapcc/argora/internal/credentials"
 	"github.com/sapcc/argora/internal/status"
-)
-
-var (
-	serverWiringGVK = schema.GroupVersionKind{
-		Group:   "readiness.metal.ironcore.dev",
-		Version: "v1alpha1",
-		Kind:    "ServerWiring",
-	}
-	serverWiringListGVK = schema.GroupVersionKind{
-		Group:   "readiness.metal.ironcore.dev",
-		Version: "v1alpha1",
-		Kind:    "ServerWiringList",
-	}
 )
 
 var _ = Describe("Ironcore Controller", func() {
@@ -1513,8 +1499,7 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(0))
 
-				srcList := &unstructured.UnstructuredList{}
-				srcList.SetGroupVersionKind(serverWiringListGVK)
+				srcList := &mmov1alpha1.ServerWiringList{}
 				err = fakeClient.List(ctx, srcList)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(srcList.Items).To(BeEmpty())
@@ -1533,19 +1518,14 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(1))
 
-				src := &unstructured.Unstructured{}
-				src.SetGroupVersionKind(serverWiringGVK)
+				src := &mmov1alpha1.ServerWiring{}
 				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)
 				Expect(err).ToNot(HaveOccurred())
 
-				ifaces, _, _ := unstructured.NestedSlice(src.Object, "spec", "network", "interfaces")
-				Expect(ifaces).To(HaveLen(1))
-				iface := ifaces[0].(map[string]interface{})
-				Expect(iface["macAddress"]).To(Equal("52:54:00:de:59:65"))
-				Expect(iface["carrierStatus"]).To(Equal("up"))
-
-				serverRefName, _, _ := unstructured.NestedString(src.Object, "spec", "serverRef", "name")
-				Expect(serverRefName).To(Equal(bmcName1 + "-system-0"))
+				Expect(src.Spec.Network.Interfaces).To(HaveLen(1))
+				Expect(src.Spec.Network.Interfaces[0].MACAddress).To(Equal("52:54:00:de:59:65"))
+				Expect(src.Spec.Network.Interfaces[0].CarrierStatus).To(Equal("up"))
+				Expect(src.Spec.ServerRef.Name).To(Equal(bmcName1 + "-system-0"))
 			})
 
 			It("should filter out mgmt-only, LAG, no-MAC, and remoteboard interfaces", func() {
@@ -1567,14 +1547,12 @@ var _ = Describe("Ironcore Controller", func() {
 				// then
 				Expect(err).ToNot(HaveOccurred())
 
-				src := &unstructured.Unstructured{}
-				src.SetGroupVersionKind(serverWiringGVK)
+				src := &mmov1alpha1.ServerWiring{}
 				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)
 				Expect(err).ToNot(HaveOccurred())
 
-				ifaces2, _, _ := unstructured.NestedSlice(src.Object, "spec", "network", "interfaces")
-				Expect(ifaces2).To(HaveLen(1))
-				Expect(ifaces2[0].(map[string]interface{})["macAddress"]).To(Equal("52:54:00:de:59:65"))
+				Expect(src.Spec.Network.Interfaces).To(HaveLen(1))
+				Expect(src.Spec.Network.Interfaces[0].MACAddress).To(Equal("52:54:00:de:59:65"))
 			})
 
 			It("should patch existing ServerWiring when interfaces change", func() {
@@ -1598,12 +1576,10 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// then - SRC has two interfaces
-				src := &unstructured.Unstructured{}
-				src.SetGroupVersionKind(serverWiringGVK)
+				src := &mmov1alpha1.ServerWiring{}
 				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)
 				Expect(err).ToNot(HaveOccurred())
-				ifaces2, _, _ := unstructured.NestedSlice(src.Object, "spec", "network", "interfaces")
-				Expect(ifaces2).To(HaveLen(2))
+				Expect(src.Spec.Network.Interfaces).To(HaveLen(2))
 			})
 
 			It("should return error when GetInterfacesForDevice fails", func() {
@@ -1667,10 +1643,12 @@ var _ = Describe("Ironcore Controller", func() {
 				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
 
 				// pre-create a ServerWiring without owner ref
-				existing := &unstructured.Unstructured{}
-				existing.SetGroupVersionKind(serverWiringGVK)
-				existing.SetName(bmcName1 + "-serverwiring")
-				existing.SetNamespace(resourceNamespace)
+				existing := &mmov1alpha1.ServerWiring{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      bmcName1 + "-serverwiring",
+						Namespace: resourceNamespace,
+					},
+				}
 				Expect(fakeClient.Create(ctx, existing)).To(Succeed())
 
 				// when
@@ -1682,8 +1660,7 @@ var _ = Describe("Ironcore Controller", func() {
 				bmc := &metalv1alpha1.BMC{}
 				Expect(fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1}, bmc)).To(Succeed())
 
-				src := &unstructured.Unstructured{}
-				src.SetGroupVersionKind(serverWiringGVK)
+				src := &mmov1alpha1.ServerWiring{}
 				Expect(fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)).To(Succeed())
 
 				ownerRefs := src.GetOwnerReferences()
