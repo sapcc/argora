@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,12 +19,14 @@ import (
 	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/argora/internal/status"
 
+	mmov1alpha1 "github.com/ironcore-dev/metal-maintenance-operator/api/readiness/v1alpha1"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	"github.com/sapcc/go-netbox-go/models"
 
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,8 +38,9 @@ import (
 )
 
 const (
-	bmcProtocolRedfish = "Redfish"
-	bmcPort            = 443
+	bmcProtocolRedfish             = "Redfish"
+	bmcPort                        = 443
+	readinessCheckTypeServerWiring = "serverwiring"
 )
 
 type IronCoreReconciler struct {
@@ -46,9 +50,15 @@ type IronCoreReconciler struct {
 	statusHandler     status.ClusterImportStatus
 	netBox            netbox.Netbox
 	reconcileInterval time.Duration
+	readinessChecks   []string
+	readinessCheckNS  string
 }
 
-func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration) *IronCoreReconciler {
+func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration, readinessChecks, readinessCheckNS string) *IronCoreReconciler {
+	var checks []string
+	if readinessChecks != "" {
+		checks = strings.Split(readinessChecks, ",")
+	}
 	return &IronCoreReconciler{
 		k8sClient:         mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
@@ -56,6 +66,8 @@ func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, sta
 		statusHandler:     statusHandler,
 		netBox:            netBox,
 		reconcileInterval: reconcileInterval,
+		readinessChecks:   checks,
+		readinessCheckNS:  readinessCheckNS,
 	}
 }
 
@@ -85,6 +97,7 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=readiness.metal.ironcore.dev,resources=serverwirings,verbs=get;list;watch;create;update;patch;delete
 
 func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -236,6 +249,12 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, clusterImportC
 		}
 
 		logger.Info("BMC custom resource already exists, will skip", "bmc", device.Name)
+
+		if slices.Contains(r.readinessChecks, readinessCheckTypeServerWiring) {
+			if err := r.reconcileServerWiring(ctx, device, bmcObj); err != nil {
+				return fmt.Errorf("unable to reconcile ServerWiring: %w", err)
+			}
+		}
 		return nil
 	}
 
@@ -256,6 +275,12 @@ func (r *IronCoreReconciler) reconcileDevice(ctx context.Context, clusterImportC
 	if !skipped {
 		if err := r.patchOwnerReference(ctx, bmc, bmcSecret); err != nil {
 			return err
+		}
+	}
+
+	if slices.Contains(r.readinessChecks, readinessCheckTypeServerWiring) {
+		if err := r.reconcileServerWiring(ctx, device, bmc); err != nil {
+			return fmt.Errorf("unable to reconcile ServerWiring: %w", err)
 		}
 	}
 	return nil
@@ -436,5 +461,92 @@ func (r *IronCoreReconciler) patchBMCLabels(ctx context.Context, bmc *metalv1alp
 		return err
 	}
 
+	return nil
+}
+
+func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *models.Device, bmc *metalv1alpha1.BMC) error {
+	logger := log.FromContext(ctx)
+
+	ifaces, err := r.netBox.DCIM().GetInterfacesForDevice(device)
+	if err != nil {
+		return fmt.Errorf("unable to get interfaces for device %s: %w", device.Name, err)
+	}
+
+	var interfaces []mmov1alpha1.ExpectedInterface
+	for _, iface := range ifaces {
+		if iface.MgmtOnly {
+			continue
+		}
+		if strings.ToLower(iface.Type.Value) == interfaceTypeLag {
+			continue
+		}
+		if iface.MacAddress == "" {
+			continue
+		}
+		if iface.Name == remoteboardInterfaceName {
+			continue
+		}
+		interfaces = append(interfaces, mmov1alpha1.ExpectedInterface{
+			MACAddress:    strings.ToLower(iface.MacAddress),
+			CarrierStatus: "up",
+		})
+	}
+
+	name := device.Name + "-serverwiring"
+	// Only single-system BMCs are supported. Netbox models a device as a single unit with no
+	// per-system interface split, so we cannot correctly assign interfaces to individual Redfish
+	// systems. Multi-system BMCs must be flagged in Netbox and excluded until proper support is added.
+	serverName := device.Name + "-system-0"
+	obj := &mmov1alpha1.ServerWiring{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: r.readinessCheckNS,
+		},
+		Spec: mmov1alpha1.ServerWiringSpec{
+			ServerRef: corev1.LocalObjectReference{Name: serverName},
+			Network: mmov1alpha1.ExpectedNetworkSpec{
+				Interfaces: interfaces,
+			},
+		},
+	}
+
+	existing := &mmov1alpha1.ServerWiring{}
+	err = r.k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: r.readinessCheckNS}, existing)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("unable to get ServerWiring %s: %w", name, err)
+		}
+		if err := controllerutil.SetControllerReference(bmc, obj, r.scheme); err != nil {
+			return fmt.Errorf("unable to set owner reference on ServerWiring %s: %w", name, err)
+		}
+		logger.Info("Creating ServerWiring", "name", name, "namespace", r.readinessCheckNS)
+		if err := r.k8sClient.Create(ctx, obj); err != nil {
+			return fmt.Errorf("unable to create ServerWiring %s: %w", name, err)
+		}
+		return nil
+	}
+
+	base := existing.DeepCopy()
+	existing.Spec.ServerRef = obj.Spec.ServerRef
+	existing.Spec.Network = obj.Spec.Network
+
+	if current := metav1.GetControllerOf(existing); current == nil || current.UID != bmc.UID {
+		owners := existing.GetOwnerReferences()
+		filtered := make([]metav1.OwnerReference, 0, len(owners))
+		for _, ref := range owners {
+			if ref.Controller == nil || !*ref.Controller {
+				filtered = append(filtered, ref)
+			}
+		}
+		existing.SetOwnerReferences(filtered)
+		if err := controllerutil.SetControllerReference(bmc, existing, r.scheme); err != nil {
+			return fmt.Errorf("unable to set owner reference on ServerWiring %s: %w", name, err)
+		}
+	}
+
+	if err := r.k8sClient.Patch(ctx, existing, client.MergeFrom(base)); err != nil {
+		return fmt.Errorf("unable to patch ServerWiring %s: %w", name, err)
+	}
+	logger.Info("Patched ServerWiring", "name", name, "namespace", r.readinessCheckNS)
 	return nil
 }

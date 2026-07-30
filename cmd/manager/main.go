@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	mmov1alpha1 "github.com/ironcore-dev/metal-maintenance-operator/api/readiness/v1alpha1"
 	ironcorev1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -76,6 +77,9 @@ type FlagVariables struct {
 	rateLimiterFrequency int
 	rateLimiterBurst     int
 	reconcileInterval    time.Duration
+
+	readinessChecks  string
+	readinessCheckNS string
 }
 
 func init() {
@@ -87,6 +91,7 @@ func init() {
 	utilruntime.Must(ipamv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ironcorev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(mmov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ipamv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
@@ -165,7 +170,7 @@ func main() {
 	setupLog.Info("argora", "version", bininfo.Version())
 
 	if flagVar.enableIronCore {
-		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval, flagVar.readinessChecks, flagVar.readinessCheckNS).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ironcore")
 			os.Exit(1)
 		}
@@ -237,6 +242,8 @@ func getFlagVariables() *FlagVariables {
 	flag.DurationVar(&flagVariables.failureBaseDelay, "failure-base-delay", failureBaseDelayDefault, "Indicates the failure base delay for rate limiter.")
 	flag.DurationVar(&flagVariables.failureMaxDelay, "failure-max-delay", failureMaxDelayDefault, "Indicates the failure max delay.")
 	flag.DurationVar(&flagVariables.reconcileInterval, "reconcile-interval", reconcileIntervalDefault, "Indicates the time based reconcile interval.")
+	flag.StringVar(&flagVariables.readinessChecks, "readiness-checks", "", "Comma-separated list of readiness check types to enable (supported: serverwiring).")
+	flag.StringVar(&flagVariables.readinessCheckNS, "readiness-check-namespace", "metal-maintenance-operator-system", "Namespace in which readiness check objects are created.")
 
 	return flagVariables
 }

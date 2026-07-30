@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	mmov1alpha1 "github.com/ironcore-dev/metal-maintenance-operator/api/readiness/v1alpha1"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1287,7 +1288,7 @@ var _ = Describe("Ironcore Controller", func() {
 				netBoxMock := prepareNetboxMock()
 
 				fakeClient := createFakeClient(clusterImportCR)
-				failClient := &shouldFailClient{fakeClient, "BMCSecret"}
+				failClient := &shouldFailClient{Client: fakeClient, FailOnCreateKind: "BMCSecret"}
 
 				controllerReconciler := createIronCoreReconciler(failClient, netBoxMock, fileReaderMock)
 
@@ -1305,7 +1306,7 @@ var _ = Describe("Ironcore Controller", func() {
 				netBoxMock := prepareNetboxMock()
 
 				fakeClient := createFakeClient(clusterImportCR)
-				failClient := &shouldFailClient{fakeClient, "BMC"}
+				failClient := &shouldFailClient{Client: fakeClient, FailOnCreateKind: "BMC"}
 
 				controllerReconciler := createIronCoreReconciler(failClient, netBoxMock, fileReaderMock)
 
@@ -1455,6 +1456,219 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(err.Error()).To(ContainSubstring("missing-secret"))
 			})
 		})
+
+		Context("ServerWiring", func() {
+
+			clusterImportCR := &argorav1alpha1.ClusterImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: resourceNamespace,
+				},
+				Spec: argorav1alpha1.ClusterImportSpec{
+					Clusters: []*argorav1alpha1.ClusterSelector{
+						{Name: "name1", Region: "region1", Type: "type1"},
+					},
+				},
+			}
+
+			dataInterface := models.Interface{
+				Name:       "enp0s2",
+				MacAddress: "52:54:00:de:59:65",
+				Type:       models.InterfaceType{Value: "1000base-t"},
+				MgmtOnly:   false,
+			}
+
+			prepareNetboxMockWithInterfaces := func(ifaces []models.Interface) *mock.NetBoxMock {
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return ifaces, nil
+				}
+				return netBoxMock
+			}
+
+			It("should not create ServerWiring when readiness checks are not enabled", func() {
+				// given
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(0))
+
+				srcList := &mmov1alpha1.ServerWiringList{}
+				err = fakeClient.List(ctx, srcList)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(srcList.Items).To(BeEmpty())
+			})
+
+			It("should create ServerWiring with data interfaces when readiness checks are enabled", func() {
+				// given
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceCalls).To(Equal(1))
+
+				src := &mmov1alpha1.ServerWiring{}
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(src.Spec.Network.Interfaces).To(HaveLen(1))
+				Expect(src.Spec.Network.Interfaces[0].MACAddress).To(Equal("52:54:00:de:59:65"))
+				Expect(src.Spec.Network.Interfaces[0].CarrierStatus).To(Equal("up"))
+				Expect(src.Spec.ServerRef.Name).To(Equal(bmcName1 + "-system-0"))
+			})
+
+			It("should filter out mgmt-only, LAG, no-MAC, and remoteboard interfaces", func() {
+				// given
+				ifaces := []models.Interface{
+					dataInterface,
+					{Name: "mgmt0", MacAddress: "52:54:00:aa:bb:01", MgmtOnly: true},
+					{Name: "bond0", MacAddress: "52:54:00:aa:bb:02", Type: models.InterfaceType{Value: interfaceTypeLag}},
+					{Name: "eth0", MacAddress: ""},
+					{Name: remoteboardInterfaceName, MacAddress: "52:54:00:aa:bb:04"},
+				}
+				netBoxMock := prepareNetboxMockWithInterfaces(ifaces)
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+
+				src := &mmov1alpha1.ServerWiring{}
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(src.Spec.Network.Interfaces).To(HaveLen(1))
+				Expect(src.Spec.Network.Interfaces[0].MACAddress).To(Equal("52:54:00:de:59:65"))
+			})
+
+			It("should patch existing ServerWiring when interfaces change", func() {
+				// given
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
+
+				// first reconcile creates SRC
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+
+				// second interface appears in Netbox
+				newIface := models.Interface{Name: "enp0s3", MacAddress: "52:54:00:de:59:66", Type: models.InterfaceType{Value: "1000base-t"}}
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return []models.Interface{dataInterface, newIface}, nil
+				}
+
+				// when - second reconcile
+				_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+
+				// then - SRC has two interfaces
+				src := &mmov1alpha1.ServerWiring{}
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(src.Spec.Network.Interfaces).To(HaveLen(2))
+			})
+
+			It("should return error when GetInterfacesForDevice fails", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return nil, errors.New("netbox unavailable")
+				}
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to get interfaces for device"))
+			})
+
+			It("should return error when ServerWiring creation fails", func() {
+				// given
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
+				failClient := &shouldFailClient{Client: fakeClient, FailOnCreateKind: "ServerWiring"}
+				controllerReconciler := createIronCoreReconcilerWithReadiness(failClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to create ServerWiring"))
+			})
+
+			It("should return error when ServerWiring patch fails", func() {
+				// given
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
+
+				// first reconcile creates the ServerWiring
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+				Expect(err).ToNot(HaveOccurred())
+
+				// inject patch failure
+				failClient := &shouldFailClient{Client: fakeClient, FailOnPatchKind: "ServerWiring"}
+				controllerReconciler.k8sClient = failClient
+
+				// when - second reconcile triggers patch
+				_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to patch ServerWiring"))
+			})
+
+			It("should take over ownership of ServerWiring created without owner reference", func() {
+				// given
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{dataInterface})
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
+
+				// pre-create a ServerWiring without owner ref
+				existing := &mmov1alpha1.ServerWiring{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      bmcName1 + "-serverwiring",
+						Namespace: resourceNamespace,
+					},
+				}
+				Expect(fakeClient.Create(ctx, existing)).To(Succeed())
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+
+				bmc := &metalv1alpha1.BMC{}
+				Expect(fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1}, bmc)).To(Succeed())
+
+				src := &mmov1alpha1.ServerWiring{}
+				Expect(fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)).To(Succeed())
+
+				ownerRefs := src.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Name).To(Equal(bmc.Name))
+				Expect(*ownerRefs[0].Controller).To(BeTrue())
+			})
+		})
 	})
 })
 
@@ -1469,9 +1683,17 @@ func createIronCoreReconciler(k8sClient client.Client, netBoxMock *mock.NetBoxMo
 	}
 }
 
+func createIronCoreReconcilerWithReadiness(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock credentials.FileReader, readinessChecks []string) *IronCoreReconciler {
+	r := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+	r.readinessChecks = readinessChecks
+	r.readinessCheckNS = "default"
+	return r
+}
+
 type shouldFailClient struct {
 	client.Client
 	FailOnCreateKind string
+	FailOnPatchKind  string
 }
 
 func (p *shouldFailClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
@@ -1486,4 +1708,18 @@ func (p *shouldFailClient) Create(ctx context.Context, obj client.Object, opts .
 		return errors.New("intentionally failing client on client.Create for " + p.FailOnCreateKind)
 	}
 	return p.Client.Create(ctx, obj, opts...)
+}
+
+func (p *shouldFailClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	kind := obj.GetObjectKind().GroupVersionKind().Kind
+	if kind == "" {
+		gvks, _, _ := p.Scheme().ObjectKinds(obj)
+		if len(gvks) > 0 {
+			kind = gvks[0].Kind
+		}
+	}
+	if kind == p.FailOnPatchKind {
+		return errors.New("intentionally failing client on client.Patch for " + p.FailOnPatchKind)
+	}
+	return p.Client.Patch(ctx, obj, patch, opts...)
 }
