@@ -486,10 +486,13 @@ func (r *IronCoreReconciler) reconcileServerWiring(ctx context.Context, device *
 		if iface.Name == remoteboardInterfaceName {
 			continue
 		}
-		interfaces = append(interfaces, mmov1alpha1.ExpectedInterface{
-			MACAddress:    strings.ToLower(iface.MacAddress),
-			CarrierStatus: "up",
-		})
+		expectedIface := mmov1alpha1.ExpectedInterface{
+			MACAddress: strings.ToLower(iface.MacAddress),
+		}
+		if iface.Cable.ID != 0 {
+			expectedIface.CarrierStatus = "up"
+		}
+		interfaces = append(interfaces, expectedIface)
 	}
 
 	name := device.Name + "-serverwiring"

@@ -45,11 +45,15 @@ spec:
             properties:
               clusters:
                 items:
+                  description: |-
+                    ClusterSelector is intentionally shared between ClusterImport and Update CRDs.
+                    Controller-specific fields (e.g. BMCCredentialsRef) are simply ignored by controllers that don't need them.
                   properties:
                     bmcCredentialsRef:
                       description: |-
-                        LocalObjectReference contains enough information to let you locate the
-                        referenced object inside the same namespace.
+                        BMCCredentialsRef optionally references a Secret (same namespace) containing
+                        bmcUser and bmcPassword keys to override central BMC credentials.
+                        Used by the ironcore controller; ignored by others.
                       properties:
                         name:
                           default: ""

@@ -93,6 +93,10 @@ help-ext: ## Display this help.
 manifests: controller-gen
 	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
+.PHONY: check-manifests
+check-manifests: manifests generate ## Check that generated manifests and code are up-to-date.
+	git diff --exit-code
+
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."

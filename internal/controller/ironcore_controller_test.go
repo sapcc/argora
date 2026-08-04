@@ -1476,6 +1476,7 @@ var _ = Describe("Ironcore Controller", func() {
 				MacAddress: "52:54:00:de:59:65",
 				Type:       models.InterfaceType{Value: "1000base-t"},
 				MgmtOnly:   false,
+				Cable:      models.NestedCable{ID: 42},
 			}
 
 			prepareNetboxMockWithInterfaces := func(ifaces []models.Interface) *mock.NetBoxMock {
@@ -1526,6 +1527,32 @@ var _ = Describe("Ironcore Controller", func() {
 				Expect(src.Spec.Network.Interfaces[0].MACAddress).To(Equal("52:54:00:de:59:65"))
 				Expect(src.Spec.Network.Interfaces[0].CarrierStatus).To(Equal("up"))
 				Expect(src.Spec.ServerRef.Name).To(Equal(bmcName1 + "-system-0"))
+			})
+
+			It("should omit CarrierStatus for interfaces without a cable", func() {
+				// given
+				uncabledIface := models.Interface{
+					Name:       "enp0s3",
+					MacAddress: "52:54:00:de:59:66",
+					Type:       models.InterfaceType{Value: "1000base-t"},
+				}
+				netBoxMock := prepareNetboxMockWithInterfaces([]models.Interface{uncabledIface})
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerWithReadiness(fakeClient, netBoxMock, fileReaderMock, []string{"serverwiring"})
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+
+				src := &mmov1alpha1.ServerWiring{}
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: bmcName1 + "-serverwiring", Namespace: resourceNamespace}, src)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(src.Spec.Network.Interfaces).To(HaveLen(1))
+				Expect(src.Spec.Network.Interfaces[0].MACAddress).To(Equal("52:54:00:de:59:66"))
+				Expect(src.Spec.Network.Interfaces[0].CarrierStatus).To(BeEmpty())
 			})
 
 			It("should filter out mgmt-only, LAG, no-MAC, and remoteboard interfaces", func() {
