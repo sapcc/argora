@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 jobs:
   helm-chart:
@@ -71,8 +71,9 @@ jobs:
 
       - name: Set container image repository and tag
         run: |
-          yq -i '.manager.image.repository = "keppel.global.cloud.sap/ccloud-ghcr-io-mirror/sapcc/argora"' dist/chart/values.yaml
-          yq -i '.manager.image.tag = "sha-${{ github.sha }}"' dist/chart/values.yaml
+          IMAGE_TAG=sha-$(echo ${{ github.sha }} | cut -c1-7)
+          yq -i '.manager.image.repository = "ghcr.io/sapcc/argora"' dist/chart/values.yaml
+          yq -i '.manager.image.tag = "'$IMAGE_TAG'"' dist/chart/values.yaml
 
       - name: Package Helm chart with crds folder in template
         run: |
