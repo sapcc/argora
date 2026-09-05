@@ -4,28 +4,25 @@ go 1.27
 
 require (
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
-	github.com/metal3-io/baremetal-operator/apis v0.9.1
-	github.com/sapcc/go-api-declarations v1.18.0
-	github.com/sapcc/go-netbox-go v0.0.0-20260116110245-ae1897937f74
-	k8s.io/api v0.36.1
-	sigs.k8s.io/cluster-api v1.12.2
-	sigs.k8s.io/controller-runtime v0.24.1
-)
-
-require (
 	github.com/go-logr/logr v1.4.4
 	github.com/ironcore-dev/metal-maintenance-operator v0.0.0-20260728080523-5a49e7541425
 	github.com/ironcore-dev/metal-operator v0.6.2
+	github.com/metal3-io/baremetal-operator/apis v0.9.1
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
 	github.com/pkg/errors v0.9.1
+	github.com/sapcc/go-api-declarations v1.25.0
+	github.com/sapcc/go-netbox-go v0.0.0-20260827094610-387cca477b11
 	go.uber.org/zap v1.27.1
 	golang.org/x/time v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
+	k8s.io/api v0.36.1
 	k8s.io/apimachinery v0.36.1
 	k8s.io/client-go v0.36.1
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
+	sigs.k8s.io/cluster-api v1.12.2
 	sigs.k8s.io/cluster-api-ipam-provider-in-cluster v1.0.3
+	sigs.k8s.io/controller-runtime v0.24.1
 )
 
 require (
