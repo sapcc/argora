@@ -188,7 +188,7 @@ type IPAMMock struct {
 	GetIPAddressForInterfaceCalls   int
 	GetPrefixesContainingFunc       func(contains string) ([]models.Prefix, error)
 	GetPrefixesContainingCalls      int
-	GetPrefixesByRegionRoleFunc     func(region, role string) ([]models.Prefix, error)
+	GetPrefixesByRegionRoleFunc     func(region, role, prefix string) ([]models.Prefix, error)
 	GetPrefixesByRegionRoleCalls    int
 	GetPrefixesByPrefixesFunc       func(prefix string) ([]models.Prefix, error)
 	GetPrefixesByPrefixesCalls      int
@@ -227,9 +227,9 @@ func (i *IPAMMock) GetPrefixesContaining(contains string) ([]models.Prefix, erro
 	return i.GetPrefixesContainingFunc(contains)
 }
 
-func (i *IPAMMock) GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error) {
+func (i *IPAMMock) GetPrefixesByRegionRole(region, role, prefix string) ([]models.Prefix, error) {
 	i.GetPrefixesByRegionRoleCalls++
-	return i.GetPrefixesByRegionRoleFunc(region, role)
+	return i.GetPrefixesByRegionRoleFunc(region, role, prefix)
 }
 
 func (i *IPAMMock) GetPrefixesByPrefix(prefix string) ([]models.Prefix, error) {

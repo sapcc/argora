@@ -362,10 +362,28 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			prefixes, err := ipamService.GetPrefixesByRegionRole("eu-central", "compute")
+			prefixes, err := ipamService.GetPrefixesByRegionRole("eu-central", "compute", "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(prefixes).To(HaveLen(2))
 			Expect(prefixes[0].Prefix).To(Equal("10.0.0.0/16"))
+		})
+
+		It("should narrow the query to the exact prefix when one is given", func() {
+			mockClient.ListPrefixesFunc = func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+				Expect(opts.Region).To(Equal("eu-central"))
+				Expect(opts.Role).To(Equal("compute"))
+				Expect(opts.Prefix).To(Equal("10.1.0.0/16"))
+				return &models.ListPrefixesReponse{
+					Results: []models.Prefix{
+						{Prefix: "10.1.0.0/16"},
+					},
+				}, nil
+			}
+
+			prefixes, err := ipamService.GetPrefixesByRegionRole("eu-central", "compute", "10.1.0.0/16")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(prefixes).To(HaveLen(1))
+			Expect(prefixes[0].Prefix).To(Equal("10.1.0.0/16"))
 		})
 
 		It("should return an error when no prefixes are found", func() {
@@ -375,7 +393,7 @@ var _ = Describe("IPAM", func() {
 				return &models.ListPrefixesReponse{Results: []models.Prefix{}}, nil
 			}
 
-			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "storage")
+			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "storage", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("prefixes in region eu-central with role storage not found"))
 		})
@@ -385,7 +403,7 @@ var _ = Describe("IPAM", func() {
 				return nil, errors.New("API error")
 			}
 
-			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "network")
+			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "network", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to list prefixes in region eu-central with role network: API error"))
 		})
@@ -416,7 +434,7 @@ var _ = Describe("IPAM", func() {
 				return &models.ListPrefixesReponse{Results: []models.Prefix{}}, nil
 			}
 
-			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "storage")
+			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "storage", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("prefixes in region eu-central with role storage not found"))
 		})
@@ -426,7 +444,7 @@ var _ = Describe("IPAM", func() {
 				return nil, errors.New("API error")
 			}
 
-			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "network")
+			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "network", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("unable to list prefixes in region eu-central with role network: API error"))
 		})

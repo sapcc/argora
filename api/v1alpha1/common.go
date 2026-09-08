@@ -34,6 +34,11 @@ type IPPoolSelector struct {
 	Region string `json:"region,omitempty"`
 	// +kubebuilder:validation:Optional
 	Role string `json:"role,omitempty"`
+	// Prefix optionally restricts the selection to the single NetBox prefix with
+	// this exact CIDR. Use it to disambiguate when region+role match more than one
+	// prefix (e.g. several management-transit networks share a region and role).
+	// +kubebuilder:validation:Optional
+	Prefix string `json:"prefix,omitempty"`
 	// +kubebuilder:validation:Optional
 	ExcludeMask *int `json:"excludeMask,omitempty"`
 	// +kubebuilder:validation:Optional

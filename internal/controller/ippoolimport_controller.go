@@ -134,9 +134,9 @@ func (r *IPPoolImportReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 func (r *IPPoolImportReconciler) reconcileIPPoolSelection(ctx context.Context, importCR *argorav1alpha1.IPPoolImport, ipPoolSelector *argorav1alpha1.IPPoolSelector) error {
 	logger := log.FromContext(ctx)
-	logger.Info("fetching prefixes", "region", ipPoolSelector.Region, "role", ipPoolSelector.Role)
+	logger.Info("fetching prefixes", "region", ipPoolSelector.Region, "role", ipPoolSelector.Role, "prefix", ipPoolSelector.Prefix)
 
-	prefixes, err := r.netBox.IPAM().GetPrefixesByRegionRole(ipPoolSelector.Region, ipPoolSelector.Role)
+	prefixes, err := r.netBox.IPAM().GetPrefixesByRegionRole(ipPoolSelector.Region, ipPoolSelector.Role, ipPoolSelector.Prefix)
 	if err != nil {
 		logger.Error(err, "unable to find prefixes", "region", ipPoolSelector.Region, "role", ipPoolSelector.Role)
 

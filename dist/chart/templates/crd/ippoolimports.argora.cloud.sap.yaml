@@ -69,6 +69,12 @@ spec:
                                             type: string
                                         namePrefix:
                                             type: string
+                                        prefix:
+                                            description: |-
+                                                Prefix optionally restricts the selection to the single NetBox prefix with
+                                                this exact CIDR. Use it to disambiguate when region+role match more than one
+                                                prefix (e.g. several management-transit networks share a region and role).
+                                            type: string
                                         region:
                                             type: string
                                         role:
