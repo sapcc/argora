@@ -109,7 +109,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 				ExtrasMock:         &mock.ExtrasMock{},
 			}
 
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role string) ([]models.Prefix, error) {
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role, prefix string) ([]models.Prefix, error) {
 				Expect(region).To(Equal(regionName))
 				Expect(role).To(Equal(roleName))
 				return []models.Prefix{
@@ -377,7 +377,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 
 			// Mock a /30 prefix to limit total addresses to 4
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role string) ([]models.Prefix, error) {
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role, prefix string) ([]models.Prefix, error) {
 				Expect(region).To(Equal(regionName))
 				Expect(role).To(Equal(roleName))
 				return []models.Prefix{
@@ -524,7 +524,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 				Expect(k8sClient.Delete(ctx, computeIPPoolImportCR)).To(Succeed())
 			}()
 
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role string) ([]models.Prefix, error) {
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role, prefix string) ([]models.Prefix, error) {
 				Expect(region).To(Equal(computeRegion))
 				Expect(role).To(Equal(computeRole))
 				return []models.Prefix{
@@ -608,7 +608,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 		It("should return an error if GetPrefixesByRegionRole fails", func() {
 			// given
 			netBoxMock := prepareNetboxMock()
-			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role string) ([]models.Prefix, error) {
+			netBoxMock.IPAMMock.(*mock.IPAMMock).GetPrefixesByRegionRoleFunc = func(region, role, prefix string) ([]models.Prefix, error) {
 				Expect(region).To(Equal("region1"))
 				Expect(role).To(Equal("role1"))
 				return nil, errors.New("unable to find prefixes")

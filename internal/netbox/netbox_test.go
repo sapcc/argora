@@ -101,7 +101,7 @@ func (m *MockIPAM) GetPrefixesContaining(contains string) ([]models.Prefix, erro
 	return nil, nil
 }
 
-func (m *MockIPAM) GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error) {
+func (m *MockIPAM) GetPrefixesByRegionRole(region, role, prefix string) ([]models.Prefix, error) {
 	return nil, nil
 }
 

@@ -34,6 +34,16 @@ type IPPoolSelector struct {
 	Region string `json:"region,omitempty"`
 	// +kubebuilder:validation:Optional
 	Role string `json:"role,omitempty"`
+	// Prefix optionally restricts the selection to the single NetBox prefix with
+	// this exact CIDR. Use it to disambiguate when region+role match more than one
+	// prefix (e.g. several management-transit networks share a region and role).
+	// An empty value means no prefix filter. MaxLength is capped at 17 to keep the
+	// isCIDR CEL rule within the apiserver's per-schema cost budget; that fits every
+	// NetBox prefix in scope (IPv4 network CIDRs such as 10.219.139.128/26).
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=17
+	// +kubebuilder:validation:XValidation:rule="self == '' || isCIDR(self)",message="prefix must be a valid CIDR"
+	Prefix string `json:"prefix,omitempty"`
 	// +kubebuilder:validation:Optional
 	ExcludeMask *int `json:"excludeMask,omitempty"`
 	// +kubebuilder:validation:Optional

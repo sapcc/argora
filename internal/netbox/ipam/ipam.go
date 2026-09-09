@@ -21,7 +21,7 @@ type IPAM interface {
 	GetIPAddressesForInterface(interfaceID int) ([]models.IPAddress, error)
 	GetIPAddressForInterface(interfaceID int) (*models.IPAddress, error)
 	GetPrefixesContaining(contains string) ([]models.Prefix, error)
-	GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error)
+	GetPrefixesByRegionRole(region, role, prefix string) ([]models.Prefix, error)
 	CreateIPAddress(addr CreateIPAddressParams) (*models.IPAddress, error)
 	UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
 	GetPrefixesByPrefix(prefix string) ([]models.Prefix, error)
@@ -110,18 +110,24 @@ func (i *IPAMService) GetPrefixesContaining(contains string) ([]models.Prefix, e
 	return res.Results, nil
 }
 
-func (i *IPAMService) GetPrefixesByRegionRole(region, role string) ([]models.Prefix, error) {
-	ListPrefixesRequest := NewListPrefixesRequest(
+func (i *IPAMService) GetPrefixesByRegionRole(region, role, prefix string) ([]models.Prefix, error) {
+	opts := []ListPrefixesRequestOption{
 		PrefixWithRegion(region),
 		PrefixWithRole(role),
-	).BuildRequest()
+	}
+	filter := fmt.Sprintf("region %s with role %s", region, role)
+	if prefix != "" {
+		opts = append(opts, PrefixWithPrefix(prefix))
+		filter += " and prefix " + prefix
+	}
+	ListPrefixesRequest := NewListPrefixesRequest(opts...).BuildRequest()
 	i.logger.V(1).Info("list prefixes", "request", ListPrefixesRequest)
 	res, err := i.netboxAPI.ListPrefixes(ListPrefixesRequest)
 	if err != nil {
-		return nil, fmt.Errorf("unable to list prefixes in region %s with role %s: %w", region, role, err)
+		return nil, fmt.Errorf("unable to list prefixes in %s: %w", filter, err)
 	}
 	if len(res.Results) == 0 {
-		return nil, fmt.Errorf("prefixes in region %s with role %s not found", region, role)
+		return nil, fmt.Errorf("prefixes in %s not found", filter)
 	}
 	return res.Results, nil
 }
