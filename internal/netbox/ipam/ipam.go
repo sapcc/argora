@@ -118,7 +118,7 @@ func (i *IPAMService) GetPrefixesByRegionRole(region, role, prefix string) ([]mo
 	filter := fmt.Sprintf("region %s with role %s", region, role)
 	if prefix != "" {
 		opts = append(opts, PrefixWithPrefix(prefix))
-		filter += fmt.Sprintf(" and prefix %s", prefix)
+		filter += " and prefix " + prefix
 	}
 	ListPrefixesRequest := NewListPrefixesRequest(opts...).BuildRequest()
 	i.logger.V(1).Info("list prefixes", "request", ListPrefixesRequest)
