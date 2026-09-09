@@ -386,6 +386,16 @@ var _ = Describe("IPAM", func() {
 			Expect(prefixes[0].Prefix).To(Equal("10.1.0.0/16"))
 		})
 
+		It("should mention the prefix in the not-found error when a prefix filter is given", func() {
+			mockClient.ListPrefixesFunc = func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
+				Expect(opts.Prefix).To(Equal("10.1.0.0/16"))
+				return &models.ListPrefixesReponse{Results: []models.Prefix{}}, nil
+			}
+
+			_, err := ipamService.GetPrefixesByRegionRole("eu-central", "compute", "10.1.0.0/16")
+			Expect(err).To(MatchError("prefixes in region eu-central with role compute and prefix 10.1.0.0/16 not found"))
+		})
+
 		It("should return an error when no prefixes are found", func() {
 			mockClient.ListPrefixesFunc = func(opts models.ListPrefixesRequest) (*models.ListPrefixesReponse, error) {
 				Expect(opts.Region).To(Equal("eu-central"))
