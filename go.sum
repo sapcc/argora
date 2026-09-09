@@ -136,10 +136,10 @@ github.com/prometheus/procfs v0.19.2 h1:zUMhqEW66Ex7OXIiDkll3tl9a1ZdilUOd/F6ZXw4
 github.com/prometheus/procfs v0.19.2/go.mod h1:M0aotyiemPhBCM0z5w87kL22CxfcH05ZpYlu+b4J7mw=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
-github.com/sapcc/go-api-declarations v1.18.0 h1:I73wuBKJEAeAI7nYuB4tHY9n9pydj5mgM7Zn+9fryAA=
-github.com/sapcc/go-api-declarations v1.18.0/go.mod h1:N2klk2oDNa1lsS6gUBnCDJedHy/c2vmwJ1sryckRW40=
-github.com/sapcc/go-netbox-go v0.0.0-20260116110245-ae1897937f74 h1:8TzJsnltLMwQgFz7Vc09d2tKQq12+kK7uLXuyp7pqcU=
-github.com/sapcc/go-netbox-go v0.0.0-20260116110245-ae1897937f74/go.mod h1:J65dz72wx7xrJHv+31bubacgljQJOio26jbqvYj2thE=
+github.com/sapcc/go-api-declarations v1.25.0 h1:vLkSVV8oaZExoBMEkwX31AqUjZIjwxKkxXr4q2sAAOg=
+github.com/sapcc/go-api-declarations v1.25.0/go.mod h1:7NrwidCCv/MxwBpb/qqYLbQb/eY6rlnYkXwWMGx/wlI=
+github.com/sapcc/go-netbox-go v0.0.0-20260827094610-387cca477b11 h1:hSpbrKsM4q9tVBxDHCHTSuxW10UBRLaCxjpHEAnBEGo=
+github.com/sapcc/go-netbox-go v0.0.0-20260827094610-387cca477b11/go.mod h1:GRVSzFWEAmoeMR2Zj2IX6mQRemj8pD9TD9YFMlrWNno=
 github.com/seborama/govcr v4.5.0+incompatible h1:XvdHtXi0d4cUAn+0aWolvwfS3nmhNC8Z+yMQwn/M64I=
 github.com/seborama/govcr v4.5.0+incompatible/go.mod h1:EgcISudCCYDLzbiAImJ8i7kk4+wTA44Kp+j4S0LhASI=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
