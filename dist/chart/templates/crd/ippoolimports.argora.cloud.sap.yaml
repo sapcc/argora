@@ -74,14 +74,14 @@ spec:
                                                 Prefix optionally restricts the selection to the single NetBox prefix with
                                                 this exact CIDR. Use it to disambiguate when region+role match more than one
                                                 prefix (e.g. several management-transit networks share a region and role).
-                                                MaxLength is capped at 18 (the longest IPv4 CIDR, e.g. 255.255.255.255/32) so
-                                                the isCIDR CEL rule stays within the apiserver's per-schema cost budget; NetBox
-                                                prefixes in scope are IPv4.
-                                            maxLength: 18
+                                                An empty value means no prefix filter. MaxLength is capped at 17 to keep the
+                                                isCIDR CEL rule within the apiserver's per-schema cost budget; that fits every
+                                                NetBox prefix in scope (IPv4 network CIDRs such as 10.219.139.128/26).
+                                            maxLength: 17
                                             type: string
                                             x-kubernetes-validations:
                                                 - message: prefix must be a valid CIDR
-                                                  rule: isCIDR(self)
+                                                  rule: self == '' || isCIDR(self)
                                         region:
                                             type: string
                                         role:
