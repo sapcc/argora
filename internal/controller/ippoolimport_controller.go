@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	ComputeTransitPrefixRoleName = "kubernetes-compute-transit"
+	ComputeTransitPrefixRoleName = "sci-k8s-compute-nodes"
 )
 
 // IPPoolImportReconciler reconciles a IPPoolImport object

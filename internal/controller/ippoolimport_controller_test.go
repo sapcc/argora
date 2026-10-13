@@ -495,7 +495,7 @@ var _ = Describe("IPPoolImport Controller", func() {
 			netBoxMock := prepareNetboxMock()
 
 			computePrefix := "10.10.40.0/24"
-			computeRole := "test-kubernetes-compute-transit"
+			computeRole := "test-sci-k8s-compute-nodes"
 			computeSite := "eu-central-1a"
 			computeRegion := "eu-central-1"
 			computeNamePrefix := "compute"
