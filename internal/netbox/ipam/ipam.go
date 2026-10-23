@@ -114,6 +114,7 @@ func (i *IPAMService) GetPrefixesByRegionRole(region, role, prefix string) ([]mo
 	opts := []ListPrefixesRequestOption{
 		PrefixWithRegion(region),
 		PrefixWithRole(role),
+		PrefixWithStatus("active"),
 	}
 	filter := fmt.Sprintf("region %s with role %s", region, role)
 	if prefix != "" {
