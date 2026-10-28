@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-ARG TARGET_GO_VERSION=1.27
+ARG TARGET_GO_VERSION=1.27@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b
 
 # Build the manager binary
 FROM --platform=$BUILDPLATFORM golang:${TARGET_GO_VERSION} AS builder
