@@ -12,7 +12,7 @@ require (
 	github.com/onsi/gomega v1.42.1
 	github.com/pkg/errors v0.9.1
 	github.com/sapcc/go-api-declarations v1.25.1
-	github.com/sapcc/go-netbox-go v0.0.0-20260827094610-387cca477b11
+	github.com/sapcc/go-netbox-go v0.0.0-20261112121136-c586d06d40ef
 	go.uber.org/zap v1.27.1
 	golang.org/x/time v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
