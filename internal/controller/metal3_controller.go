@@ -46,6 +46,7 @@ var (
 		"poweredge-r840":             rootHintBOSS,
 		"poweredge-r7615":            rootHintBOSS,
 		"dell-poweredge-r7715":       rootHintBOSS,
+		"poweredge-r7715":            rootHintBOSS,
 		"thinksystem-sr650":          "ThinkSystem M.2 VD",
 		"thinksystem-sr655-v3":       "NVMe 2-Bay",
 		"thinksystem-sr650-v3":       "NVMe 2-Bay",
