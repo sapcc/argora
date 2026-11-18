@@ -37,11 +37,34 @@ Each active device in a Netbox cluster SHALL be represented as a `ServerEntry` i
 - **THEN** `name` equals the device name in Netbox
 - **AND** `serial` equals the device's chassis serial number from Netbox
 - **AND** `remoteboardMAC` equals the MAC address of the device's `remoteboard` interface in Netbox
-- **AND** `labels` includes region, zone, cluster name, device type, role, and platform
 
 #### Scenario: Inactive device excluded
 - **WHEN** a device in a Netbox cluster has status other than `active`
 - **THEN** no `ServerEntry` is created for that device in the `MetalCluster`
+
+### Requirement: MetalCluster server labels
+Each `ServerEntry` SHALL carry a `labels` map with the following keys populated from Netbox. MOO copies these labels onto the BMC CR it creates, so the full set is required.
+
+| Label key | Source |
+|---|---|
+| `topology.kubernetes.io/region` | `DCIM().GetRegionForDevice(device)` |
+| `topology.kubernetes.io/zone` | `device.Site.Slug` |
+| `kubernetes.metal.cloud.sap/cluster` | `cluster.Name` |
+| `kubernetes.metal.cloud.sap/cluster-type` | `cluster.Type.Slug` |
+| `kubernetes.metal.cloud.sap/name` | `device.Name` |
+| `kubernetes.metal.cloud.sap/nodename` | first segment of `device.Name` (before `-`) |
+| `kubernetes.metal.cloud.sap/bb` | second segment of `device.Name` (after `-`) |
+| `kubernetes.metal.cloud.sap/type` | `device.DeviceType.Slug` |
+| `kubernetes.metal.cloud.sap/role` | `device.DeviceRole.Slug` |
+| `kubernetes.metal.cloud.sap/platform` | `device.Platform.Slug` |
+| `clusterctl.cluster.x-k8s.io/move` | empty string `""` (fixed value) |
+
+#### Scenario: All required label keys present
+- **WHEN** Argora builds a `ServerEntry` for a device named `node003-bb098`
+- **THEN** `labels["kubernetes.metal.cloud.sap/nodename"]` is `"node003"`
+- **AND** `labels["kubernetes.metal.cloud.sap/bb"]` is `"bb098"`
+- **AND** `labels["clusterctl.cluster.x-k8s.io/move"]` is `""`
+- **AND** all other keys listed above are present and non-empty
 
 ### Requirement: MetalCluster interface type mapping
 Each non-management, non-LAG interface with a non-empty MAC address SHALL be included in a server's `interfaces` list with a type of `oob`, `dpu`, or `nic` based on the interface's Netbox properties.
@@ -90,6 +113,17 @@ For each device whose OOB IP falls in an `OOBSubnet`'s CIDR, Argora SHALL add a 
 #### Scenario: Static leases updated on device change
 - **WHEN** a device's remoteboard MAC changes in Netbox
 - **THEN** the corresponding `StaticLease` in the `OOBSubnet` is updated on the next reconcile
+
+### Requirement: OOBSubnet DHCP operational dependency
+Argora SHALL NOT populate `OOBSubnet.spec.bootURL`, `OOBSubnet.spec.dnsServers`, or `OOBSubnet.spec.leaseTime`. These fields are required by the metaldhcp operator to serve DHCP but must be set externally (e.g., via Helm values, a GitOps overlay, or a separate operator) before the subnet can issue leases.
+
+This is an explicit out-of-scope decision: Netbox does not carry boot URL, DNS server, or lease time information for OOB subnets, so Argora cannot derive them. Consumers of this change must ensure those fields are populated on each `OOBSubnet` before expecting DHCP to work.
+
+#### Scenario: Argora does not overwrite externally-set fields
+- **WHEN** an `OOBSubnet` already has `bootURL` set to a non-empty value
+- **AND** Argora reconciles that subnet
+- **THEN** `spec.bootURL` retains its existing value
+- **AND** Argora only updates `spec.cidr`, `spec.gateway`, and `spec.staticLeases`
 
 ### Requirement: Continuous sync from Netbox
 In `--sync-metalcluster` mode, `MetalCluster` and `OOBSubnet` CRs SHALL be kept in sync with Netbox on every reconcile cycle driven by the existing `--reconcile-interval`.

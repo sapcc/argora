@@ -48,3 +48,12 @@ path = [
 ]
 SPDX-FileCopyrightText = "SAP SE"
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  ".claude/**",
+  "openspec/**",
+  "CLAUDE.md",
+]
+SPDX-FileCopyrightText = "SAP SE"
+SPDX-License-Identifier = "Apache-2.0"
