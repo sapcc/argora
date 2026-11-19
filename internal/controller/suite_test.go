@@ -22,6 +22,7 @@ import (
 
 	moov1alpha1 "github.com/SAP-cloud-infrastructure/metal-onboarding-operator/api/v1alpha1"
 	metaldhcpv1alpha1 "github.com/SAP-cloud-infrastructure/metaldhcp/api/v1alpha1"
+
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
 	"github.com/sapcc/argora/internal/controller/mock"

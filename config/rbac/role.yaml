@@ -91,6 +91,7 @@ rules:
   - oobsubnets
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
@@ -165,6 +166,7 @@ rules:
   - metalclusters
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
