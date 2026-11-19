@@ -20,6 +20,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 
+	moov1alpha1 "github.com/SAP-cloud-infrastructure/metal-onboarding-operator/api/v1alpha1"
+	metaldhcpv1alpha1 "github.com/SAP-cloud-infrastructure/metaldhcp/api/v1alpha1"
 	argorav1alpha1 "github.com/sapcc/argora/api/v1alpha1"
 
 	"github.com/sapcc/argora/internal/controller/mock"
@@ -244,6 +246,8 @@ func createFakeClient(objects ...client.Object) client.Client {
 	Expect(clusterv1.AddToScheme(scheme)).Should(Succeed())
 	Expect(bmov1alpha1.AddToScheme(scheme)).Should(Succeed())
 	Expect(ipamv1.AddToScheme(scheme)).Should(Succeed())
+	Expect(moov1alpha1.AddToScheme(scheme)).Should(Succeed())
+	Expect(metaldhcpv1alpha1.AddToScheme(scheme)).Should(Succeed())
 
 	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithStatusSubresource(objects...).Build()
 }
