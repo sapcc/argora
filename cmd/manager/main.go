@@ -197,9 +197,11 @@ func main() {
 		}
 	}
 
-	if err = controller.NewUpdateReconciler(mgr, creds, status.NewUpdateStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "update")
-		os.Exit(1)
+	if !flagVar.syncMetalCluster {
+		if err = controller.NewUpdateReconciler(mgr, creds, status.NewUpdateStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "update")
+			os.Exit(1)
+		}
 	}
 
 	if err = controller.NewIPPoolImportReconciler(mgr, creds, status.NewIPPoolImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {

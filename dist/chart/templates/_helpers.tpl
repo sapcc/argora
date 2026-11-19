@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: 2025 SAP SE
-# SPDX-License-Identifier: Apache-2.0
-
 {{/*
 Expand the name of the chart.
 */}}
@@ -52,49 +49,15 @@ Dynamically calculates safe truncation to ensure total name length <= 63 chars.
 {{- end }}
 {{- end }}
 
-{{- define "chart.name" -}}
-{{- if .Chart }}
-  {{- if .Chart.Name }}
-    {{- .Chart.Name | trunc 63 | trimSuffix "-" }}
-  {{- else if .Values.nameOverride }}
-    {{ .Values.nameOverride | trunc 63 | trimSuffix "-" }}
-  {{- else }}
-    argora
-  {{- end }}
+{{/*
+ServiceAccount name to use.
+When enabled, use the chart's ServiceAccount name.
+When disabled, serviceAccount.name must be set; use "default" to pick the namespace default ServiceAccount.
+*/}}
+{{- define "argora.serviceAccountName" -}}
+{{- if .Values.serviceAccount.enabled }}
+{{- include "argora.resourceName" (dict "suffix" "controller-manager" "context" .) }}
 {{- else }}
-  argora
+{{- required "serviceAccount.name is required when serviceAccount.enabled=false (set name: default explicitly to use the namespace default ServiceAccount)" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
-
-{{- define "chart.labels" -}}
-{{- if .Chart.AppVersion -}}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-{{- end }}
-{{- if .Chart.Version }}
-helm.sh/chart: {{ .Chart.Version | quote }}
-{{- end }}
-app.kubernetes.io/name: {{ include "chart.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/managed-by: {{ .Release.Service }}
-{{- end }}
-
-{{- define "chart.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "chart.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-{{- end }}
-
-{{- define "chart.hasMutatingWebhooks" -}}
-{{- $hasMutating := false }}
-{{- range . }}
-  {{- if eq .type "mutating" }}
-    $hasMutating = true }}{{- end }}
-{{- end }}
-{{ $hasMutating }}}}{{- end }}
-
-{{- define "chart.hasValidatingWebhooks" -}}
-{{- $hasValidating := false }}
-{{- range . }}
-  {{- if eq .type "validating" }}
-    $hasValidating = true }}{{- end }}
-{{- end }}
-{{ $hasValidating }}}}{{- end }}

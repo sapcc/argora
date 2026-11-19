@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: 2025 SAP SE
-# SPDX-License-Identifier: Apache-2.0
-
 ## String to partially override chart.fullname template (will maintain the release name)
 ##
 # nameOverride: ""
@@ -12,48 +9,63 @@
 ## Configure the controller manager deployment
 ##
 manager:
-  enable: true
+  ## Set to false to skip manager installation
+  ##
+  enabled: true
+
   replicas: 1
 
   image:
     repository: controller
-    tag: latest
+    ## Image tag (defaults to Chart.appVersion if not set)
+    ##
+    # tag: ""
     pullPolicy: IfNotPresent
 
   ## Arguments
   ##
   args:
-    - --leader-elect
-    #- --zap-log-level=debug
+    - --leader-elect={{.Values.leaderElect}}
+    - --sync-metalcluster={{.Values.syncMetalCluster}}
+    - --reconcile-interval={{.Values.reconcileInterval}}
+    - --netbox-url={{.Values.netboxURL}}
 
-  ## Environment variables
+  ## Health probes.
+  ## The manager serves the liveness (/healthz) and readiness (/readyz) endpoints on this port.
   ##
-  env: {}
+  healthProbe:
+    # Health probe server port
+    port: 8081
+
+  ## Image pull secrets
+  ##
+  # imagePullSecrets:
+  #   - name: myregistrykey
 
   ## Pod-level security settings
   ##
   podSecurityContext:
     runAsNonRoot: true
     seccompProfile:
-        type: RuntimeDefault
+      type: RuntimeDefault
 
   ## Container-level security settings
   ##
   securityContext:
     allowPrivilegeEscalation: false
     capabilities:
-        drop:
-            - ALL
+      drop:
+        - ALL
 
   ## Resource limits and requests
   ##
   resources:
     limits:
-        cpu: 500m
-        memory: 128Mi
+      cpu: 500m
+      memory: 128Mi
     requests:
-        cpu: 10m
-        memory: 64Mi
+      cpu: 10m
+      memory: 64Mi
 
   ## Manager pod's affinity
   ##
@@ -67,85 +79,148 @@ manager:
   ##
   tolerations: []
 
-  ## Additional labels for the manager pod
+  ## Deployment strategy
   ##
-  podLabels: {}
+  # strategy:
+  #   type: RollingUpdate
+  #   rollingUpdate:
+  #     maxSurge: 25%
+  #     maxUnavailable: 25%
 
-  ## Additional volumes for the manager pod
+  ## Priority class name
   ##
-  volumes: []
+  # priorityClassName: ""
 
-  ## Service account name for the manager deployment
-  ## If not set, a new service account will be created with the same name as the release.
+  ## Topology spread constraints
   ##
-  serviceAccountName: ""
+  # topologySpreadConstraints: []
+
+  ## Termination grace period seconds
+  ##
+  terminationGracePeriodSeconds: 10
+
+  ## Custom Deployment labels
+  ##
+  # labels: {}
+
+  ## Custom Deployment annotations
+  ##
+  # annotations: {}
+
+  ## Custom Pod labels and annotations
+  ##
+  # pod:
+  #   labels: {}
+  #   annotations: {}
+
+  ## Extra volumes and volume mounts
+  ##
+  extraVolumes:
+    - name: secret-volume
+      secret:
+        secretName: argora-secret
+
+  extraVolumeMounts:
+    - mountPath: /etc/credentials
+      name: secret-volume
+      readOnly: true
 
 ## RBAC configuration
 ##
 rbac:
-  enable: true
+  ## RBAC resource scope
+  ## - false (default): ClusterRole/ClusterRoleBinding (all namespaces)
+  ## - true: Role/RoleBinding (release namespace only)
+  ##
+  namespaced: false
+
+  ## Helper roles for CRD management (admin/editor/viewer)
+  ##
+  helpers:
+    ## Install convenience admin/editor/viewer roles for CRDs
+    ##
+    enabled: false
+
+## ServiceAccount configuration
+##
+serviceAccount:
+  # Install default ServiceAccount provided
+  enabled: true
+
+  ## Existing ServiceAccount name (required when enabled=false)
+  ## Set to "default" to use the namespace default ServiceAccount
+  ## Note: When enabled=true, respects nameOverride/fullnameOverride
+  ##
+  # name: ""
+
+  ## Custom ServiceAccount annotations
+  ##
+  # annotations: {}
+
+  ## Custom ServiceAccount labels
+  ##
+  # labels: {}
 
 ## Custom Resource Definitions
 ##
 crd:
   # Install CRDs with the chart
-  enable: false
+  enabled: true
   # Keep CRDs when uninstalling
   keep: true
 
 ## Controller metrics endpoint.
-## Enable to expose /metrics endpoint with RBAC protection.
+## Enable to expose /metrics endpoint
 ##
 metrics:
-  enable: true
+  enabled: true
   # Metrics server port
   port: 8443
+  # Enable secure metrics: HTTPS with certs/auth (true) or HTTP (false).
+  # Note: Metrics authn/authz needs ClusterRole access.
+  secure: true
 
 ## Cert-manager integration for TLS certificates.
 ## Required for webhook certificates and metrics endpoint certificates.
 ##
 certManager:
-  enable: false
+  enabled: false
+
+## Webhook server configuration
+##
+webhook:
+  enabled: false
+  # Webhook server port
+  port: 9443
 
 ## Prometheus ServiceMonitor for metrics scraping.
 ## Requires prometheus-operator to be installed in the cluster.
 ##
 prometheus:
-  enable: false
+  enabled: false
 
-## Create rules for Argora monitoring.
-## Requires prometheus-operator to be installed in the cluster.
+  ## Custom ServiceMonitor labels
+  ##
+  # labels: {}
+
+  ## Custom ServiceMonitor annotations
+  ##
+  # annotations: {}
+
+## Network policies for controlling traffic flow.
+## Enable to restrict ingress to the controller manager.
+##
+networkPolicy:
+  enabled: false
+
+## PrometheusRule alerts configuration.
 ##
 prometheusRules:
-  ## Enables PrometheusRule resources to be created
   create: false
-  ## Labels for PrometheusRules
   labels: {}
-
-  ## Annotations for PrometheusRules
   annotations: {}
 
-ironcore:
-  enable: true
-
-netboxURL: "https://netbox-url"
-
-credentials:
-  bmcUser: "_"
-  bmcPassword: "_"
-  netboxToken: "xxx"
-
-# Sample cluster import and update configurations
-# clusterImport:
-#   cluster1:
-#     clusters:
-#       - name: "cluster1"
-#         region: "emea"
-#         type: "compute"
-
-# update:
-#   cluster1:
-#     clusters:
-#       - name: "cluster1"
-#         region: "emea"
-#         type: "compute"
+netboxURL: "http://netbox-url"
+leaderElect: true
+syncMetalCluster: false
+reconcileInterval: "5m"

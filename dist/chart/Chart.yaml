@@ -1,7 +1,14 @@
 apiVersion: v2
 name: argora
-description: A Helm chart to distribute the project argora
+description: A Helm chart to distribute argora
 type: application
-version: 0.2.0
+
+version: 0.2.1
 appVersion: "0.1.0"
-icon: "https://example.com/icon.png"
+
+keywords:
+  - kubernetes
+  - operator
+
+annotations:
+  kubebuilder.io/generated-by: kubebuilder

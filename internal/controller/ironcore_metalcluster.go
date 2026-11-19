@@ -11,10 +11,12 @@ import (
 
 	moov1alpha1 "github.com/SAP-cloud-infrastructure/metal-onboarding-operator/api/v1alpha1"
 	metaldhcpv1alpha1 "github.com/SAP-cloud-infrastructure/metaldhcp/api/v1alpha1"
-	"github.com/sapcc/argora/internal/netbox"
 	"github.com/sapcc/go-netbox-go/models"
 
+	"github.com/sapcc/argora/internal/netbox"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -22,6 +24,13 @@ import (
 const (
 	dpuTagSmartNICMgmt = "SmartNIC-mgmt"
 	dpuTagSmartNICNIC1 = "SmartNIC-NIC1"
+
+	managedByAnnotation = "dhcp.metal.ironcore.dev/managed-by"
+	managedByArgora     = "argora"
+	managedByHelm       = "helm"
+
+	clusterLabel       = "argora.cloud.sap/cluster"
+	clusterImportLabel = "argora.cloud.sap/cluster-import"
 )
 
 // buildServerEntries converts a slice of Netbox devices into MOO ServerEntry objects.
@@ -30,6 +39,7 @@ const (
 func buildServerEntries(ctx context.Context, devices []models.Device, cluster *models.Cluster, nb netbox.Netbox) ([]moov1alpha1.ServerEntry, error) {
 	logger := log.FromContext(ctx)
 	entries := make([]moov1alpha1.ServerEntry, 0, len(devices))
+	regionCache := make(map[int]string)
 
 	for i := range devices {
 		device := &devices[i]
@@ -43,9 +53,14 @@ func buildServerEntries(ctx context.Context, devices []models.Device, cluster *m
 			return nil, fmt.Errorf("unexpected device name format %q: expected exactly one dash", device.Name)
 		}
 
-		region, err := nb.DCIM().GetRegionForDevice(device)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get region for device %s: %w", device.Name, err)
+		region, ok := regionCache[device.Site.ID]
+		if !ok {
+			var err error
+			region, err = nb.DCIM().GetRegionForDevice(device)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get region for device %s: %w", device.Name, err)
+			}
+			regionCache[device.Site.ID] = region
 		}
 
 		remoteboardMAC, remoteboardEntry, err := getRemoteboardEntry(nb, device)
@@ -141,7 +156,8 @@ func buildInterfaceEntries(ifaces []models.Interface) []moov1alpha1.InterfaceEnt
 }
 
 // reconcileMetalCluster creates or updates the MetalCluster CR for a cluster.
-func (r *IronCoreReconciler) reconcileMetalCluster(ctx context.Context, clusterName string, servers []moov1alpha1.ServerEntry) error {
+// It stamps annotation managedByAnnotation and label clusterImportLabel so the pruner can scope deletions.
+func (r *IronCoreReconciler) reconcileMetalCluster(ctx context.Context, clusterName, clusterImportName string, servers []moov1alpha1.ServerEntry) error {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling MetalCluster", "cluster", clusterName)
 
@@ -152,6 +168,14 @@ func (r *IronCoreReconciler) reconcileMetalCluster(ctx context.Context, clusterN
 	}
 
 	_, err := controllerutil.CreateOrUpdate(ctx, r.k8sClient, mc, func() error {
+		if mc.Annotations == nil {
+			mc.Annotations = make(map[string]string)
+		}
+		mc.Annotations[managedByAnnotation] = managedByArgora
+		if mc.Labels == nil {
+			mc.Labels = make(map[string]string)
+		}
+		mc.Labels[clusterImportLabel] = clusterImportName
 		mc.Spec.Servers = servers
 		return nil
 	})
@@ -188,9 +212,9 @@ func oobSubnetName(cidr string) string {
 }
 
 // buildStaticLeases builds the static lease list for an OOBSubnet from a device slice.
-// For each device it uses the remoteboard MAC (fetched from Netbox) and the host address
-// of device.OOBIp.Address as IP. Devices with no remoteboard MAC are skipped.
-func buildStaticLeases(ctx context.Context, devices []models.Device, nb netbox.Netbox) ([]metaldhcpv1alpha1.StaticLease, error) {
+// remoteboardMACs is a device-name → MAC map pre-populated by buildServerEntries, so no
+// additional Netbox calls are needed here. Devices with no entry or an empty MAC are skipped.
+func buildStaticLeases(ctx context.Context, devices []models.Device, remoteboardMACs map[string]string) ([]metaldhcpv1alpha1.StaticLease, error) {
 	logger := log.FromContext(ctx)
 	leases := make([]metaldhcpv1alpha1.StaticLease, 0, len(devices))
 
@@ -206,13 +230,9 @@ func buildStaticLeases(ctx context.Context, devices []models.Device, nb netbox.N
 		}
 		hostIP := prefix.Addr().String()
 
-		mac, _, err := getRemoteboardEntry(nb, device)
-		if err != nil {
-			logger.Info("unable to get remoteboard MAC for static lease, skipping device", "device", device.Name, "error", err)
-			continue
-		}
+		mac := remoteboardMACs[device.Name]
 		if mac == "" {
-			logger.Info("remoteboard MAC is empty, skipping static lease for device", "device", device.Name)
+			logger.Info("no remoteboard MAC for device, skipping static lease", "device", device.Name)
 			continue
 		}
 
@@ -228,7 +248,8 @@ func buildStaticLeases(ctx context.Context, devices []models.Device, nb netbox.N
 
 // reconcileOOBSubnet creates or updates an OOBSubnet CR for the given CIDR. It sets only
 // spec.cidr, spec.gateway, and spec.staticLeases — other fields are left for external management.
-func (r *IronCoreReconciler) reconcileOOBSubnet(ctx context.Context, cidr string, leases []metaldhcpv1alpha1.StaticLease) error {
+// The subnet is labelled with clusterName so the pruner can scope deletions per cluster.
+func (r *IronCoreReconciler) reconcileOOBSubnet(ctx context.Context, cidr, clusterName string, leases []metaldhcpv1alpha1.StaticLease) error {
 	logger := log.FromContext(ctx)
 	name := oobSubnetName(cidr)
 	logger.Info("reconciling OOBSubnet", "cidr", cidr, "name", name)
@@ -246,6 +267,14 @@ func (r *IronCoreReconciler) reconcileOOBSubnet(ctx context.Context, cidr string
 	}
 
 	_, err = controllerutil.CreateOrUpdate(ctx, r.k8sClient, subnet, func() error {
+		if subnet.Annotations == nil {
+			subnet.Annotations = make(map[string]string)
+		}
+		subnet.Annotations[managedByAnnotation] = managedByArgora
+		if subnet.Labels == nil {
+			subnet.Labels = make(map[string]string)
+		}
+		subnet.Labels[clusterLabel] = clusterName
 		subnet.Spec.CIDR = cidr
 		subnet.Spec.Gateway = gateway
 		subnet.Spec.StaticLeases = leases
@@ -260,13 +289,13 @@ func (r *IronCoreReconciler) reconcileOOBSubnet(ctx context.Context, cidr string
 
 // reconcileMetalClusterMode handles the syncMetalCluster branch for one Netbox cluster.
 // It builds the MetalCluster and OOBSubnet CRs from the full device list.
-func (r *IronCoreReconciler) reconcileMetalClusterMode(ctx context.Context, cluster *models.Cluster, devices []models.Device, nb netbox.Netbox) error {
+func (r *IronCoreReconciler) reconcileMetalClusterMode(ctx context.Context, clusterImportName string, cluster *models.Cluster, devices []models.Device, nb netbox.Netbox) error {
 	servers, err := buildServerEntries(ctx, devices, cluster, nb)
 	if err != nil {
 		return fmt.Errorf("unable to build server entries for cluster %s: %w", cluster.Name, err)
 	}
 
-	if err := r.reconcileMetalCluster(ctx, cluster.Name, servers); err != nil {
+	if err := r.reconcileMetalCluster(ctx, cluster.Name, clusterImportName, servers); err != nil {
 		return err
 	}
 
@@ -275,15 +304,70 @@ func (r *IronCoreReconciler) reconcileMetalClusterMode(ctx context.Context, clus
 		return fmt.Errorf("unable to group devices by OOB CIDR for cluster %s: %w", cluster.Name, err)
 	}
 
+	remoteboardMACs := make(map[string]string, len(servers))
+	for _, entry := range servers {
+		remoteboardMACs[entry.Name] = entry.RemoteboardMAC
+	}
+
 	for cidr, cidrDevices := range cidrMap {
-		leases, err := buildStaticLeases(ctx, cidrDevices, nb)
+		leases, err := buildStaticLeases(ctx, cidrDevices, remoteboardMACs)
 		if err != nil {
 			return fmt.Errorf("unable to build static leases for CIDR %s: %w", cidr, err)
 		}
-		if err := r.reconcileOOBSubnet(ctx, cidr, leases); err != nil {
+		if err := r.reconcileOOBSubnet(ctx, cidr, cluster.Name, leases); err != nil {
 			return err
 		}
 	}
 
+	return r.pruneOOBSubnets(ctx, cidrMap, cluster.Name)
+}
+
+// pruneOOBSubnets deletes any argora-managed OOBSubnets for the given cluster whose CIDR is
+// no longer in the active set. Subnets belonging to other clusters, or managed by helm or any
+// other owner, are never touched.
+func (r *IronCoreReconciler) pruneOOBSubnets(ctx context.Context, activeCIDRs map[string][]models.Device, clusterName string) error {
+	logger := log.FromContext(ctx)
+	existing := &metaldhcpv1alpha1.OOBSubnetList{}
+	if err := r.k8sClient.List(ctx, existing, client.MatchingLabels{clusterLabel: clusterName}); err != nil {
+		return fmt.Errorf("unable to list OOBSubnets: %w", err)
+	}
+	for i := range existing.Items {
+		subnet := &existing.Items[i]
+		if subnet.Annotations[managedByAnnotation] != managedByArgora {
+			continue
+		}
+		if _, stillNeeded := activeCIDRs[subnet.Spec.CIDR]; stillNeeded {
+			continue
+		}
+		logger.Info("deleting stale OOBSubnet", "name", subnet.Name, "cidr", subnet.Spec.CIDR)
+		if err := r.k8sClient.Delete(ctx, subnet); err != nil {
+			return fmt.Errorf("unable to delete stale OOBSubnet %s: %w", subnet.Name, err)
+		}
+	}
+	return nil
+}
+
+// pruneMetalClusters deletes any argora-managed MetalClusters owned by the given ClusterImport
+// whose name is no longer in the active set. MetalClusters owned by other ClusterImports, or
+// managed by any owner other than argora, are never touched.
+func (r *IronCoreReconciler) pruneMetalClusters(ctx context.Context, activeClusters map[string]struct{}, clusterImportName string) error {
+	logger := log.FromContext(ctx)
+	existing := &moov1alpha1.MetalClusterList{}
+	if err := r.k8sClient.List(ctx, existing, client.MatchingLabels{clusterImportLabel: clusterImportName}); err != nil {
+		return fmt.Errorf("unable to list MetalClusters: %w", err)
+	}
+	for i := range existing.Items {
+		mc := &existing.Items[i]
+		if mc.Annotations[managedByAnnotation] != managedByArgora {
+			continue
+		}
+		if _, stillNeeded := activeClusters[mc.Name]; stillNeeded {
+			continue
+		}
+		logger.Info("deleting stale MetalCluster", "name", mc.Name)
+		if err := r.k8sClient.Delete(ctx, mc); err != nil {
+			return fmt.Errorf("unable to delete stale MetalCluster %s: %w", mc.Name, err)
+		}
+	}
 	return nil
 }
