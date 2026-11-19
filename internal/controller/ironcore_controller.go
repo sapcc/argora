@@ -52,9 +52,10 @@ type IronCoreReconciler struct {
 	reconcileInterval time.Duration
 	readinessChecks   []string
 	readinessCheckNS  string
+	syncMetalCluster  bool
 }
 
-func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration, readinessChecks, readinessCheckNS string) *IronCoreReconciler {
+func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration, readinessChecks, readinessCheckNS string, syncMetalCluster bool) *IronCoreReconciler {
 	var checks []string
 	if readinessChecks != "" {
 		checks = strings.Split(readinessChecks, ",")
@@ -68,6 +69,7 @@ func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, sta
 		reconcileInterval: reconcileInterval,
 		readinessChecks:   checks,
 		readinessCheckNS:  readinessCheckNS,
+		syncMetalCluster:  syncMetalCluster,
 	}
 }
 
@@ -98,6 +100,8 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=readiness.metal.ironcore.dev,resources=serverwirings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=onboarding.metal.ironcore.dev,resources=metalclusters,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=dhcp.metal.ironcore.dev,resources=oobsubnets,verbs=get;list;watch;create;update;patch
 
 func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -182,17 +186,31 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clus
 			return err
 		}
 
-		for _, device := range devices {
-			err = r.reconcileDevice(ctx, clusterImportCR, clusterSelector, r.netBox, &cluster, &device)
-			if err != nil {
-				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+		if r.syncMetalCluster {
+			clusterCopy := cluster
+			if err = r.reconcileMetalClusterMode(ctx, &clusterCopy, devices, r.netBox); err != nil {
+				logger.Error(err, "unable to reconcile MetalCluster mode", "cluster", cluster.Name, "ID", cluster.ID)
 
 				r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
-				if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
+				if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile cluster %s (%d) in MetalCluster mode: %w", cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
 					return errUpdateStatus
 				}
 
 				return err
+			}
+		} else {
+			for _, device := range devices {
+				err = r.reconcileDevice(ctx, clusterImportCR, clusterSelector, r.netBox, &cluster, &device)
+				if err != nil {
+					logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+
+					r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
+					if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
+						return errUpdateStatus
+					}
+
+					return err
+				}
 			}
 		}
 	}

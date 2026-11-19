@@ -33,6 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	moov1alpha1 "github.com/SAP-cloud-infrastructure/metal-onboarding-operator/api/v1alpha1"
+	metaldhcpv1alpha1 "github.com/SAP-cloud-infrastructure/metaldhcp/api/v1alpha1"
 	mmov1alpha1 "github.com/ironcore-dev/metal-maintenance-operator/api/readiness/v1alpha1"
 	ironcorev1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -71,6 +73,7 @@ type FlagVariables struct {
 	secureMetrics        bool
 	enableHTTP2          bool
 	enableIronCore       bool
+	syncMetalCluster     bool
 
 	failureBaseDelay     time.Duration
 	failureMaxDelay      time.Duration
@@ -93,6 +96,8 @@ func init() {
 	utilruntime.Must(ironcorev1alpha1.AddToScheme(scheme))
 	utilruntime.Must(mmov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(ipamv1.AddToScheme(scheme))
+	utilruntime.Must(moov1alpha1.AddToScheme(scheme))
+	utilruntime.Must(metaldhcpv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -170,7 +175,7 @@ func main() {
 	setupLog.Info("argora", "version", bininfo.Version())
 
 	if flagVar.enableIronCore {
-		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval, flagVar.readinessChecks, flagVar.readinessCheckNS).SetupWithManager(mgr, rateLimiter); err != nil {
+		if err = controller.NewIronCoreReconciler(mgr, creds, status.NewClusterImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval, flagVar.readinessChecks, flagVar.readinessCheckNS, flagVar.syncMetalCluster).SetupWithManager(mgr, rateLimiter); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ironcore")
 			os.Exit(1)
 		}
@@ -236,6 +241,7 @@ func getFlagVariables() *FlagVariables {
 	flag.BoolVar(&flagVariables.secureMetrics, "metrics-secure", true, "If true (default), the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&flagVariables.enableHTTP2, "enable-http2", false, "If true (default is false), HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.BoolVar(&flagVariables.enableIronCore, "enable-ironcore", true, "If true (default), the IronCore controller will be enabled, otherwise Metal3 controller will be enabled.")
+	flag.BoolVar(&flagVariables.syncMetalCluster, "sync-metalcluster", false, "If true, the IronCore reconciler creates MetalCluster and OOBSubnet CRs instead of BMC and BMCSecret CRs.")
 
 	flag.IntVar(&flagVariables.rateLimiterBurst, "rate-limiter-burst", rateLimiterBurstDefault, "Indicates the burst value for the bucket rate limiter.")
 	flag.IntVar(&flagVariables.rateLimiterFrequency, "rate-limiter-frequency", rateLimiterFrequencyDefault, "Indicates the bucket rate limiter frequency, signifying no. of events per second.")
