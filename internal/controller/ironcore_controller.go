@@ -41,6 +41,7 @@ const (
 	bmcProtocolRedfish             = "Redfish"
 	bmcPort                        = 443
 	readinessCheckTypeServerWiring = "serverwiring"
+	clusterImportFinalizer         = "argora.cloud.sap/finalizer"
 )
 
 type IronCoreReconciler struct {
@@ -52,9 +53,10 @@ type IronCoreReconciler struct {
 	reconcileInterval time.Duration
 	readinessChecks   []string
 	readinessCheckNS  string
+	syncMetalCluster  bool
 }
 
-func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration, readinessChecks, readinessCheckNS string) *IronCoreReconciler {
+func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, statusHandler status.ClusterImportStatus, netBox netbox.Netbox, reconcileInterval time.Duration, readinessChecks, readinessCheckNS string, syncMetalCluster bool) *IronCoreReconciler {
 	var checks []string
 	if readinessChecks != "" {
 		checks = strings.Split(readinessChecks, ",")
@@ -68,6 +70,7 @@ func NewIronCoreReconciler(mgr ctrl.Manager, creds *credentials.Credentials, sta
 		reconcileInterval: reconcileInterval,
 		readinessChecks:   checks,
 		readinessCheckNS:  readinessCheckNS,
+		syncMetalCluster:  syncMetalCluster,
 	}
 }
 
@@ -98,6 +101,8 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=readiness.metal.ironcore.dev,resources=serverwirings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=onboarding.metal.ironcore.dev,resources=metalclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=dhcp.metal.ironcore.dev,resources=oobsubnets,verbs=get;list;watch;create;update;patch;delete
 
 func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -106,11 +111,42 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	clusterImportCR := &argorav1alpha1.ClusterImport{}
 	err := r.k8sClient.Get(ctx, req.NamespacedName, clusterImportCR)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 		logger.Error(err, "unable to get ClusterImport CR")
 		return ctrl.Result{}, err
 	}
 
-	err = r.credentials.Reload()
+	if !clusterImportCR.DeletionTimestamp.IsZero() {
+		if controllerutil.ContainsFinalizer(clusterImportCR, clusterImportFinalizer) {
+			if err := r.handleDeletion(ctx, clusterImportCR); err != nil {
+				return ctrl.Result{}, err
+			}
+			controllerutil.RemoveFinalizer(clusterImportCR, clusterImportFinalizer)
+			if err := r.k8sClient.Update(ctx, clusterImportCR); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+
+	if r.syncMetalCluster && !controllerutil.ContainsFinalizer(clusterImportCR, clusterImportFinalizer) {
+		controllerutil.AddFinalizer(clusterImportCR, clusterImportFinalizer)
+		if err := r.k8sClient.Update(ctx, clusterImportCR); err != nil {
+			return ctrl.Result{}, err
+		}
+		// Re-fetch to get the updated ResourceVersion before status updates below.
+		if err := r.k8sClient.Get(ctx, req.NamespacedName, clusterImportCR); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	if r.syncMetalCluster {
+		err = r.credentials.ReloadNetboxOnly()
+	} else {
+		err = r.credentials.Reload()
+	}
 	if err != nil {
 		logger.Error(err, "unable to reload credentials")
 
@@ -151,6 +187,41 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{RequeueAfter: r.reconcileInterval}, nil
 }
 
+// handleDeletion runs cleanup when a ClusterImport is being deleted. In syncMetalCluster mode
+// it prunes all argora-managed OOBSubnets and MetalClusters that belong to this import.
+func (r *IronCoreReconciler) handleDeletion(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport) error {
+	if !r.syncMetalCluster {
+		return nil
+	}
+	logger := log.FromContext(ctx)
+	logger.Info("handling ClusterImport deletion, pruning OOBSubnets and MetalClusters")
+
+	if err := r.credentials.ReloadNetboxOnly(); err != nil {
+		return fmt.Errorf("unable to reload credentials for deletion cleanup: %w", err)
+	}
+	if err := r.netBox.Reload(r.credentials.NetboxToken, logger); err != nil {
+		return fmt.Errorf("unable to reload netbox for deletion cleanup: %w", err)
+	}
+
+	for _, clusterSelector := range clusterImportCR.Spec.Clusters {
+		clusters, err := r.netBox.Virtualization().GetClustersByNameRegionType(clusterSelector.Name, clusterSelector.Region, clusterSelector.Type)
+		if err != nil {
+			return fmt.Errorf("unable to find clusters for deletion cleanup (selector %s): %w", clusterSelector.Name, err)
+		}
+		for _, cluster := range clusters {
+			if err := r.pruneOOBSubnets(ctx, map[string][]models.Device{}, cluster.Name); err != nil {
+				return fmt.Errorf("unable to prune OOBSubnets for cluster %s: %w", cluster.Name, err)
+			}
+		}
+	}
+
+	if err := r.pruneMetalClusters(ctx, map[string]struct{}{}, clusterImportCR.Name); err != nil {
+		return fmt.Errorf("unable to prune MetalClusters for ClusterImport %s: %w", clusterImportCR.Name, err)
+	}
+
+	return nil
+}
+
 func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport, clusterSelector *argorav1alpha1.ClusterSelector) error {
 	logger := log.FromContext(ctx)
 	logger.Info("fetching clusters data", "name", clusterSelector.Name, "region", clusterSelector.Region, "type", clusterSelector.Type)
@@ -167,6 +238,7 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clus
 		return err
 	}
 
+	activeMetalClusters := make(map[string]struct{})
 	for _, cluster := range clusters {
 		logger.Info("reconciling cluster", "cluster", cluster.Name, "ID", cluster.ID)
 
@@ -182,18 +254,43 @@ func (r *IronCoreReconciler) reconcileClusterSelection(ctx context.Context, clus
 			return err
 		}
 
-		for _, device := range devices {
-			err = r.reconcileDevice(ctx, clusterImportCR, clusterSelector, r.netBox, &cluster, &device)
-			if err != nil {
-				logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+		if r.syncMetalCluster {
+			clusterCopy := cluster
+			if err = r.reconcileMetalClusterMode(ctx, clusterImportCR.Name, &clusterCopy, devices, r.netBox); err != nil {
+				logger.Error(err, "unable to reconcile MetalCluster mode", "cluster", cluster.Name, "ID", cluster.ID)
 
 				r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
-				if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
+				if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile cluster %s (%d) in MetalCluster mode: %w", cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
 					return errUpdateStatus
 				}
 
 				return err
 			}
+			activeMetalClusters[cluster.Name] = struct{}{}
+		} else {
+			for _, device := range devices {
+				err = r.reconcileDevice(ctx, clusterImportCR, clusterSelector, r.netBox, &cluster, &device)
+				if err != nil {
+					logger.Error(err, "unable to reconcile device", "device", device.Name, "ID", device.ID)
+
+					r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
+					if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to reconcile device %s (%d) on cluster %s (%d): %w", device.Name, device.ID, cluster.Name, cluster.ID, err)); errUpdateStatus != nil {
+						return errUpdateStatus
+					}
+
+					return err
+				}
+			}
+		}
+	}
+
+	if r.syncMetalCluster {
+		if err := r.pruneMetalClusters(ctx, activeMetalClusters, clusterImportCR.Name); err != nil {
+			r.statusHandler.SetCondition(clusterImportCR, argorav1alpha1.NewReasonWithMessage(argorav1alpha1.ConditionReasonClusterImportFailed))
+			if errUpdateStatus := r.statusHandler.UpdateToError(ctx, clusterImportCR, fmt.Errorf("unable to prune MetalClusters: %w", err)); errUpdateStatus != nil {
+				return errUpdateStatus
+			}
+			return err
 		}
 	}
 

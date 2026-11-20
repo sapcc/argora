@@ -78,6 +78,18 @@ func (c *Credentials) Reload() error {
 	return c.Validate()
 }
 
+// ReloadNetboxOnly reads the credentials file and validates only the Netbox token.
+// Use when BMC credentials are not required (e.g., --sync-metalcluster mode).
+func (c *Credentials) ReloadNetboxOnly() error {
+	if err := c.readJSONAndUnmarshal("/etc/credentials/credentials.json"); err != nil {
+		return fmt.Errorf("unable to read credentials.json: %w", err)
+	}
+	if c.NetboxToken == "" {
+		return errors.New("netbox token is required")
+	}
+	return nil
+}
+
 func (c *Credentials) readJSONAndUnmarshal(fileName string) error {
 	byteValue, err := c.reader.ReadFile(fileName)
 	if err != nil {

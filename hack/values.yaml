@@ -1,0 +1,22 @@
+manager:
+  image:
+    repository: controller
+    tag: latest
+    pullPolicy: Never
+
+crd:
+  enable: true
+
+# clusterImport:
+#   clusterimport-sample:
+#     clusters:
+#       - name: "cc-b0-qa-de-1"
+#         region: "qa-de-1"
+#         type: "cc-kvm-compute"
+
+# update:
+#   update-sample:
+#     clusters:
+#       - name: "cc-b0-qa-de-1"
+#         region: "qa-de-1"
+#         type: "cc-kvm-compute"
