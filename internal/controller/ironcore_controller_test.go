@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	moov1alpha1 "github.com/SAP-cloud-infrastructure/metal-onboarding-operator/api/v1alpha1"
 	mmov1alpha1 "github.com/ironcore-dev/metal-maintenance-operator/api/readiness/v1alpha1"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
@@ -1457,6 +1458,298 @@ var _ = Describe("Ironcore Controller", func() {
 			})
 		})
 
+		Context("IsNotFound", func() {
+			It("should return nil when ClusterImport does not exist", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				fakeClient := createFakeClient()
+				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).To(Equal(ctrl.Result{}))
+			})
+		})
+
+		Context("Deletion", func() {
+			ciWithFinalizer := &argorav1alpha1.ClusterImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       resourceName,
+					Namespace:  resourceNamespace,
+					Finalizers: []string{clusterImportFinalizer},
+				},
+				Spec: argorav1alpha1.ClusterImportSpec{
+					Clusters: []*argorav1alpha1.ClusterSelector{
+						{Name: "name1", Region: "region1", Type: "type1"},
+					},
+				},
+			}
+
+			It("should return nil when DeletionTimestamp is set but finalizer is not ours", func() {
+				// given
+				ciWithOtherFinalizer := &argorav1alpha1.ClusterImport{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       resourceName,
+						Namespace:  resourceNamespace,
+						Finalizers: []string{"some-other-finalizer"},
+					},
+					Spec: argorav1alpha1.ClusterImportSpec{
+						Clusters: []*argorav1alpha1.ClusterSelector{
+							{Name: "name1", Region: "region1", Type: "type1"},
+						},
+					},
+				}
+				netBoxMock := prepareNetboxMock()
+				fakeClient := createFakeClient(ciWithOtherFinalizer)
+				Expect(fakeClient.Delete(ctx, ciWithOtherFinalizer)).To(Succeed())
+				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).To(Equal(ctrl.Result{}))
+			})
+
+			It("should remove finalizer and return nil when syncMetalCluster is false", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				fakeClient := createFakeClient(ciWithFinalizer)
+				Expect(fakeClient.Delete(ctx, ciWithFinalizer)).To(Succeed())
+				controllerReconciler := createIronCoreReconciler(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).To(Equal(ctrl.Result{}))
+				ci := &argorav1alpha1.ClusterImport{}
+				getErr := fakeClient.Get(ctx, typeNamespacedClusterImportName, ci)
+				Expect(getErr != nil || len(ci.Finalizers) == 0).To(BeTrue())
+			})
+
+			It("should return an error when credentials fail during handleDeletion", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				failFileReader := &mock.FileReaderMock{ReturnError: true}
+				fakeClient := createFakeClient(ciWithFinalizer)
+				Expect(fakeClient.Delete(ctx, ciWithFinalizer)).To(Succeed())
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(fakeClient, netBoxMock, failFileReader)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to reload credentials for deletion cleanup"))
+			})
+
+			It("should return an error when netbox reload fails during handleDeletion", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.ReturnError = true
+				fakeClient := createFakeClient(ciWithFinalizer)
+				Expect(fakeClient.Delete(ctx, ciWithFinalizer)).To(Succeed())
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to reload netbox for deletion cleanup"))
+			})
+
+			It("should return an error when GetClusters fails during handleDeletion", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.VirtualizationMock.(*mock.VirtualizationMock).GetClustersByNameRegionTypeFunc = func(name, region, clusterType string) ([]models.Cluster, error) {
+					return nil, errors.New("netbox virtualization error")
+				}
+				fakeClient := createFakeClient(ciWithFinalizer)
+				Expect(fakeClient.Delete(ctx, ciWithFinalizer)).To(Succeed())
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to find clusters for deletion cleanup"))
+			})
+
+			It("should remove finalizer after successful deletion cleanup when syncMetalCluster is true", func() {
+				// given
+				netBoxMock := prepareNetboxMock()
+				fakeClient := createFakeClient(ciWithFinalizer)
+				Expect(fakeClient.Delete(ctx, ciWithFinalizer)).To(Succeed())
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).To(Equal(ctrl.Result{}))
+				ci := &argorav1alpha1.ClusterImport{}
+				getErr := fakeClient.Get(ctx, typeNamespacedClusterImportName, ci)
+				Expect(getErr != nil || len(ci.Finalizers) == 0).To(BeTrue())
+			})
+		})
+
+		Context("syncMetalCluster mode", func() {
+			clusterImportCR := &argorav1alpha1.ClusterImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: resourceNamespace,
+				},
+				Spec: argorav1alpha1.ClusterImportSpec{
+					Clusters: []*argorav1alpha1.ClusterSelector{
+						{Name: "name1", Region: "region1", Type: "type1"},
+					},
+				},
+			}
+
+			ciWithFinalizer := &argorav1alpha1.ClusterImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       resourceName,
+					Namespace:  resourceNamespace,
+					Finalizers: []string{clusterImportFinalizer},
+				},
+				Spec: argorav1alpha1.ClusterImportSpec{
+					Clusters: []*argorav1alpha1.ClusterSelector{
+						{Name: "name1", Region: "region1", Type: "type1"},
+					},
+				},
+			}
+
+			prepareNetboxMockMetalCluster := func() *mock.NetBoxMock {
+				netBoxMock := prepareNetboxMock()
+				netBoxMock.DCIMMock.(*mock.DCIMMock).GetInterfacesForDeviceFunc = func(device *models.Device) ([]models.Interface, error) {
+					return []models.Interface{}, nil
+				}
+				return netBoxMock
+			}
+
+			It("should add a finalizer on first reconcile", func() {
+				// given
+				netBoxMock := prepareNetboxMockMetalCluster()
+				fakeClient := createFakeClient(clusterImportCR)
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+				ci := &argorav1alpha1.ClusterImport{}
+				Expect(fakeClient.Get(ctx, typeNamespacedClusterImportName, ci)).To(Succeed())
+				Expect(ci.Finalizers).To(ContainElement(clusterImportFinalizer))
+			})
+
+			It("should return an error when Update fails while adding finalizer", func() {
+				// given
+				netBoxMock := prepareNetboxMockMetalCluster()
+				fakeClient := createFakeClient(clusterImportCR)
+				failClient := &shouldFailClient{Client: fakeClient, FailOnUpdateKind: "ClusterImport"}
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(failClient, netBoxMock, fileReaderMock)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ClusterImport"))
+			})
+
+			It("should return an error when credentials fail in syncMetalCluster mode", func() {
+				// given
+				netBoxMock := prepareNetboxMockMetalCluster()
+				noTokenReader := &mock.FileReaderMock{
+					FileContent: map[string]string{
+						"/etc/credentials/credentials.json": `{"bmcUser": "user", "bmcPassword": "pass"}`,
+					},
+				}
+				fakeClient := createFakeClient(ciWithFinalizer)
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(fakeClient, netBoxMock, noTokenReader)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("netbox token is required"))
+			})
+
+			It("should reconcile MetalCluster when syncMetalCluster is true", func() {
+				// given
+				netBoxMock := prepareNetboxMockMetalCluster()
+				fakeClient := createFakeClient(ciWithFinalizer)
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+				metalClusterList := &moov1alpha1.MetalClusterList{}
+				Expect(fakeClient.List(ctx, metalClusterList)).To(Succeed())
+				Expect(metalClusterList.Items).To(HaveLen(1))
+				Expect(metalClusterList.Items[0].Name).To(Equal("cluster1"))
+			})
+
+			It("should return an error when reconcileMetalClusterMode fails", func() {
+				// given
+				netBoxMock := prepareNetboxMockMetalCluster()
+				fakeClient := createFakeClient(ciWithFinalizer)
+				failClient := &shouldFailClient{Client: fakeClient, FailOnCreateKind: "MetalCluster"}
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(failClient, netBoxMock, fileReaderMock)
+
+				// when
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to create or update MetalCluster"))
+			})
+
+			It("should prune stale MetalClusters after reconcile", func() {
+				// given
+				staleMetalCluster := &moov1alpha1.MetalCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "stale-cluster",
+						Labels: map[string]string{
+							clusterImportLabel: resourceName,
+						},
+						Annotations: map[string]string{
+							managedByAnnotation: managedByArgora,
+						},
+					},
+				}
+				netBoxMock := prepareNetboxMockMetalCluster()
+				fakeClient := createFakeClient(ciWithFinalizer, staleMetalCluster)
+				controllerReconciler := createIronCoreReconcilerSyncMetalCluster(fakeClient, netBoxMock, fileReaderMock)
+
+				// when
+				res, err := controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedClusterImportName})
+
+				// then
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.RequeueAfter).To(Equal(reconcileInterval))
+				metalClusterList := &moov1alpha1.MetalClusterList{}
+				Expect(fakeClient.List(ctx, metalClusterList)).To(Succeed())
+				Expect(metalClusterList.Items).To(HaveLen(1))
+				Expect(metalClusterList.Items[0].Name).To(Equal("cluster1"))
+			})
+		})
+
 		Context("ServerWiring", func() {
 
 			clusterImportCR := &argorav1alpha1.ClusterImport{
@@ -1717,10 +2010,17 @@ func createIronCoreReconcilerWithReadiness(k8sClient client.Client, netBoxMock *
 	return r
 }
 
+func createIronCoreReconcilerSyncMetalCluster(k8sClient client.Client, netBoxMock *mock.NetBoxMock, fileReaderMock credentials.FileReader) *IronCoreReconciler {
+	r := createIronCoreReconciler(k8sClient, netBoxMock, fileReaderMock)
+	r.syncMetalCluster = true
+	return r
+}
+
 type shouldFailClient struct {
 	client.Client
 	FailOnCreateKind string
 	FailOnPatchKind  string
+	FailOnUpdateKind string
 }
 
 func (p *shouldFailClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
@@ -1749,4 +2049,18 @@ func (p *shouldFailClient) Patch(ctx context.Context, obj client.Object, patch c
 		return errors.New("intentionally failing client on client.Patch for " + p.FailOnPatchKind)
 	}
 	return p.Client.Patch(ctx, obj, patch, opts...)
+}
+
+func (p *shouldFailClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	kind := obj.GetObjectKind().GroupVersionKind().Kind
+	if kind == "" {
+		gvks, _, _ := p.Scheme().ObjectKinds(obj)
+		if len(gvks) > 0 {
+			kind = gvks[0].Kind
+		}
+	}
+	if kind == p.FailOnUpdateKind {
+		return errors.New("intentionally failing client on client.Update for " + p.FailOnUpdateKind)
+	}
+	return p.Client.Update(ctx, obj, opts...)
 }
