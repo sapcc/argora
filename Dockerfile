@@ -57,7 +57,7 @@ ENTRYPOINT ["dlv", "exec", "/manager", "--headless", "--listen=:3000", "--accept
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot AS manager
+FROM gcr.io/distroless/static:nonroot@sha256:8ce6dd87e9823c5b48dcfb2c8604714ccb351ce59607327bcc4957448da279b5 AS manager
 ARG BININFO_BUILD_DATE BININFO_COMMIT_HASH BININFO_VERSION
 
 LABEL source_repository="https://github.com/sapcc/argora" \
