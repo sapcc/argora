@@ -23,7 +23,7 @@ type IPAM interface {
 	GetPrefixesContaining(contains string) ([]models.Prefix, error)
 	GetPrefixesByRegionRole(region, role, prefix string) ([]models.Prefix, error)
 	CreateIPAddress(addr CreateIPAddressParams) (*models.IPAddress, error)
-	UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	UpdateIPAddress(addr models.WritableIPAddress) (*models.IPAddress, error)
 	GetPrefixesByPrefix(prefix string) ([]models.Prefix, error)
 
 	DeleteIPAddress(id int) error
@@ -162,7 +162,7 @@ type CreateIPAddressParams struct {
 }
 
 func (i *IPAMService) CreateIPAddress(params CreateIPAddressParams) (*models.IPAddress, error) {
-	addr := models.WriteableIPAddress{
+	addr := models.WritableIPAddress{
 		NestedIPAddress: models.NestedIPAddress{
 			Address: params.Address,
 		},
@@ -180,7 +180,7 @@ func (i *IPAMService) CreateIPAddress(params CreateIPAddressParams) (*models.IPA
 	return res, nil
 }
 
-func (i *IPAMService) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+func (i *IPAMService) UpdateIPAddress(addr models.WritableIPAddress) (*models.IPAddress, error) {
 	i.logger.V(1).Info("update ipaddress", "addr", addr)
 	res, err := i.netboxAPI.UpdateIPAddress(addr)
 	if err != nil {

@@ -101,7 +101,7 @@ rules:
 - apiGroups:
   - dhcp.metal.ironcore.dev
   resources:
-  - oobsubnets
+  - subnets
   verbs:
   - create
   - delete

@@ -35,8 +35,8 @@ type MockIPAMClient struct {
 	// ip-addresses
 	ListIPAddressesFunc func(opts models.ListIPAddressesRequest) (*models.ListIPAddressesResponse, error)
 	GetIPAdressFunc     func(id int) (*models.IPAddress, error)
-	CreateIPAddressFunc func(ip models.WriteableIPAddress) (*models.IPAddress, error)
-	UpdateIPAddressFunc func(address models.WriteableIPAddress) (*models.IPAddress, error)
+	CreateIPAddressFunc func(ip models.WritableIPAddress) (*models.IPAddress, error)
+	UpdateIPAddressFunc func(address models.WritableIPAddress) (*models.IPAddress, error)
 	DeleteIPAddressFunc func(id int) error
 
 	// prefixes
@@ -86,15 +86,19 @@ func (m *MockIPAMClient) ListIPAddresses(opts models.ListIPAddressesRequest) (*m
 	return m.ListIPAddressesFunc(opts)
 }
 
+func (m *MockIPAMClient) GetIPAddress(id int) (*models.IPAddress, error) {
+	return m.GetIPAdressFunc(id)
+}
+
 func (m *MockIPAMClient) GetIPAdress(id int) (*models.IPAddress, error) {
 	return m.GetIPAdressFunc(id)
 }
 
-func (m *MockIPAMClient) CreateIPAddress(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+func (m *MockIPAMClient) CreateIPAddress(ip models.WritableIPAddress) (*models.IPAddress, error) {
 	return m.CreateIPAddressFunc(ip)
 }
 
-func (m *MockIPAMClient) UpdateIPAddress(address models.WriteableIPAddress) (*models.IPAddress, error) {
+func (m *MockIPAMClient) UpdateIPAddress(address models.WritableIPAddress) (*models.IPAddress, error) {
 	return m.UpdateIPAddressFunc(address)
 }
 
@@ -462,7 +466,7 @@ var _ = Describe("IPAM", func() {
 
 	Describe("CreateIPAddress", func() {
 		It("should create IP address successfully", func() {
-			mockClient.CreateIPAddressFunc = func(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+			mockClient.CreateIPAddressFunc = func(ip models.WritableIPAddress) (*models.IPAddress, error) {
 				Expect(ip.Address).To(Equal("123.123.123.123/24"))
 				Expect(ip.Tenant).To(Equal(1))
 				Expect(ip.AssignedObjectID).To(Equal(2))
@@ -489,7 +493,7 @@ var _ = Describe("IPAM", func() {
 			Expect(gotAddr.Vrf.(models.VRF).ID).To(Equal(3))
 		})
 		It("should fail on client failure", func() {
-			mockClient.CreateIPAddressFunc = func(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+			mockClient.CreateIPAddressFunc = func(ip models.WritableIPAddress) (*models.IPAddress, error) {
 				return nil, errors.New("API error")
 			}
 
@@ -507,7 +511,7 @@ var _ = Describe("IPAM", func() {
 
 	Describe("UpdateIPAddress", func() {
 		It("should create IP address successfully", func() {
-			mockClient.UpdateIPAddressFunc = func(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+			mockClient.UpdateIPAddressFunc = func(ip models.WritableIPAddress) (*models.IPAddress, error) {
 				Expect(ip.Address).To(Equal("123.123.123.123/24"))
 				Expect(ip.Tenant).To(Equal(1))
 				Expect(ip.AssignedObjectID).To(Equal(2))
@@ -520,7 +524,7 @@ var _ = Describe("IPAM", func() {
 				}, nil
 			}
 
-			gotAddr, err := ipamService.UpdateIPAddress(models.WriteableIPAddress{
+			gotAddr, err := ipamService.UpdateIPAddress(models.WritableIPAddress{
 				NestedIPAddress:  models.NestedIPAddress{Address: "123.123.123.123/24"},
 				Tenant:           1,
 				AssignedObjectID: 2,
@@ -534,11 +538,11 @@ var _ = Describe("IPAM", func() {
 			Expect(gotAddr.Vrf.(models.VRF).ID).To(Equal(3))
 		})
 		It("should fail on client failure", func() {
-			mockClient.UpdateIPAddressFunc = func(ip models.WriteableIPAddress) (*models.IPAddress, error) {
+			mockClient.UpdateIPAddressFunc = func(ip models.WritableIPAddress) (*models.IPAddress, error) {
 				return nil, errors.New("API error")
 			}
 
-			_, err := ipamService.UpdateIPAddress(models.WriteableIPAddress{
+			_, err := ipamService.UpdateIPAddress(models.WritableIPAddress{
 				NestedIPAddress:  models.NestedIPAddress{Address: "123.123.123.123/24"},
 				Tenant:           1,
 				AssignedObjectID: 2,

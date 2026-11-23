@@ -172,7 +172,7 @@ var _ = Describe("MetalCluster helpers", func() {
 		})
 	})
 
-	Describe("buildServerEntries", func() {
+	Describe("buildGroups", func() {
 		cluster := &models.Cluster{
 			ID:   1,
 			Name: "cluster-test",
@@ -197,7 +197,7 @@ var _ = Describe("MetalCluster helpers", func() {
 			return &mock.NetBoxMock{DCIMMock: dcimMock}
 		}
 
-		It("skips inactive devices", func() {
+		It("skips inactive devices and returns empty groups", func() {
 			devices := []models.Device{
 				{
 					Name:   "node001-bb001",
@@ -206,9 +206,9 @@ var _ = Describe("MetalCluster helpers", func() {
 				},
 			}
 			nb := makeNetboxMock(nil, "")
-			entries, err := buildServerEntries(ctx, devices, cluster, nb)
+			_, groups, err := buildGroups(ctx, devices, cluster, nb)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(entries).To(BeEmpty())
+			Expect(groups).To(BeEmpty())
 		})
 
 		It("returns error for unexpected device name format", func() {
@@ -220,12 +220,12 @@ var _ = Describe("MetalCluster helpers", func() {
 				},
 			}
 			nb := makeNetboxMock(nil, "AA:BB:CC:DD:EE:FF")
-			_, err := buildServerEntries(ctx, devices, cluster, nb)
+			_, _, err := buildGroups(ctx, devices, cluster, nb)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unexpected device name format"))
 		})
 
-		It("builds server entries with oob, nic, and dpu interface types", func() {
+		It("splits labels across cluster, group, and server tiers", func() {
 			devices := []models.Device{
 				{
 					Name:       "node001-bb001",
@@ -253,11 +253,25 @@ var _ = Describe("MetalCluster helpers", func() {
 			}
 			nb := makeNetboxMock(ifaces, "AA:BB:CC:00:00:FF")
 
-			entries, err := buildServerEntries(ctx, devices, cluster, nb)
+			clusterLabels, groups, err := buildGroups(ctx, devices, cluster, nb)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(entries).To(HaveLen(1))
+			Expect(groups).To(HaveLen(1))
 
-			entry := entries[0]
+			// Cluster-level labels
+			Expect(clusterLabels).To(HaveKeyWithValue("topology.kubernetes.io/region", "eu-de-1"))
+			Expect(clusterLabels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/cluster", "cluster-test"))
+			Expect(clusterLabels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/cluster-type", "test-type"))
+			Expect(clusterLabels).To(HaveKey("clusterctl.cluster.x-k8s.io/move"))
+
+			group := groups[0]
+			Expect(group.Name).To(Equal("bb001"))
+
+			// Group-level labels
+			Expect(group.Labels).To(HaveKeyWithValue("topology.kubernetes.io/zone", "qa-de-1a"))
+			Expect(group.Labels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/bb", "bb001"))
+
+			Expect(group.Servers).To(HaveLen(1))
+			entry := group.Servers[0]
 			Expect(entry.Name).To(Equal("node001-bb001"))
 			Expect(entry.Serial).To(Equal("SN12345"))
 			Expect(entry.RemoteboardMAC).To(Equal("aa:bb:cc:00:00:ff"))
@@ -274,28 +288,55 @@ var _ = Describe("MetalCluster helpers", func() {
 			Expect(typeMap[moov1alpha1.InterfaceTypeNIC]).To(BeTrue())
 			Expect(typeMap[moov1alpha1.InterfaceTypeDPU]).To(BeTrue())
 
-			// All 11 label keys must be present
-			expectedLabelKeys := []string{
-				"topology.kubernetes.io/region",
-				"topology.kubernetes.io/zone",
-				"kubernetes.metal.cloud.sap/cluster",
-				"kubernetes.metal.cloud.sap/cluster-type",
-				"kubernetes.metal.cloud.sap/name",
-				"kubernetes.metal.cloud.sap/nodename",
-				"kubernetes.metal.cloud.sap/bb",
-				"kubernetes.metal.cloud.sap/type",
-				"kubernetes.metal.cloud.sap/role",
-				"kubernetes.metal.cloud.sap/platform",
-				"clusterctl.cluster.x-k8s.io/move",
+			// Server-level labels
+			Expect(entry.Labels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/name", "node001-bb001"))
+			Expect(entry.Labels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/nodename", "node001"))
+			Expect(entry.Labels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/type", "powerserver-r2"))
+			Expect(entry.Labels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/role", "compute"))
+			Expect(entry.Labels).To(HaveKeyWithValue("kubernetes.metal.cloud.sap/platform", "ubuntu-22-04"))
+		})
+
+		It("groups two devices with the same bb into one group", func() {
+			devices := []models.Device{
+				{
+					Name:   "node001-bb001",
+					Status: models.DeviceStatus{Value: deviceStatusActive},
+					Site:   models.NestedSite{ID: 7, Slug: "qa-de-1a"},
+				},
+				{
+					Name:   "node002-bb001",
+					Status: models.DeviceStatus{Value: deviceStatusActive},
+					Site:   models.NestedSite{ID: 7, Slug: "qa-de-1a"},
+				},
 			}
-			for _, key := range expectedLabelKeys {
-				Expect(entry.Labels).To(HaveKey(key), "missing label key: "+key)
+			nb := makeNetboxMock(nil, "AA:BB:CC:DD:EE:FF")
+
+			_, groups, err := buildGroups(ctx, devices, cluster, nb)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(groups).To(HaveLen(1))
+			Expect(groups[0].Servers).To(HaveLen(2))
+		})
+
+		It("creates a separate group for each distinct bb", func() {
+			devices := []models.Device{
+				{
+					Name:   "node001-bb001",
+					Status: models.DeviceStatus{Value: deviceStatusActive},
+					Site:   models.NestedSite{ID: 7, Slug: "qa-de-1a"},
+				},
+				{
+					Name:   "node003-bb002",
+					Status: models.DeviceStatus{Value: deviceStatusActive},
+					Site:   models.NestedSite{ID: 7, Slug: "qa-de-1a"},
+				},
 			}
-			Expect(entry.Labels["topology.kubernetes.io/region"]).To(Equal("eu-de-1"))
-			Expect(entry.Labels["topology.kubernetes.io/zone"]).To(Equal("qa-de-1a"))
-			Expect(entry.Labels["kubernetes.metal.cloud.sap/cluster"]).To(Equal("cluster-test"))
-			Expect(entry.Labels["kubernetes.metal.cloud.sap/nodename"]).To(Equal("node001"))
-			Expect(entry.Labels["kubernetes.metal.cloud.sap/bb"]).To(Equal("bb001"))
+			nb := makeNetboxMock(nil, "AA:BB:CC:DD:EE:FF")
+
+			_, groups, err := buildGroups(ctx, devices, cluster, nb)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(groups).To(HaveLen(2))
+			groupNames := []string{groups[0].Name, groups[1].Name}
+			Expect(groupNames).To(ConsistOf("bb001", "bb002"))
 		})
 
 		It("calls GetRegionForDevice only once for multiple devices sharing the same site", func() {
@@ -324,9 +365,10 @@ var _ = Describe("MetalCluster helpers", func() {
 			}
 			nb := &mock.NetBoxMock{DCIMMock: dcimMock}
 
-			entries, err := buildServerEntries(ctx, devices, cluster, nb)
+			_, groups, err := buildGroups(ctx, devices, cluster, nb)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(entries).To(HaveLen(2))
+			Expect(groups).To(HaveLen(1))
+			Expect(groups[0].Servers).To(HaveLen(2))
 			Expect(dcimMock.GetRegionForDeviceCalls).To(Equal(1), "region should be fetched once and cached for the same site ID")
 		})
 	})
@@ -336,42 +378,54 @@ var _ = Describe("MetalCluster helpers", func() {
 			fakeClient := createFakeClient()
 			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
 
-			servers := []moov1alpha1.ServerEntry{
-				{Name: "node001-bb001", Serial: "SN1"},
+			clusterLabels := map[string]string{
+				"topology.kubernetes.io/region":      "eu-de-1",
+				"kubernetes.metal.cloud.sap/cluster": "cluster-test",
 			}
-			err := r.reconcileMetalCluster(ctx, "cluster-test", "import-test", servers)
+			groups := []moov1alpha1.Group{
+				{
+					Name:    "bb001",
+					Labels:  map[string]string{"topology.kubernetes.io/zone": "qa-de-1a"},
+					Servers: []moov1alpha1.ServerEntry{{Name: "node001-bb001", Serial: "SN1"}},
+				},
+			}
+			err := r.reconcileMetalCluster(ctx, "cluster-test", "import-test", clusterLabels, groups)
 			Expect(err).ToNot(HaveOccurred())
 
 			mc := &moov1alpha1.MetalCluster{}
 			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "cluster-test"}, mc)).To(Succeed())
-			Expect(mc.Spec.Servers).To(HaveLen(1))
-			Expect(mc.Spec.Servers[0].Name).To(Equal("node001-bb001"))
+			Expect(mc.Spec.Labels).To(HaveKeyWithValue("topology.kubernetes.io/region", "eu-de-1"))
+			Expect(mc.Spec.Groups).To(HaveLen(1))
+			Expect(mc.Spec.Groups[0].Name).To(Equal("bb001"))
+			Expect(mc.Spec.Groups[0].Servers[0].Name).To(Equal("node001-bb001"))
 			Expect(mc.Annotations).To(HaveKeyWithValue(managedByAnnotation, managedByArgora))
 			Expect(mc.Labels).To(HaveKeyWithValue(clusterImportLabel, "import-test"))
 		})
 
-		It("updates spec.servers when MetalCluster already exists", func() {
+		It("updates spec.groups when MetalCluster already exists", func() {
 			existing := &moov1alpha1.MetalCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "cluster-test"},
 				Spec: moov1alpha1.MetalClusterSpec{
-					Servers: []moov1alpha1.ServerEntry{{Name: "old-node-bb001", Serial: "OLD"}},
+					Groups: []moov1alpha1.Group{
+						{Name: "bb001", Servers: []moov1alpha1.ServerEntry{{Name: "old-node-bb001", Serial: "OLD"}}},
+					},
 				},
 			}
 			fakeClient := createFakeClient(existing)
 			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
 
-			newServers := []moov1alpha1.ServerEntry{
-				{Name: "node001-bb001", Serial: "NEW1"},
-				{Name: "node002-bb001", Serial: "NEW2"},
+			newGroups := []moov1alpha1.Group{
+				{Name: "bb001", Servers: []moov1alpha1.ServerEntry{{Name: "node001-bb001", Serial: "NEW1"}}},
+				{Name: "bb002", Servers: []moov1alpha1.ServerEntry{{Name: "node002-bb002", Serial: "NEW2"}}},
 			}
-			err := r.reconcileMetalCluster(ctx, "cluster-test", "import-test", newServers)
+			err := r.reconcileMetalCluster(ctx, "cluster-test", "import-test", map[string]string{}, newGroups)
 			Expect(err).ToNot(HaveOccurred())
 
 			mc := &moov1alpha1.MetalCluster{}
 			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "cluster-test"}, mc)).To(Succeed())
-			Expect(mc.Spec.Servers).To(HaveLen(2))
-			names := []string{mc.Spec.Servers[0].Name, mc.Spec.Servers[1].Name}
-			Expect(names).To(ConsistOf("node001-bb001", "node002-bb001"))
+			Expect(mc.Spec.Groups).To(HaveLen(2))
+			groupNames := []string{mc.Spec.Groups[0].Name, mc.Spec.Groups[1].Name}
+			Expect(groupNames).To(ConsistOf("bb001", "bb002"))
 			Expect(mc.Annotations).To(HaveKeyWithValue(managedByAnnotation, managedByArgora))
 			Expect(mc.Labels).To(HaveKeyWithValue(clusterImportLabel, "import-test"))
 		})
@@ -422,17 +476,17 @@ var _ = Describe("MetalCluster helpers", func() {
 		})
 	})
 
-	Describe("oobSubnetName", func() {
+	Describe("subnetName", func() {
 		It("converts a /24 CIDR to the expected slug", func() {
-			Expect(oobSubnetName("10.1.2.0/24")).To(Equal("oobsubnet-10-1-2-0-24"))
+			Expect(subnetName("10.1.2.0/24")).To(Equal("subnet-10-1-2-0-24"))
 		})
 
 		It("converts a /25 CIDR to the expected slug", func() {
-			Expect(oobSubnetName("10.1.2.128/25")).To(Equal("oobsubnet-10-1-2-128-25"))
+			Expect(subnetName("10.1.2.128/25")).To(Equal("subnet-10-1-2-128-25"))
 		})
 
 		It("converts a /16 CIDR to the expected slug", func() {
-			Expect(oobSubnetName("192.168.0.0/16")).To(Equal("oobsubnet-192-168-0-0-16"))
+			Expect(subnetName("192.168.0.0/16")).To(Equal("subnet-192-168-0-0-16"))
 		})
 	})
 
@@ -488,7 +542,7 @@ var _ = Describe("MetalCluster helpers", func() {
 	})
 
 	Describe("reconcileOOBSubnet", func() {
-		It("creates an OOBSubnet with correct CIDR, gateway (first host), and leases", func() {
+		It("creates a Subnet with correct CIDR, gateway (first host), and leases", func() {
 			fakeClient := createFakeClient()
 			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
 
@@ -498,8 +552,8 @@ var _ = Describe("MetalCluster helpers", func() {
 			err := r.reconcileOOBSubnet(ctx, "10.1.2.0/24", "cluster-test", leases)
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-0-24"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-0-24"}, subnet)).To(Succeed())
 			Expect(subnet.Spec.CIDR).To(Equal("10.1.2.0/24"))
 			Expect(subnet.Spec.Gateway).To(Equal("10.1.2.1"))
 			Expect(subnet.Spec.StaticLeases).To(HaveLen(1))
@@ -508,13 +562,13 @@ var _ = Describe("MetalCluster helpers", func() {
 			Expect(subnet.Labels).To(HaveKeyWithValue(clusterLabel, "cluster-test"))
 		})
 
-		It("takes over a helm-managed OOBSubnet by updating the annotation to argora", func() {
-			existing := &metaldhcpv1alpha1.OOBSubnet{
+		It("takes over a helm-managed Subnet by updating the annotation to argora", func() {
+			existing := &metaldhcpv1alpha1.Subnet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        "oobsubnet-10-1-2-0-24",
+					Name:        "subnet-10-1-2-0-24",
 					Annotations: map[string]string{managedByAnnotation: managedByHelm},
 				},
-				Spec: metaldhcpv1alpha1.OOBSubnetSpec{
+				Spec: metaldhcpv1alpha1.SubnetSpec{
 					CIDR:    "10.1.2.0/24",
 					Gateway: "10.1.2.1",
 				},
@@ -525,8 +579,8 @@ var _ = Describe("MetalCluster helpers", func() {
 			err := r.reconcileOOBSubnet(ctx, "10.1.2.0/24", "cluster-test", nil)
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-0-24"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-0-24"}, subnet)).To(Succeed())
 			Expect(subnet.Annotations).To(HaveKeyWithValue(managedByAnnotation, managedByArgora))
 		})
 
@@ -537,15 +591,15 @@ var _ = Describe("MetalCluster helpers", func() {
 			err := r.reconcileOOBSubnet(ctx, "10.1.2.128/25", "cluster-test", nil)
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-128-25"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-128-25"}, subnet)).To(Succeed())
 			Expect(subnet.Spec.Gateway).To(Equal("10.1.2.129"))
 		})
 
-		It("updates spec.staticLeases when OOBSubnet already exists", func() {
-			existing := &metaldhcpv1alpha1.OOBSubnet{
-				ObjectMeta: metav1.ObjectMeta{Name: "oobsubnet-10-1-2-0-24"},
-				Spec: metaldhcpv1alpha1.OOBSubnetSpec{
+		It("updates spec.staticLeases when Subnet already exists", func() {
+			existing := &metaldhcpv1alpha1.Subnet{
+				ObjectMeta: metav1.ObjectMeta{Name: "subnet-10-1-2-0-24"},
+				Spec: metaldhcpv1alpha1.SubnetSpec{
 					CIDR:    "10.1.2.0/24",
 					Gateway: "10.1.2.1",
 					StaticLeases: []metaldhcpv1alpha1.StaticLease{
@@ -563,8 +617,8 @@ var _ = Describe("MetalCluster helpers", func() {
 			err := r.reconcileOOBSubnet(ctx, "10.1.2.0/24", "cluster-test", newLeases)
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-0-24"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-0-24"}, subnet)).To(Succeed())
 			Expect(subnet.Spec.StaticLeases).To(HaveLen(2))
 		})
 
@@ -575,8 +629,8 @@ var _ = Describe("MetalCluster helpers", func() {
 			err := r.reconcileOOBSubnet(ctx, "10.1.2.0/24", "cluster-test", nil)
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-0-24"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-0-24"}, subnet)).To(Succeed())
 			Expect(subnet.Spec.BootURL).To(BeEmpty())
 			Expect(subnet.Spec.DNSServers).To(BeEmpty())
 			Expect(subnet.Spec.LeaseTime).To(BeNil())
@@ -584,7 +638,7 @@ var _ = Describe("MetalCluster helpers", func() {
 	})
 
 	Describe("pruneOOBSubnets", func() {
-		makeSubnet := func(name, cidr, managedBy, cluster string) *metaldhcpv1alpha1.OOBSubnet {
+		makeSubnet := func(name, cidr, managedBy, cluster string) *metaldhcpv1alpha1.Subnet {
 			annotations := map[string]string{}
 			if managedBy != "" {
 				annotations[managedByAnnotation] = managedBy
@@ -593,50 +647,50 @@ var _ = Describe("MetalCluster helpers", func() {
 			if cluster != "" {
 				labels[clusterLabel] = cluster
 			}
-			return &metaldhcpv1alpha1.OOBSubnet{
+			return &metaldhcpv1alpha1.Subnet{
 				ObjectMeta: metav1.ObjectMeta{Name: name, Annotations: annotations, Labels: labels},
-				Spec:       metaldhcpv1alpha1.OOBSubnetSpec{CIDR: cidr, Gateway: "10.1.2.1"},
+				Spec:       metaldhcpv1alpha1.SubnetSpec{CIDR: cidr, Gateway: "10.1.2.1"},
 			}
 		}
 
-		It("deletes argora-managed OOBSubnets not in the active CIDR set", func() {
-			stale := makeSubnet("oobsubnet-10-1-2-0-24", "10.1.2.0/24", managedByArgora, "cluster-test")
+		It("deletes argora-managed Subnets not in the active CIDR set", func() {
+			stale := makeSubnet("subnet-10-1-2-0-24", "10.1.2.0/24", managedByArgora, "cluster-test")
 			fakeClient := createFakeClient(stale)
 			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
 
 			err := r.pruneOOBSubnets(ctx, map[string][]models.Device{}, "cluster-test")
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-0-24"}, subnet)).ToNot(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-0-24"}, subnet)).ToNot(Succeed())
 		})
 
-		It("does not delete helm-managed OOBSubnets", func() {
-			helmSubnet := makeSubnet("oobsubnet-10-1-2-0-24", "10.1.2.0/24", managedByHelm, "cluster-test")
+		It("does not delete helm-managed Subnets", func() {
+			helmSubnet := makeSubnet("subnet-10-1-2-0-24", "10.1.2.0/24", managedByHelm, "cluster-test")
 			fakeClient := createFakeClient(helmSubnet)
 			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
 
 			err := r.pruneOOBSubnets(ctx, map[string][]models.Device{}, "cluster-test")
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-0-24"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-0-24"}, subnet)).To(Succeed())
 		})
 
-		It("does not delete unannotated OOBSubnets", func() {
-			unannotated := makeSubnet("oobsubnet-10-1-2-0-24", "10.1.2.0/24", "", "cluster-test")
+		It("does not delete unannotated Subnets", func() {
+			unannotated := makeSubnet("subnet-10-1-2-0-24", "10.1.2.0/24", "", "cluster-test")
 			fakeClient := createFakeClient(unannotated)
 			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
 
 			err := r.pruneOOBSubnets(ctx, map[string][]models.Device{}, "cluster-test")
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-0-24"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-0-24"}, subnet)).To(Succeed())
 		})
 
-		It("does not delete argora-managed OOBSubnets that are still active", func() {
-			active := makeSubnet("oobsubnet-10-1-2-0-24", "10.1.2.0/24", managedByArgora, "cluster-test")
+		It("does not delete argora-managed Subnets that are still active", func() {
+			active := makeSubnet("subnet-10-1-2-0-24", "10.1.2.0/24", managedByArgora, "cluster-test")
 			fakeClient := createFakeClient(active)
 			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
 
@@ -644,20 +698,20 @@ var _ = Describe("MetalCluster helpers", func() {
 			err := r.pruneOOBSubnets(ctx, activeCIDRs, "cluster-test")
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-2-0-24"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-2-0-24"}, subnet)).To(Succeed())
 		})
 
-		It("does not delete argora-managed OOBSubnets belonging to a different cluster", func() {
-			otherCluster := makeSubnet("oobsubnet-10-1-3-0-24", "10.1.3.0/24", managedByArgora, "other-cluster")
+		It("does not delete argora-managed Subnets belonging to a different cluster", func() {
+			otherCluster := makeSubnet("subnet-10-1-3-0-24", "10.1.3.0/24", managedByArgora, "other-cluster")
 			fakeClient := createFakeClient(otherCluster)
 			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
 
 			err := r.pruneOOBSubnets(ctx, map[string][]models.Device{}, "cluster-test")
 			Expect(err).ToNot(HaveOccurred())
 
-			subnet := &metaldhcpv1alpha1.OOBSubnet{}
-			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "oobsubnet-10-1-3-0-24"}, subnet)).To(Succeed())
+			subnet := &metaldhcpv1alpha1.Subnet{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "subnet-10-1-3-0-24"}, subnet)).To(Succeed())
 		})
 	})
 
@@ -734,6 +788,69 @@ var _ = Describe("MetalCluster helpers", func() {
 
 			mc := &moov1alpha1.MetalCluster{}
 			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "cluster-other"}, mc)).To(Succeed())
+		})
+	})
+
+	Describe("reconcileMetalClusterMode", func() {
+		cluster := &models.Cluster{
+			ID:   1,
+			Name: "cluster-test",
+			Type: models.NestedClusterType{Slug: "test-type"},
+		}
+
+		makeModeNetboxMock := func(macByDevice map[string]string) *mock.NetBoxMock {
+			dcimMock := &mock.DCIMMock{
+				GetRegionForDeviceFunc: func(device *models.Device) (string, error) {
+					return "eu-de-1", nil
+				},
+				GetInterfaceForDeviceFunc: func(device *models.Device, ifaceName string) (*models.Interface, error) {
+					return &models.Interface{
+						Name:       remoteboardInterfaceName,
+						MacAddress: macByDevice[device.Name],
+					}, nil
+				},
+				GetInterfacesForDeviceFunc: func(device *models.Device) ([]models.Interface, error) {
+					return nil, nil
+				},
+			}
+			return &mock.NetBoxMock{DCIMMock: dcimMock}
+		}
+
+		It("creates exactly one Subnet CR when two remoteboard nodes share the same OOB subnet", func() {
+			devices := []models.Device{
+				{
+					Name:   "node001-bb001",
+					Status: models.DeviceStatus{Value: deviceStatusActive},
+					Site:   models.NestedSite{Slug: "qa-de-1a"},
+					OOBIp:  models.NestedIPAddress{Address: "10.1.2.10/24"},
+				},
+				{
+					Name:   "node002-bb001",
+					Status: models.DeviceStatus{Value: deviceStatusActive},
+					Site:   models.NestedSite{Slug: "qa-de-1a"},
+					OOBIp:  models.NestedIPAddress{Address: "10.1.2.20/24"},
+				},
+			}
+			nb := makeModeNetboxMock(map[string]string{
+				"node001-bb001": "AA:BB:CC:00:00:01",
+				"node002-bb001": "AA:BB:CC:00:00:02",
+			})
+			fakeClient := createFakeClient()
+			r := &IronCoreReconciler{k8sClient: fakeClient, scheme: fakeClient.Scheme()}
+
+			err := r.reconcileMetalClusterMode(ctx, "import-test", cluster, devices, nb)
+			Expect(err).ToNot(HaveOccurred())
+
+			subnetList := &metaldhcpv1alpha1.SubnetList{}
+			Expect(fakeClient.List(ctx, subnetList)).To(Succeed())
+			Expect(subnetList.Items).To(HaveLen(1), "expected exactly one Subnet CR for two nodes in the same /24")
+
+			subnet := subnetList.Items[0]
+			Expect(subnet.Name).To(Equal("subnet-10-1-2-0-24"))
+			Expect(subnet.Spec.StaticLeases).To(HaveLen(2))
+
+			macs := []string{subnet.Spec.StaticLeases[0].MAC, subnet.Spec.StaticLeases[1].MAC}
+			Expect(macs).To(ConsistOf("aa:bb:cc:00:00:01", "aa:bb:cc:00:00:02"))
 		})
 	})
 })

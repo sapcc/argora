@@ -39,14 +39,14 @@ def deploy_metal_crd():
     local(cmd, quiet=False)
 
 def deploy_onboarding_crd():
-    version = "f3537746de458d8d336614ac4ba833aef986f2bc"
+    version = "c91ba0d76b78ab8d24a58a41b31bcfab6ff4a995"
     metalcluster_uri = "https://raw.githubusercontent.com/SAP-cloud-infrastructure/metal-onboarding-operator/{}/config/crd/bases/onboarding.metal.ironcore.dev_metalclusters.yaml".format(version)
     local("curl -sSL {} | kubectl apply -f -".format(metalcluster_uri), quiet=False)
 
 def deploy_metaldhcp_crd():
-    version = "7ee7142fdcab40b6e0fc06b263bdcba0ab50d351"
-    oobsubnet_uri = "https://raw.githubusercontent.com/SAP-cloud-infrastructure/metaldhcp/{}/config/crd/bases/dhcp.metal.ironcore.dev_oobsubnets.yaml".format(version)
-    local("curl -sSL {} | kubectl apply -f -".format(oobsubnet_uri), quiet=False)
+    version = "07bd42b2f6975f95a14b7e1bda03906988bf83c3"
+    subnet_uri = "https://raw.githubusercontent.com/SAP-cloud-infrastructure/metaldhcp/{}/config/crd/bases/dhcp.metal.ironcore.dev_subnets.yaml".format(version)
+    local("curl -sSL {} | kubectl apply -f -".format(subnet_uri), quiet=False)
 
 
 build_args = {k: v for k, v in {

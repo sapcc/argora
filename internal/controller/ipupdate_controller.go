@@ -336,7 +336,7 @@ func (r *IPUpdateReconciler) reconcileDevicePrimaryIP(
 	logger.V(1).Info("updating device primary id", "device_id", device.ID,
 		"current_primary_ip", device.PrimaryIP.ID, "needed_primary_ip", addr.ID)
 
-	wDevice := device.Writeable()
+	wDevice := device.Writable()
 	wDevice.PrimaryIP4 = addr.ID
 
 	_, err := r.netBox.DCIM().UpdateDevice(wDevice)
