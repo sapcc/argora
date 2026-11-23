@@ -204,14 +204,16 @@ func main() {
 		}
 	}
 
-	if err = controller.NewIPPoolImportReconciler(mgr, creds, status.NewIPPoolImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ippoolimport")
-		os.Exit(1)
-	}
+	if !flagVar.syncMetalCluster {
+		if err = controller.NewIPPoolImportReconciler(mgr, creds, status.NewIPPoolImportStatusHandler(mgr.GetClient()), netbox.NewNetbox(flagVar.netboxURL), flagVar.reconcileInterval).SetupWithManager(mgr, rateLimiter); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ippoolimport")
+			os.Exit(1)
+		}
 
-	if err = controller.NewIPUpdateReconciler(mgr, creds, netbox.NewNetbox(flagVar.netboxURL)).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ipupdate")
-		os.Exit(1)
+		if err = controller.NewIPUpdateReconciler(mgr, creds, netbox.NewNetbox(flagVar.netboxURL)).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ipupdate")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
