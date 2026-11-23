@@ -102,7 +102,7 @@ func (r *IronCoreReconciler) SetupWithManager(mgr ctrl.Manager, rateLimiter Rate
 // +kubebuilder:rbac:groups=metal.ironcore.dev,resources=bmcsecrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=readiness.metal.ironcore.dev,resources=serverwirings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=onboarding.metal.ironcore.dev,resources=metalclusters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=dhcp.metal.ironcore.dev,resources=oobsubnets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=dhcp.metal.ironcore.dev,resources=subnets,verbs=get;list;watch;create;update;patch;delete
 
 func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -188,13 +188,13 @@ func (r *IronCoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 }
 
 // handleDeletion runs cleanup when a ClusterImport is being deleted. In syncMetalCluster mode
-// it prunes all argora-managed OOBSubnets and MetalClusters that belong to this import.
+// it prunes all argora-managed Subnets and MetalClusters that belong to this import.
 func (r *IronCoreReconciler) handleDeletion(ctx context.Context, clusterImportCR *argorav1alpha1.ClusterImport) error {
 	if !r.syncMetalCluster {
 		return nil
 	}
 	logger := log.FromContext(ctx)
-	logger.Info("handling ClusterImport deletion, pruning OOBSubnets and MetalClusters")
+	logger.Info("handling ClusterImport deletion, pruning Subnets and MetalClusters")
 
 	if err := r.credentials.ReloadNetboxOnly(); err != nil {
 		return fmt.Errorf("unable to reload credentials for deletion cleanup: %w", err)
@@ -209,8 +209,8 @@ func (r *IronCoreReconciler) handleDeletion(ctx context.Context, clusterImportCR
 			return fmt.Errorf("unable to find clusters for deletion cleanup (selector %s): %w", clusterSelector.Name, err)
 		}
 		for _, cluster := range clusters {
-			if err := r.pruneOOBSubnets(ctx, map[string][]models.Device{}, cluster.Name); err != nil {
-				return fmt.Errorf("unable to prune OOBSubnets for cluster %s: %w", cluster.Name, err)
+			if err := r.pruneSubnets(ctx, map[string][]models.Device{}, cluster.Name); err != nil {
+				return fmt.Errorf("unable to prune Subnets for cluster %s: %w", cluster.Name, err)
 			}
 		}
 	}
