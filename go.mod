@@ -3,8 +3,8 @@ module github.com/sapcc/argora
 go 1.27.0
 
 require (
-	github.com/SAP-cloud-infrastructure/metal-onboarding-operator v0.0.0-20261119085102-576a44746c63
-	github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261119121602-65f593071972
+	github.com/SAP-cloud-infrastructure/metal-onboarding-operator v0.0.0-20261123114435-4e989c21608c
+	github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261123112144-07bd42b2f697
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/go-logr/logr v1.4.4
 	github.com/ironcore-dev/metal-maintenance-operator v0.1.1-0.20261119074956-d72b8eb31373
