@@ -29,6 +29,7 @@ manager:
     - --sync-metalcluster={{.Values.syncMetalCluster}}
     - --reconcile-interval={{.Values.reconcileInterval}}
     - --netbox-url={{.Values.netboxURL}}
+    - --enable-ironcore={{.Values.ironcore.enabled}}
 
   ## Health probes.
   ## The manager serves the liveness (/healthz) and readiness (/readyz) endpoints on this port.
@@ -224,3 +225,8 @@ netboxURL: "http://netbox-url"
 leaderElect: true
 syncMetalCluster: false
 reconcileInterval: "5m"
+
+## IronCore controller toggle.
+## Set to false to disable the IronCore controller and enable Metal3 instead.
+ironcore:
+  enabled: true
