@@ -26,10 +26,21 @@ manager:
   ##
   args:
     - --leader-elect={{.Values.leaderElect}}
+    - --leader-elect-ns={{.Values.leaderElectionNamespace}}
     - --sync-metalcluster={{.Values.syncMetalCluster}}
     - --reconcile-interval={{.Values.reconcileInterval}}
     - --netbox-url={{.Values.netboxURL}}
     - --enable-ironcore={{.Values.ironcore.enabled}}
+    - --readiness-checks={{.Values.readinessChecks}}
+    - --readiness-check-namespace={{.Values.readinessCheckNamespace}}
+    - --rate-limiter-burst={{.Values.rateLimiterBurst}}
+    - --rate-limiter-frequency={{.Values.rateLimiterFrequency}}
+    - --failure-base-delay={{.Values.failureBaseDelay}}
+    - --failure-max-delay={{.Values.failureMaxDelay}}
+
+  ## Environment variables for the manager container
+  ##
+  env: []
 
   ## Health probes.
   ## The manager serves the liveness (/healthz) and readiness (/readyz) endpoints on this port.
@@ -221,12 +232,38 @@ prometheusRules:
   labels: {}
   annotations: {}
 
-netboxURL: "http://netbox-url"
-leaderElect: true
+## Netbox integration.
+##
+netboxURL: "https://netbox-url"
+
+## Leader election configuration.
+##
+leaderElect: false
+leaderElectionNamespace: "kube-system"
+
+## IronCore controller configuration.
+## Set ironcore.enabled=false to use Metal3 instead.
+##
+ironcore:
+  enabled: true
 syncMetalCluster: false
 reconcileInterval: "5m"
 
-## IronCore controller toggle.
-## Set to false to disable the IronCore controller and enable Metal3 instead.
-ironcore:
-  enabled: true
+## Readiness checks.
+## readinessChecks is a comma-separated list of check types (supported: serverwiring).
+## Leave empty to disable.
+##
+readinessChecks: ""
+readinessCheckNamespace: "metal-maintenance-operator-system"
+
+## Rate limiter tuning.
+##
+rateLimiterBurst: 200
+rateLimiterFrequency: 30
+failureBaseDelay: "1s"
+failureMaxDelay: "1000s"
+
+## Extra Kubernetes objects to deploy alongside the chart.
+## Supports templating with tpl, e.g. to reference .Release.Name or other chart values.
+##
+extraObjects: []
