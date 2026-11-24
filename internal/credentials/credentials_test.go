@@ -163,6 +163,55 @@ var _ = Describe("Reload", func() {
 	})
 })
 
+var _ = Describe("ReloadNetboxOnly", func() {
+	var creds *Credentials
+	var fileReaderMock *FileReaderMock
+
+	BeforeEach(func() {
+		fileReaderMock = &FileReaderMock{
+			fileContent: make(map[string]string),
+		}
+		creds = NewDefaultCredentials(fileReaderMock)
+	})
+
+	It("should succeed when only the netbox token is present", func() {
+		// given
+		fileReaderMock.fileContent["/etc/credentials/credentials.json"] = `{"netboxToken": "token"}`
+
+		// when
+		err := creds.ReloadNetboxOnly()
+
+		// then
+		Expect(err).ToNot(HaveOccurred())
+		Expect(creds.NetboxToken).To(Equal("token"))
+		Expect(creds.BMCUser).To(BeEmpty())
+		Expect(creds.BMCPassword).To(BeEmpty())
+	})
+
+	It("should return an error when the netbox token is missing", func() {
+		// given
+		fileReaderMock.fileContent["/etc/credentials/credentials.json"] = `{"bmcUser": "user", "bmcPassword": "pass"}`
+
+		// when
+		err := creds.ReloadNetboxOnly()
+
+		// then
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError("netbox token is required"))
+	})
+
+	It("should return an error when reading the credentials file fails", func() {
+		// given
+		fileReaderMock.returnError = true
+
+		// when
+		err := creds.ReloadNetboxOnly()
+
+		// then
+		Expect(err).To(HaveOccurred())
+	})
+})
+
 var _ = Describe("readJSONAndUnmarshal", func() {
 	var credentials *Credentials
 	var fileReaderMock *FileReaderMock

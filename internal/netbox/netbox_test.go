@@ -113,7 +113,7 @@ func (m *MockIPAM) CreateIPAddress(addr ipam.CreateIPAddressParams) (*models.IPA
 	return nil, nil
 }
 
-func (m *MockIPAM) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+func (m *MockIPAM) UpdateIPAddress(addr models.WritableIPAddress) (*models.IPAddress, error) {
 	return nil, nil
 }
 

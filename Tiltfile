@@ -1,3 +1,4 @@
+config.define_string("NETBOX_URL")
 config.define_string("BININFO_BUILD_DATE")
 config.define_string("BININFO_VERSION")
 config.define_string("BININFO_COMMIT_HASH")
@@ -5,6 +6,7 @@ config.define_string("TARGET")
 
 cfg = config.parse()
 target = cfg.get("TARGET", "manager")
+netbox_url = cfg.get("NETBOX_URL", "")
 
 def deploy_cert_manager():
     version = "v1.14.4"
@@ -36,12 +38,22 @@ def deploy_metal_crd():
     local(cmd_bmc, quiet=False)
     local(cmd, quiet=False)
 
+def deploy_onboarding_crd():
+    version = "c91ba0d76b78ab8d24a58a41b31bcfab6ff4a995"
+    metalcluster_uri = "https://raw.githubusercontent.com/SAP-cloud-infrastructure/metal-onboarding-operator/{}/config/crd/bases/onboarding.metal.ironcore.dev_metalclusters.yaml".format(version)
+    local("curl -sSL {} | kubectl apply -f -".format(metalcluster_uri), quiet=False)
 
-build_args = {
+def deploy_metaldhcp_crd():
+    version = "07bd42b2f6975f95a14b7e1bda03906988bf83c3"
+    subnet_uri = "https://raw.githubusercontent.com/SAP-cloud-infrastructure/metaldhcp/{}/config/crd/bases/dhcp.metal.ironcore.dev_subnets.yaml".format(version)
+    local("curl -sSL {} | kubectl apply -f -".format(subnet_uri), quiet=False)
+
+
+build_args = {k: v for k, v in {
     "BININFO_BUILD_DATE": cfg.get('BININFO_BUILD_DATE'),
     "BININFO_VERSION": cfg.get('BININFO_VERSION'),
     "BININFO_COMMIT_HASH": cfg.get('BININFO_COMMIT_HASH')
-}
+}.items() if v != None}
 
 if target == 'debug':
     docker_build(
@@ -63,6 +75,8 @@ deploy_cert_manager()
 # deploy_capi_crd()
 deploy_bmo_crd()
 deploy_metal_crd()
+deploy_onboarding_crd()
+deploy_metaldhcp_crd()
 
 load('ext://namespace', 'namespace_create', 'namespace_inject')
 
@@ -78,11 +92,23 @@ k8s_yaml('hack/crd/ipam.cluster.x-k8s.io_globalinclusterippools.yaml')
 k8s_yaml('hack/crd/metal.ironcore.dev_servers.yaml')
 k8s_yaml('hack/crd/metal.ironcore.dev_serverclaims.yaml')
 
-k8s_yaml('hack/deploy/cluster.yaml')
-k8s_yaml('dist/install.yaml')
+# Values: chart defaults → tracked dev overrides → local secrets (gitignored)
+helm_values = ['dist/chart/values.yaml', 'hack/values.yaml']
+if os.path.exists('hack/values.local.yaml'):
+    helm_values.append('hack/values.local.yaml')
 
-k8s_yaml('config/samples/argora_v1alpha1_update.yaml')
-k8s_yaml('config/samples/argora_v1alpha1_clusterimport.yaml')
+# NETBOX_URL from tilt_config.json overrides whatever is in the values files
+helm_set = []
+if netbox_url != "":
+    helm_set.append('netboxURL=' + netbox_url)
+
+k8s_yaml(helm(
+    'dist/chart',
+    name='argora',
+    namespace='argora-system',
+    values=helm_values,
+    set=helm_set,
+))
 
 if target == 'debug':
     k8s_resource('argora-controller-manager', port_forwards=3000)

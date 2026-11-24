@@ -255,7 +255,7 @@ func (r *UpdateReconciler) updateDeviceData(ctx context.Context, netBox netbox.N
 	}
 
 	if device.Platform.ID != platform.ID || device.OOBIp.ID != ipAddress.ID {
-		wDevice := device.Writeable()
+		wDevice := device.Writable()
 		wDevice.Platform = platform.ID
 		wDevice.OOBIp = ipAddress.ID
 

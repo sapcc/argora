@@ -86,6 +86,18 @@ rules:
   - update
   - watch
 - apiGroups:
+  - dhcp.metal.ironcore.dev
+  resources:
+  - subnets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - ipam.cluster.x-k8s.io
   resources:
   - globalinclusterippools
@@ -140,6 +152,18 @@ rules:
   - metal3.io
   resources:
   - baremetalhosts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - onboarding.metal.ironcore.dev
+  resources:
+  - metalclusters
   verbs:
   - create
   - delete

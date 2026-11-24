@@ -198,7 +198,7 @@ type IPAMMock struct {
 
 	CreateIPAddressFunc  func(params ipam.CreateIPAddressParams) (*models.IPAddress, error)
 	CreateIPAddressCalls int
-	UpdateIPAddressFunc  func(addr models.WriteableIPAddress) (*models.IPAddress, error)
+	UpdateIPAddressFunc  func(addr models.WritableIPAddress) (*models.IPAddress, error)
 	UpdateIPAddressCalls int
 }
 
@@ -237,7 +237,7 @@ func (i *IPAMMock) GetPrefixesByPrefix(prefix string) ([]models.Prefix, error) {
 	return i.GetPrefixesByPrefixesFunc(prefix)
 }
 
-func (i *IPAMMock) UpdateIPAddress(addr models.WriteableIPAddress) (*models.IPAddress, error) {
+func (i *IPAMMock) UpdateIPAddress(addr models.WritableIPAddress) (*models.IPAddress, error) {
 	i.UpdateIPAddressCalls++
 	return i.UpdateIPAddressFunc(addr)
 }
