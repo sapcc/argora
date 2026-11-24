@@ -48,6 +48,9 @@ spec:
           #- --zap-log-level=debug
         image: controller:latest
         name: manager
+        env:
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: cluster.local
         ports: []
         securityContext:
           allowPrivilegeEscalation: false
