@@ -1,4 +1,4 @@
-{{- if .Values.certManager.enable }}
+{{- if .Values.certManager.enabled }}
 # Self-signed Issuer
 apiVersion: cert-manager.io/v1
 kind: Issuer
@@ -9,7 +9,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   selfSigned: {}
-{{- if .Values.webhook.enable }}
+{{- if .Values.webhook.enabled }}
 ---
 # Certificate for the webhook
 apiVersion: cert-manager.io/v1
@@ -33,7 +33,7 @@ spec:
     name: selfsigned-issuer
   secretName: webhook-server-cert
 {{- end }}
-{{- if .Values.metrics.enable }}
+{{- if .Values.metrics.enabled }}
 ---
 # Certificate for the metrics
 apiVersion: cert-manager.io/v1
