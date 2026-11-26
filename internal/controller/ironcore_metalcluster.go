@@ -305,6 +305,7 @@ func (r *IronCoreReconciler) reconcileOOBSubnet(ctx context.Context, cidr, clust
 			subnet.Labels = make(map[string]string)
 		}
 		subnet.Labels[clusterLabel] = clusterName
+		subnet.Labels["dhcp"] = "true"
 		subnet.Spec.CIDR = cidr
 		subnet.Spec.Gateway = gateway
 		subnet.Spec.StaticLeases = leases

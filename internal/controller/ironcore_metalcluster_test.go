@@ -560,6 +560,7 @@ var _ = Describe("MetalCluster helpers", func() {
 			Expect(subnet.Spec.StaticLeases[0].MAC).To(Equal("aa:bb:cc:dd:ee:01"))
 			Expect(subnet.Annotations).To(HaveKeyWithValue(managedByAnnotation, managedByArgora))
 			Expect(subnet.Labels).To(HaveKeyWithValue(clusterLabel, "cluster-test"))
+			Expect(subnet.Labels).To(HaveKeyWithValue("dhcp", "true"))
 		})
 
 		It("takes over a helm-managed Subnet by updating the annotation to argora", func() {
