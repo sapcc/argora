@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/SAP-cloud-infrastructure/metal-onboarding-operator v0.0.0-20261123122118-c91ba0d76b78
-	github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261123112144-07bd42b2f697
+	github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261126134837-e4d92074f30a
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/go-logr/logr v1.4.4
 	github.com/ironcore-dev/metal-maintenance-operator v0.1.1-0.20261119074956-d72b8eb31373
