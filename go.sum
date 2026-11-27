@@ -2,8 +2,8 @@ github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/SAP-cloud-infrastructure/metal-onboarding-operator v0.0.0-20261123122118-c91ba0d76b78 h1:fT5PAkMkcszWmN8cwjWavrqGammTnNdAnUgHhF48tAE=
 github.com/SAP-cloud-infrastructure/metal-onboarding-operator v0.0.0-20261123122118-c91ba0d76b78/go.mod h1:PpTiCyBG2k7Sv5YZxrNIszRK77zWXT0yq/k4xzXExps=
-github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261123112144-07bd42b2f697 h1:HRpmHnTPDuKKOEAUj7bxtP+weCK3eOAbI5BdAeUDzI4=
-github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261123112144-07bd42b2f697/go.mod h1:eZ7vJOQ+pJEoGOV5nXNQUaf/vSzsM+dJD42tGyQRqwo=
+github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261126134837-e4d92074f30a h1:0SCGMhjV9JeoUD+Gahk7VWixWvQS6rSkDUoGWSux/9E=
+github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261126134837-e4d92074f30a/go.mod h1:eZ7vJOQ+pJEoGOV5nXNQUaf/vSzsM+dJD42tGyQRqwo=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
