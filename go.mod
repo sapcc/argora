@@ -7,7 +7,7 @@ require (
 	github.com/SAP-cloud-infrastructure/metaldhcp v0.0.0-20261123112144-07bd42b2f697
 	github.com/dspinhirne/netaddr-go/v2 v2.0.0
 	github.com/go-logr/logr v1.4.4
-	github.com/ironcore-dev/metal-maintenance-operator v0.1.1-0.20261119074956-d72b8eb31373
+	github.com/ironcore-dev/metal-maintenance-operator v0.1.1-0.20261127124516-2f788f1106bd
 	github.com/ironcore-dev/metal-operator v0.8.1-0.20261118074636-7f387b6ad836
 	github.com/metal3-io/baremetal-operator/apis v0.9.1
 	github.com/onsi/ginkgo/v2 v2.34.0
